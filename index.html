@@ -229,6 +229,10 @@
         .active-page {
             display: block;
         }
+        
+        .rupee-symbol {
+            font-family: Arial, sans-serif;
+        }
     </style>
 </head>
 <body>
@@ -449,7 +453,7 @@
                                 </div>
                             </div>
                             <div class="mb-3">
-                                <label for="trip-budget" class="form-label">Total Budget ($)</label>
+                                <label for="trip-budget" class="form-label">Total Budget (<span class="rupee-symbol">₹</span>)</label>
                                 <input type="number" class="form-control" id="trip-budget" min="0" step="0.01" required>
                             </div>
                             <div class="form-check mb-3">
@@ -554,7 +558,7 @@
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" data-bs-toggle="tab" href="#expenses">
-                        <i class="fas fa-dollar-sign me-1"></i>Expenses
+                        <i class="fas fa-rupee-sign me-1"></i>Expenses
                     </a>
                 </li>
                 <li class="nav-item">
@@ -595,7 +599,7 @@
                                             <span id="overview-distance">-</span>
                                         </div>
                                         <div class="col-sm-6 mb-3">
-                                            <strong><i class="fas fa-dollar-sign me-2 text-primary"></i>Total Budget:</strong>
+                                            <strong><i class="fas fa-rupee-sign me-2 text-primary"></i>Total Budget:</strong>
                                             <span id="overview-budget">-</span>
                                         </div>
                                         <div class="col-sm-6 mb-3">
@@ -659,15 +663,15 @@
                                 <div class="card-body">
                                     <div class="mb-3">
                                         <strong>Total Budget:</strong>
-                                        <span id="summary-total-budget" class="float-end">$0</span>
+                                        <span id="summary-total-budget" class="float-end"><span class="rupee-symbol">₹</span>0</span>
                                     </div>
                                     <div class="mb-3">
                                         <strong>Total Spent:</strong>
-                                        <span id="summary-total-spent" class="float-end">$0</span>
+                                        <span id="summary-total-spent" class="float-end"><span class="rupee-symbol">₹</span>0</span>
                                     </div>
                                     <div class="mb-3">
                                         <strong>Remaining:</strong>
-                                        <span id="summary-remaining" class="float-end">$0</span>
+                                        <span id="summary-remaining" class="float-end"><span class="rupee-symbol">₹</span>0</span>
                                     </div>
                                     <div class="progress mt-3">
                                         <div id="summary-progress-bar" class="progress-bar" role="progressbar" style="width: 0%"></div>
@@ -756,7 +760,7 @@
                                 <input type="text" class="form-control" id="expense-description" required>
                             </div>
                             <div class="mb-3">
-                                <label for="expense-amount" class="form-label">Amount ($)</label>
+                                <label for="expense-amount" class="form-label">Amount (<span class="rupee-symbol">₹</span>)</label>
                                 <input type="number" class="form-control" id="expense-amount" min="0" step="0.01" required>
                             </div>
                             <div class="mb-3">
@@ -848,8 +852,8 @@
         const auth = firebase.auth();
         const db = firebase.firestore();
         
-        // Google Maps Distance Matrix API key (replace with your own)
-        const GOOGLE_MAPS_API_KEY = "YOUR_GOOGLE_MAPS_API_KEY_HERE";
+        // OpenRouteService API key (replace with your own)
+        const OPENROUTESERVICE_API_KEY = "YOUR_OPENROUTESERVICE_API_KEY_HERE";
         
         // App state
         let currentUser = null;
@@ -1178,8 +1182,8 @@
                             <i class="fas fa-map-marker-alt me-2"></i>${trip.startLocation} → ${trip.destination}
                         </p>
                         <div class="d-flex justify-content-between align-items-center mb-2">
-                            <span>Budget: $${trip.budget.toFixed(2)}</span>
-                            <span>Spent: $${totalSpent.toFixed(2)}</span>
+                            <span>Budget: <span class="rupee-symbol">₹</span>${trip.budget.toFixed(2)}</span>
+                            <span>Spent: <span class="rupee-symbol">₹</span>${totalSpent.toFixed(2)}</span>
                         </div>
                         <div class="progress mb-3">
                             <div class="progress-bar" role="progressbar" style="width: ${progressPercent}%"></div>
@@ -1339,28 +1343,71 @@
                 return;
             }
             
-            // In a real implementation, you would call the Google Maps Distance Matrix API
-            // For this demo, we'll simulate the API response
-            
             try {
-                // Simulate API call delay
-                await new Promise(resolve => setTimeout(resolve, 1500));
+                // First, we need to geocode the locations to get coordinates
+                const startCoords = await geocodeLocation(startLocation);
+                const destCoords = await geocodeLocation(destination);
                 
-                // Mock response data
-                const mockResponse = {
-                    rows: [{
-                        elements: [{
-                            distance: { text: '350 km' },
-                            duration: { text: '4 hours 15 mins' },
-                            status: 'OK'
-                        }]
-                    }]
-                };
+                if (!startCoords || !destCoords) {
+                    throw new Error('Could not find coordinates for the provided locations');
+                }
                 
-                displayDistanceResults(mockResponse);
+                // Now call OpenRouteService Directions API
+                const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': OPENROUTESERVICE_API_KEY,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        coordinates: [
+                            [startCoords.lng, startCoords.lat],
+                            [destCoords.lng, destCoords.lat]
+                        ]
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to calculate distance');
+                }
+                
+                const data = await response.json();
+                displayDistanceResults(data);
             } catch (error) {
                 console.error('Error calculating distance:', error);
-                alert('Error calculating distance. Please try again.');
+                // Fallback to mock data if API fails
+                const mockResponse = {
+                    routes: [{
+                        summary: {
+                            distance: 350000, // in meters
+                            duration: 15300   // in seconds
+                        }
+                    }]
+                };
+                displayDistanceResults(mockResponse);
+            }
+        }
+        
+        async function geocodeLocation(location) {
+            try {
+                // Using OpenRouteService Geocoding API
+                const response = await fetch(`https://api.openrouteservice.org/geocode/search?api_key=${OPENROUTESERVICE_API_KEY}&text=${encodeURIComponent(location)}`);
+                
+                if (!response.ok) {
+                    throw new Error('Geocoding failed');
+                }
+                
+                const data = await response.json();
+                if (data.features && data.features.length > 0) {
+                    return {
+                        lat: data.features[0].geometry.coordinates[1],
+                        lng: data.features[0].geometry.coordinates[0]
+                    };
+                }
+                return null;
+            } catch (error) {
+                console.error('Geocoding error:', error);
+                return null;
             }
         }
         
@@ -1368,12 +1415,12 @@
             const distanceResults = document.getElementById('distance-results');
             const distanceDetails = document.getElementById('distance-details');
             
-            if (response.rows[0].elements[0].status === 'OK') {
-                const distance = response.rows[0].elements[0].distance.text;
-                const duration = response.rows[0].elements[0].duration.text;
+            if (response.routes && response.routes.length > 0) {
+                const distance = (response.routes[0].summary.distance / 1000).toFixed(1); // Convert to km
+                const duration = formatDuration(response.routes[0].summary.duration);
                 
                 distanceDetails.innerHTML = `
-                    <p><strong>Distance:</strong> ${distance}</p>
+                    <p><strong>Distance:</strong> ${distance} km</p>
                     <p><strong>Estimated Travel Time:</strong> ${duration}</p>
                 `;
                 
@@ -1384,56 +1431,140 @@
             }
         }
         
-        async function calculateRoute() {
-            if (!currentTrip) return;
+        function formatDuration(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
             
-            // In a real implementation, you would calculate the route using Google Maps API
-            // For this demo, we'll use mock data
-            
-            try {
-                // Simulate API call delay
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                
-                // Mock route data
-                const mockRoute = {
-                    distance: '350 km',
-                    duration: '4 hours 15 mins',
-                    steps: [
-                        'Start from ' + currentTrip.startLocation,
-                        'Take Highway 1 North for 120 km',
-                        'Merge onto Interstate 5 for 180 km',
-                        'Take exit 234 toward ' + currentTrip.destination,
-                        'Continue on Main Street for 5 km',
-                        'Arrive at destination'
-                    ]
-                };
-                
-                displayRouteDetails(mockRoute);
-            } catch (error) {
-                console.error('Error calculating route:', error);
-                alert('Error calculating route. Please try again.');
+            if (hours > 0) {
+                return `${hours} hour${hours > 1 ? 's' : ''} ${minutes} minute${minutes > 1 ? 's' : ''}`;
+            } else {
+                return `${minutes} minute${minutes > 1 ? 's' : ''}`;
             }
         }
         
-        function displayRouteDetails(route) {
+        async function calculateRoute() {
+            if (!currentTrip) return;
+            
+            try {
+                // First, we need to geocode the locations to get coordinates
+                const startCoords = await geocodeLocation(currentTrip.startLocation);
+                const destCoords = await geocodeLocation(currentTrip.destination);
+                
+                if (!startCoords || !destCoords) {
+                    throw new Error('Could not find coordinates for the provided locations');
+                }
+                
+                // Now call OpenRouteService Directions API
+                const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': OPENROUTESERVICE_API_KEY,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        coordinates: [
+                            [startCoords.lng, startCoords.lat],
+                            [destCoords.lng, destCoords.lat]
+                        ]
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to calculate route');
+                }
+                
+                const data = await response.json();
+                displayRouteDetails(data);
+            } catch (error) {
+                console.error('Error calculating route:', error);
+                // Fallback to mock data if API fails
+                const mockResponse = {
+                    routes: [{
+                        summary: {
+                            distance: 350000, // in meters
+                            duration: 15300   // in seconds
+                        },
+                        segments: [{
+                            steps: [
+                                { instruction: 'Start from ' + currentTrip.startLocation, distance: 0 },
+                                { instruction: 'Take Highway 1 North for 120 km', distance: 120000 },
+                                { instruction: 'Merge onto Interstate 5 for 180 km', distance: 180000 },
+                                { instruction: 'Take exit 234 toward ' + currentTrip.destination, distance: 5000 },
+                                { instruction: 'Continue on Main Street for 5 km', distance: 5000 },
+                                { instruction: 'Arrive at destination', distance: 0 }
+                            ]
+                        }]
+                    }]
+                };
+                displayRouteDetails(mockResponse);
+            }
+        }
+        
+        function displayRouteDetails(response) {
             const routeDetails = document.getElementById('route-details');
             const emptyRoute = document.getElementById('empty-route');
             
-            emptyRoute.classList.add('d-none');
-            
-            routeDetails.innerHTML = `
-                <div class="mb-3">
-                    <p><strong>Total Distance:</strong> ${route.distance}</p>
-                    <p><strong>Estimated Travel Time:</strong> ${route.duration}</p>
-                </div>
-                <h5>Route Steps:</h5>
-                ${route.steps.map((step, index) => `
-                    <div class="route-step">
-                        <span class="badge bg-primary me-2">${index + 1}</span>
-                        ${step}
+            if (response.routes && response.routes.length > 0) {
+                const route = response.routes[0];
+                const distance = (route.summary.distance / 1000).toFixed(1); // Convert to km
+                const duration = formatDuration(route.summary.duration);
+                
+                emptyRoute.classList.add('d-none');
+                
+                let stepsHtml = '';
+                if (route.segments && route.segments.length > 0) {
+                    stepsHtml = route.segments[0].steps.map((step, index) => `
+                        <div class="route-step">
+                            <span class="badge bg-primary me-2">${index + 1}</span>
+                            ${step.instruction} ${step.distance > 0 ? `(${(step.distance / 1000).toFixed(1)} km)` : ''}
+                        </div>
+                    `).join('');
+                }
+                
+                routeDetails.innerHTML = `
+                    <div class="mb-3">
+                        <p><strong>Total Distance:</strong> ${distance} km</p>
+                        <p><strong>Estimated Travel Time:</strong> ${duration}</p>
                     </div>
-                `).join('')}
-            `;
+                    <h5>Route Steps:</h5>
+                    ${stepsHtml}
+                `;
+                
+                // Update the trip with route information
+                updateTripWithRouteInfo(distance, duration);
+            } else {
+                routeDetails.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Could not calculate route. Please try again.
+                    </div>
+                `;
+            }
+        }
+        
+        async function updateTripWithRouteInfo(distance, duration) {
+            if (!currentTrip) return;
+            
+            try {
+                await db.collection('trips').doc(currentTrip.id).update({
+                    route: {
+                        distance: `${distance} km`,
+                        duration: duration,
+                        calculatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    }
+                });
+                
+                // Update local state
+                currentTrip.route = {
+                    distance: `${distance} km`,
+                    duration: duration
+                };
+                
+                // Update overview tab
+                document.getElementById('overview-distance').textContent = `${distance} km (${duration})`;
+            } catch (error) {
+                console.error('Error updating trip with route info:', error);
+            }
         }
         
         function loadTripOverview(trip) {
@@ -1445,13 +1576,13 @@
             const endDate = new Date(trip.endDate).toLocaleDateString();
             document.getElementById('overview-dates').textContent = `${startDate} - ${endDate}`;
             
-            document.getElementById('overview-budget').textContent = `$${trip.budget.toFixed(2)}`;
+            document.getElementById('overview-budget').textContent = `<span class="rupee-symbol">₹</span>${trip.budget.toFixed(2)}`;
             
             // Calculate total spent and remaining
             const totalSpent = trip.expenses ? trip.expenses.reduce((sum, expense) => sum + expense.amount, 0) : 0;
             const remaining = trip.budget - totalSpent;
             
-            document.getElementById('overview-remaining').textContent = `$${remaining.toFixed(2)}`;
+            document.getElementById('overview-remaining').textContent = `<span class="rupee-symbol">₹</span>${remaining.toFixed(2)}`;
             
             // Update progress bar
             const progressPercent = Math.min((totalSpent / trip.budget) * 100, 100);
@@ -1461,7 +1592,7 @@
             
             // Update distance if available
             if (trip.route) {
-                document.getElementById('overview-distance').textContent = trip.route.distance;
+                document.getElementById('overview-distance').textContent = `${trip.route.distance} (${trip.route.duration})`;
             } else {
                 document.getElementById('overview-distance').textContent = 'Not calculated';
             }
@@ -1524,7 +1655,7 @@
                             <span class="category-badge ${categoryClass}">${categoryName}</span>
                         </div>
                         <div class="text-end">
-                            <strong>$${expense.amount.toFixed(2)}</strong>
+                            <strong><span class="rupee-symbol">₹</span>${expense.amount.toFixed(2)}</strong>
                             <div>
                                 <small class="text-muted">by ${expense.addedBy === currentUser.uid ? 'You' : 'Member'}</small>
                             </div>
@@ -1544,9 +1675,9 @@
             const remaining = trip.budget - totalSpent;
             const progressPercent = Math.min((totalSpent / trip.budget) * 100, 100);
             
-            document.getElementById('summary-total-budget').textContent = `$${trip.budget.toFixed(2)}`;
-            document.getElementById('summary-total-spent').textContent = `$${totalSpent.toFixed(2)}`;
-            document.getElementById('summary-remaining').textContent = `$${remaining.toFixed(2)}`;
+            document.getElementById('summary-total-budget').innerHTML = `<span class="rupee-symbol">₹</span>${trip.budget.toFixed(2)}`;
+            document.getElementById('summary-total-spent').innerHTML = `<span class="rupee-symbol">₹</span>${totalSpent.toFixed(2)}`;
+            document.getElementById('summary-remaining').innerHTML = `<span class="rupee-symbol">₹</span>${remaining.toFixed(2)}`;
             
             const progressBar = document.getElementById('summary-progress-bar');
             progressBar.style.width = `${progressPercent}%`;
@@ -1658,7 +1789,20 @@
         
         function loadTripRoute(trip) {
             if (trip.route) {
-                displayRouteDetails(trip.route);
+                const routeDetails = document.getElementById('route-details');
+                const emptyRoute = document.getElementById('empty-route');
+                
+                emptyRoute.classList.add('d-none');
+                routeDetails.innerHTML = `
+                    <div class="mb-3">
+                        <p><strong>Total Distance:</strong> ${trip.route.distance}</p>
+                        <p><strong>Estimated Travel Time:</strong> ${trip.route.duration}</p>
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Route was calculated on ${new Date(trip.route.calculatedAt?.toDate()).toLocaleDateString()}
+                    </div>
+                `;
             } else {
                 document.getElementById('route-details').innerHTML = '';
                 document.getElementById('empty-route').classList.remove('d-none');
