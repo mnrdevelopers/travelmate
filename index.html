@@ -3,14 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/png" href="https://example.com/favicon.png">
     <title>TravelMate - Trip Management</title>
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Lottie Player -->
-    <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
     <style>
         :root {
             --primary-color: #4361ee;
@@ -234,6 +231,346 @@
         .rupee-symbol {
             font-family: Arial, sans-serif;
         }
+        
+        /* Travel Animations */
+        .travel-animation {
+            width: 200px;
+            height: 200px;
+            margin: 0 auto;
+            position: relative;
+        }
+        
+        .splash-animation {
+            width: 300px;
+            height: 300px;
+            margin: 0 auto;
+        }
+        
+        .empty-animation {
+            width: 250px;
+            height: 250px;
+            margin: 0 auto;
+        }
+        
+        /* Plane Animation */
+        .plane-animation {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .plane {
+            position: absolute;
+            top: 40%;
+            left: 0;
+            width: 40px;
+            height: 40px;
+            color: var(--primary-color);
+            animation: fly 4s infinite ease-in-out;
+        }
+        
+        .plane i {
+            font-size: 40px;
+        }
+        
+        @keyframes fly {
+            0% {
+                transform: translateX(-50px) translateY(0) rotate(0deg);
+            }
+            25% {
+                transform: translateX(25%) translateY(-10px) rotate(5deg);
+            }
+            50% {
+                transform: translateX(50%) translateY(0) rotate(0deg);
+            }
+            75% {
+                transform: translateX(75%) translateY(10px) rotate(-5deg);
+            }
+            100% {
+                transform: translateX(150%) translateY(0) rotate(0deg);
+            }
+        }
+        
+        /* Suitcase Animation */
+        .suitcase-animation {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .suitcase {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80px;
+            height: 60px;
+            background-color: #3a0ca3;
+            border-radius: 10px;
+            animation: bounce 2s infinite ease-in-out;
+        }
+        
+        .suitcase:before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: 10px;
+            width: 60px;
+            height: 15px;
+            background-color: #4361ee;
+            border-radius: 5px 5px 0 0;
+        }
+        
+        .suitcase:after {
+            content: '';
+            position: absolute;
+            top: 15px;
+            left: 20px;
+            width: 40px;
+            height: 5px;
+            background-color: #4cc9f0;
+            border-radius: 2px;
+        }
+        
+        @keyframes bounce {
+            0%, 100% {
+                transform: translate(-50%, -50%) translateY(0);
+            }
+            50% {
+                transform: translate(-50%, -50%) translateY(-20px);
+            }
+        }
+        
+        /* Map Animation */
+        .map-animation {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .map {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 120px;
+            height: 120px;
+            border: 3px solid #4361ee;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .map-path {
+            position: absolute;
+            top: 50%;
+            left: 20%;
+            width: 60%;
+            height: 3px;
+            background-color: #4cc9f0;
+            transform-origin: left center;
+            animation: drawPath 3s infinite ease-in-out;
+        }
+        
+        .map-pin {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background-color: #e63946;
+            border-radius: 50%;
+            animation: pinPulse 2s infinite ease-in-out;
+        }
+        
+        .pin-start {
+            top: 45%;
+            left: 20%;
+        }
+        
+        .pin-end {
+            top: 55%;
+            left: 80%;
+        }
+        
+        @keyframes drawPath {
+            0% {
+                transform: scaleX(0);
+            }
+            50% {
+                transform: scaleX(1);
+            }
+            100% {
+                transform: scaleX(1);
+            }
+        }
+        
+        @keyframes pinPulse {
+            0%, 100% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(230, 57, 70, 0.7);
+            }
+            50% {
+                transform: scale(1.2);
+                box-shadow: 0 0 0 10px rgba(230, 57, 70, 0);
+            }
+        }
+        
+        /* Compass Animation */
+        .compass-animation {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .compass {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100px;
+            height: 100px;
+            border: 3px solid #4361ee;
+            border-radius: 50%;
+        }
+        
+        .compass-needle {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 70%;
+            height: 3px;
+            background-color: #e63946;
+            transform-origin: left center;
+            animation: spinNeedle 4s infinite linear;
+        }
+        
+        .compass-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 12px;
+            height: 12px;
+            background-color: #4361ee;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        @keyframes spinNeedle {
+            0% {
+                transform: translate(-50%, -50%) rotate(0deg);
+            }
+            100% {
+                transform: translate(-50%, -50%) rotate(360deg);
+            }
+        }
+        
+        /* Success Check Animation */
+        .success-check {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto;
+            border-radius: 50%;
+            background-color: #06d6a0;
+            position: relative;
+            animation: scaleCheck 0.5s ease-in-out;
+        }
+        
+        .success-check:after {
+            content: '';
+            position: absolute;
+            top: 35%;
+            left: 25%;
+            width: 30%;
+            height: 15%;
+            border: solid white;
+            border-width: 0 0 4px 4px;
+            transform: rotate(-45deg);
+        }
+        
+        @keyframes scaleCheck {
+            0% {
+                transform: scale(0);
+            }
+            70% {
+                transform: scale(1.2);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+        
+        /* Car Animation */
+        .car-animation {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .road {
+            position: absolute;
+            bottom: 30%;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background-color: #333;
+        }
+        
+        .car {
+            position: absolute;
+            bottom: 30%;
+            left: 0;
+            width: 60px;
+            height: 30px;
+            background-color: #4361ee;
+            border-radius: 10px 10px 0 0;
+            animation: drive 4s infinite linear;
+        }
+        
+        .car:before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: 5px;
+            width: 50px;
+            height: 15px;
+            background-color: #4cc9f0;
+            border-radius: 5px 5px 0 0;
+        }
+        
+        .car:after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 5px;
+            width: 15px;
+            height: 10px;
+            background-color: #333;
+            border-radius: 2px;
+        }
+        
+        .car .wheel {
+            position: absolute;
+            bottom: -8px;
+            width: 12px;
+            height: 12px;
+            background-color: #333;
+            border-radius: 50%;
+        }
+        
+        .car .wheel-front {
+            left: 10px;
+        }
+        
+        .car .wheel-back {
+            right: 10px;
+        }
+        
+        @keyframes drive {
+            0% {
+                transform: translateX(-50px);
+            }
+            100% {
+                transform: translateX(250px);
+            }
+        }
     </style>
 </head>
 <body>
@@ -246,15 +583,12 @@
                 </div>
                 <h1>TravelMate</h1>
                 <p>Plan your trips together</p>
-                <div class="mt-4">
-                    <lottie-player 
-                        src="https://assets1.lottiefiles.com/packages/lf20_sk5h1kfn.json" 
-                        background="transparent" 
-                        speed="1" 
-                        style="width: 200px; height: 200px; margin: 0 auto;" 
-                        loop 
-                        autoplay>
-                    </lottie-player>
+                <div class="splash-animation">
+                    <div class="plane-animation">
+                        <div class="plane">
+                            <i class="fas fa-plane"></i>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -270,14 +604,11 @@
                 </div>
                 <div class="auth-body">
                     <div id="auth-animation" class="text-center mb-4">
-                        <lottie-player 
-                            src="https://assets1.lottiefiles.com/packages/lf20_sk5h1kfn.json" 
-                            background="transparent" 
-                            speed="1" 
-                            style="width: 200px; height: 200px; margin: 0 auto;" 
-                            loop 
-                            autoplay>
-                        </lottie-player>
+                        <div class="travel-animation">
+                            <div class="suitcase-animation">
+                                <div class="suitcase"></div>
+                            </div>
+                        </div>
                     </div>
                     
                     <div class="d-grid mb-3">
@@ -403,14 +734,15 @@
             </div>
             
             <div id="empty-trips" class="empty-state">
-                <lottie-player 
-                    src="https://assets2.lottiefiles.com/packages/lf20_vybwn7df.json" 
-                    background="transparent" 
-                    speed="1" 
-                    style="width: 300px; height: 300px; margin: 0 auto;" 
-                    loop 
-                    autoplay>
-                </lottie-player>
+                <div class="empty-animation">
+                    <div class="map-animation">
+                        <div class="map">
+                            <div class="map-path"></div>
+                            <div class="map-pin pin-start"></div>
+                            <div class="map-pin pin-end"></div>
+                        </div>
+                    </div>
+                </div>
                 <h4>No trips yet</h4>
                 <p>Create your first trip or join an existing one to get started!</p>
                 <button class="btn btn-primary mt-2" id="create-first-trip-btn">
@@ -512,13 +844,7 @@
                     </div>
                     <div class="modal-body text-center">
                         <div class="success-animation">
-                            <lottie-player 
-                                src="https://assets10.lottiefiles.com/packages/lf20_ykqwfq2g.json" 
-                                background="transparent" 
-                                speed="1" 
-                                style="width: 150px; height: 150px;" 
-                                autoplay>
-                            </lottie-player>
+                            <div class="success-check"></div>
                         </div>
                         <h4 class="mb-3">Trip Created Successfully!</h4>
                         <p>Share this code with your travel companions:</p>
@@ -646,14 +972,14 @@
                             </div>
                             
                             <div id="empty-expenses" class="empty-state">
-                                <lottie-player 
-                                    src="https://assets10.lottiefiles.com/packages/lf20_6wutsrox.json" 
-                                    background="transparent" 
-                                    speed="1" 
-                                    style="width: 200px; height: 200px; margin: 0 auto;" 
-                                    loop 
-                                    autoplay>
-                                </lottie-player>
+                                <div class="empty-animation">
+                                    <div class="compass-animation">
+                                        <div class="compass">
+                                            <div class="compass-needle"></div>
+                                            <div class="compass-center"></div>
+                                        </div>
+                                    </div>
+                                </div>
                                 <h4>No expenses yet</h4>
                                 <p>Start adding expenses to track your spending!</p>
                             </div>
@@ -704,14 +1030,15 @@
                     </div>
                     
                     <div id="empty-itinerary" class="empty-state">
-                        <lottie-player 
-                            src="https://assets7.lottiefiles.com/packages/lf20_0skurerf.json" 
-                            background="transparent" 
-                            speed="1" 
-                            style="width: 250px; height: 250px; margin: 0 auto;" 
-                            loop 
-                            autoplay>
-                        </lottie-player>
+                        <div class="empty-animation">
+                            <div class="car-animation">
+                                <div class="road"></div>
+                                <div class="car">
+                                    <div class="wheel wheel-front"></div>
+                                    <div class="wheel wheel-back"></div>
+                                </div>
+                            </div>
+                        </div>
                         <h4>No activities planned yet</h4>
                         <p>Start adding activities to your itinerary!</p>
                     </div>
@@ -726,14 +1053,13 @@
                                 <!-- Route details will be loaded here -->
                             </div>
                             <div id="empty-route" class="empty-state">
-                                <lottie-player 
-                                    src="https://assets1.lottiefiles.com/packages/lf20_ki7nbraa.json" 
-                                    background="transparent" 
-                                    speed="1" 
-                                    style="width: 200px; height: 200px; margin: 0 auto;" 
-                                    loop 
-                                    autoplay>
-                                </lottie-player>
+                                <div class="empty-animation">
+                                    <div class="plane-animation">
+                                        <div class="plane">
+                                            <i class="fas fa-plane"></i>
+                                        </div>
+                                    </div>
+                                </div>
                                 <h4>No route information</h4>
                                 <p>Calculate distance to see route details</p>
                                 <button class="btn btn-primary mt-2" id="calculate-route-btn">
