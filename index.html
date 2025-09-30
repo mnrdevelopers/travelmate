@@ -10,6 +10,12 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Lottie Player -->
     <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <style>
         :root {
             --primary-color: #4361ee;
@@ -24,8 +30,6 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #f5f7fb;
             color: #333;
-            height: 100vh;
-            overflow: hidden;
         }
         
         .splash-container {
@@ -222,12 +226,32 @@
         
         .page {
             display: none;
-            height: 100vh;
-            overflow-y: auto;
         }
         
         .active-page {
             display: block;
+        }
+        
+        .rupee-symbol {
+            font-family: Arial, sans-serif;
+        }
+        
+        .currency-input {
+            position: relative;
+        }
+        
+        .currency-input::before {
+            content: "₹";
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-weight: bold;
+            color: #495057;
+        }
+        
+        .currency-input input {
+            padding-left: 25px;
         }
     </style>
 </head>
@@ -449,8 +473,10 @@
                                 </div>
                             </div>
                             <div class="mb-3">
-                                <label for="trip-budget" class="form-label">Total Budget ($)</label>
-                                <input type="number" class="form-control" id="trip-budget" min="0" step="0.01" required>
+                                <label for="trip-budget" class="form-label">Total Budget</label>
+                                <div class="currency-input">
+                                    <input type="number" class="form-control" id="trip-budget" min="0" step="0.01" required>
+                                </div>
                             </div>
                             <div class="form-check mb-3">
                                 <input class="form-check-input" type="checkbox" id="calculate-distance">
@@ -554,7 +580,7 @@
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" data-bs-toggle="tab" href="#expenses">
-                        <i class="fas fa-dollar-sign me-1"></i>Expenses
+                        <i class="fas fa-rupee-sign me-1"></i>Expenses
                     </a>
                 </li>
                 <li class="nav-item">
@@ -595,7 +621,7 @@
                                             <span id="overview-distance">-</span>
                                         </div>
                                         <div class="col-sm-6 mb-3">
-                                            <strong><i class="fas fa-dollar-sign me-2 text-primary"></i>Total Budget:</strong>
+                                            <strong><i class="fas fa-rupee-sign me-2 text-primary"></i>Total Budget:</strong>
                                             <span id="overview-budget">-</span>
                                         </div>
                                         <div class="col-sm-6 mb-3">
@@ -659,15 +685,15 @@
                                 <div class="card-body">
                                     <div class="mb-3">
                                         <strong>Total Budget:</strong>
-                                        <span id="summary-total-budget" class="float-end">$0</span>
+                                        <span id="summary-total-budget" class="float-end">₹0</span>
                                     </div>
                                     <div class="mb-3">
                                         <strong>Total Spent:</strong>
-                                        <span id="summary-total-spent" class="float-end">$0</span>
+                                        <span id="summary-total-spent" class="float-end">₹0</span>
                                     </div>
                                     <div class="mb-3">
                                         <strong>Remaining:</strong>
-                                        <span id="summary-remaining" class="float-end">$0</span>
+                                        <span id="summary-remaining" class="float-end">₹0</span>
                                     </div>
                                     <div class="progress mt-3">
                                         <div id="summary-progress-bar" class="progress-bar" role="progressbar" style="width: 0%"></div>
@@ -756,8 +782,10 @@
                                 <input type="text" class="form-control" id="expense-description" required>
                             </div>
                             <div class="mb-3">
-                                <label for="expense-amount" class="form-label">Amount ($)</label>
-                                <input type="number" class="form-control" id="expense-amount" min="0" step="0.01" required>
+                                <label for="expense-amount" class="form-label">Amount</label>
+                                <div class="currency-input">
+                                    <input type="number" class="form-control" id="expense-amount" min="0" step="0.01" required>
+                                </div>
                             </div>
                             <div class="mb-3">
                                 <label for="expense-category" class="form-label">Category</label>
@@ -824,12 +852,6 @@
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     
     <script>
         // Firebase configuration
@@ -848,212 +870,178 @@
         const auth = firebase.auth();
         const db = firebase.firestore();
         
-        // Google Maps Distance Matrix API key (replace with your own)
-        const GOOGLE_MAPS_API_KEY = "YOUR_GOOGLE_MAPS_API_KEY_HERE";
-        
         // App state
         let currentUser = null;
         let currentTrip = null;
         let userTrips = [];
+        let expenseChart = null;
         
         // DOM Elements
         const splashScreen = document.getElementById('splash-screen');
         const authScreen = document.getElementById('auth-screen');
-        const appScreen = document.getElementById('app');
+        const app = document.getElementById('app');
+        const googleSigninBtn = document.getElementById('google-signin-btn');
+        const loginForm = document.getElementById('login-form');
+        const signupForm = document.getElementById('signup-form');
+        const resetPasswordForm = document.getElementById('reset-password-form');
+        const authMessage = document.getElementById('auth-message');
+        const showSignup = document.getElementById('show-signup');
+        const showLogin = document.getElementById('show-login');
+        const forgotPassword = document.getElementById('forgot-password');
+        const backToLogin = document.getElementById('back-to-login');
+        const logoutBtn = document.getElementById('logout-btn');
+        const userName = document.getElementById('user-name');
+        const userAvatar = document.getElementById('user-avatar');
         const dashboardScreen = document.getElementById('dashboard-screen');
+        const tripsContainer = document.getElementById('trips-container');
+        const emptyTrips = document.getElementById('empty-trips');
+        const createTripBtn = document.getElementById('create-trip-btn');
+        const joinTripBtn = document.getElementById('join-trip-btn');
+        const createFirstTripBtn = document.getElementById('create-first-trip-btn');
+        const createTripModal = new bootstrap.Modal(document.getElementById('createTripModal'));
+        const joinTripModal = new bootstrap.Modal(document.getElementById('joinTripModal'));
+        const shareTripModal = new bootstrap.Modal(document.getElementById('shareTripModal'));
+        const saveTripBtn = document.getElementById('save-trip-btn');
+        const joinTripCodeBtn = document.getElementById('join-trip-code-btn');
+        const copyCodeBtn = document.getElementById('copy-code-btn');
+        const shareTripCode = document.getElementById('share-trip-code');
+        const copySuccess = document.getElementById('copy-success');
         const tripDetailsScreen = document.getElementById('trip-details-screen');
+        const backToDashboard = document.getElementById('back-to-dashboard');
+        const tripDetailsName = document.getElementById('trip-details-name');
+        const tripDetailsCode = document.getElementById('trip-details-code');
+        const addExpenseBtn = document.getElementById('add-expense-btn');
+        const addExpenseModal = new bootstrap.Modal(document.getElementById('addExpenseModal'));
+        const saveExpenseBtn = document.getElementById('save-expense-btn');
+        const addActivityBtn = document.getElementById('add-activity-btn');
+        const addActivityModal = new bootstrap.Modal(document.getElementById('addActivityModal'));
+        const saveActivityBtn = document.getElementById('save-activity-btn');
+        const calculateDistanceCheckbox = document.getElementById('calculate-distance');
+        const distanceResults = document.getElementById('distance-results');
+        const calculateRouteBtn = document.getElementById('calculate-route-btn');
         
         // Initialize the app
         document.addEventListener('DOMContentLoaded', function() {
-            initializeApp();
-            setupEventListeners();
-            
-            // Show splash screen for 2 seconds then check auth state
+            // Show splash screen for 2 seconds
             setTimeout(() => {
-                checkAuthState();
+                initAuth();
             }, 2000);
+            
+            setupEventListeners();
         });
         
-        function initializeApp() {
-            // Set minimum dates to today
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('start-date').min = today;
-            document.getElementById('end-date').min = today;
-            document.getElementById('expense-date').max = today;
-        }
-        
-        function setupEventListeners() {
-            // Auth form toggles
-            document.getElementById('show-signup').addEventListener('click', showSignupForm);
-            document.getElementById('show-login').addEventListener('click', showLoginForm);
-            document.getElementById('forgot-password').addEventListener('click', showResetPasswordForm);
-            document.getElementById('back-to-login').addEventListener('click', showLoginForm);
-            
-            // Auth form submissions
-            document.getElementById('login-form').addEventListener('submit', handleLogin);
-            document.getElementById('signup-form').addEventListener('submit', handleSignup);
-            document.getElementById('reset-password-form').addEventListener('submit', handleResetPassword);
-            document.getElementById('google-signin-btn').addEventListener('click', handleGoogleSignIn);
-            
-            // Trip management
-            document.getElementById('create-trip-btn').addEventListener('click', showCreateTripModal);
-            document.getElementById('create-first-trip-btn').addEventListener('click', showCreateTripModal);
-            document.getElementById('join-trip-btn').addEventListener('click', showJoinTripModal);
-            document.getElementById('save-trip-btn').addEventListener('click', saveTrip);
-            document.getElementById('join-trip-code-btn').addEventListener('click', joinTripWithCode);
-            document.getElementById('back-to-dashboard').addEventListener('click', showDashboard);
-            
-            // Trip details
-            document.getElementById('add-expense-btn').addEventListener('click', showAddExpenseModal);
-            document.getElementById('save-expense-btn').addEventListener('click', saveExpense);
-            document.getElementById('add-activity-btn').addEventListener('click', showAddActivityModal);
-            document.getElementById('save-activity-btn').addEventListener('click', saveActivity);
-            document.getElementById('calculate-route-btn').addEventListener('click', calculateRoute);
-            
-            // Logout
-            document.getElementById('logout-btn').addEventListener('click', handleLogout);
-            
-            // Copy trip code
-            document.getElementById('copy-code-btn').addEventListener('click', copyTripCode);
-            
-            // Calculate distance when checkbox is toggled
-            document.getElementById('calculate-distance').addEventListener('change', function() {
-                if (this.checked) {
-                    calculateDistance();
-                } else {
-                    document.getElementById('distance-results').classList.add('d-none');
-                }
-            });
-        }
-        
-        function checkAuthState() {
+        // Initialize authentication state listener
+        function initAuth() {
             auth.onAuthStateChanged(user => {
                 if (user) {
-                    // User is signed in
                     currentUser = user;
                     showApp();
+                    loadUserData();
                     loadUserTrips();
                 } else {
-                    // User is signed out
-                    showAuthScreen();
+                    currentUser = null;
+                    showAuth();
                 }
             });
         }
         
-        function showAuthScreen() {
+        // Set up event listeners
+        function setupEventListeners() {
+            // Auth form events
+            googleSigninBtn.addEventListener('click', handleGoogleSignIn);
+            loginForm.addEventListener('submit', handleLogin);
+            signupForm.addEventListener('submit', handleSignup);
+            resetPasswordForm.addEventListener('submit', handleResetPassword);
+            showSignup.addEventListener('click', showSignupForm);
+            showLogin.addEventListener('click', showLoginForm);
+            forgotPassword.addEventListener('click', showResetPasswordForm);
+            backToLogin.addEventListener('click', showLoginForm);
+            logoutBtn.addEventListener('click', handleLogout);
+            
+            // Trip management events
+            createTripBtn.addEventListener('click', showCreateTripModal);
+            createFirstTripBtn.addEventListener('click', showCreateTripModal);
+            joinTripBtn.addEventListener('click', showJoinTripModal);
+            saveTripBtn.addEventListener('click', handleCreateTrip);
+            joinTripCodeBtn.addEventListener('click', handleJoinTrip);
+            copyCodeBtn.addEventListener('click', copyTripCode);
+            backToDashboard.addEventListener('click', showDashboard);
+            
+            // Expense and itinerary events
+            addExpenseBtn.addEventListener('click', showAddExpenseModal);
+            saveExpenseBtn.addEventListener('click', handleAddExpense);
+            addActivityBtn.addEventListener('click', showAddActivityModal);
+            saveActivityBtn.addEventListener('click', handleAddActivity);
+            
+            // Distance calculation events
+            calculateDistanceCheckbox.addEventListener('change', handleDistanceCalculationToggle);
+            calculateRouteBtn.addEventListener('click', calculateRoute);
+        }
+        
+        // Page navigation functions
+        function showSplash() {
+            splashScreen.classList.add('active-page');
+            authScreen.classList.remove('active-page');
+            app.classList.remove('active-page');
+        }
+        
+        function showAuth() {
             splashScreen.classList.remove('active-page');
             authScreen.classList.add('active-page');
-            appScreen.classList.remove('active-page');
+            app.classList.remove('active-page');
         }
         
         function showApp() {
             splashScreen.classList.remove('active-page');
             authScreen.classList.remove('active-page');
-            appScreen.classList.add('active-page');
-            showDashboard();
-            
-            // Update user info in navbar
-            document.getElementById('user-name').textContent = currentUser.displayName || currentUser.email;
-            document.getElementById('user-avatar').src = currentUser.photoURL || 'https://via.placeholder.com/40';
+            app.classList.add('active-page');
         }
         
         function showDashboard() {
             dashboardScreen.classList.remove('d-none');
             tripDetailsScreen.classList.add('d-none');
-            loadUserTrips();
         }
         
-        function showTripDetails(trip) {
-            currentTrip = trip;
-            dashboardScreen.classList.add('d-none');
-            tripDetailsScreen.classList.remove('d-none');
+        // Authentication handlers
+        function handleGoogleSignIn() {
+            const provider = new firebase.auth.GoogleAuthProvider();
             
-            // Update trip details
-            document.getElementById('trip-details-name').textContent = trip.name;
-            document.getElementById('trip-details-code').textContent = trip.code;
-            
-            // Load trip data
-            loadTripOverview(trip);
-            loadTripExpenses(trip);
-            loadTripItinerary(trip);
-            loadTripRoute(trip);
+            auth.signInWithPopup(provider)
+                .then((result) => {
+                    // User signed in successfully
+                    const user = result.user;
+                    
+                    // Check if user exists in Firestore, if not create a new document
+                    return db.collection('users').doc(user.uid).set({
+                        name: user.displayName,
+                        email: user.email,
+                        photoURL: user.photoURL,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                })
+                .catch((error) => {
+                    console.error('Error during Google sign-in:', error);
+                    showAuthMessage(error.message, 'danger');
+                });
         }
         
-        function showLoginForm(e) {
-            e.preventDefault();
-            document.getElementById('login-form').classList.remove('d-none');
-            document.getElementById('signup-form').classList.add('d-none');
-            document.getElementById('reset-password-form').classList.add('d-none');
-            document.getElementById('auth-message').classList.add('d-none');
-        }
-        
-        function showSignupForm(e) {
-            e.preventDefault();
-            document.getElementById('login-form').classList.add('d-none');
-            document.getElementById('signup-form').classList.remove('d-none');
-            document.getElementById('reset-password-form').classList.add('d-none');
-            document.getElementById('auth-message').classList.add('d-none');
-        }
-        
-        function showResetPasswordForm(e) {
-            e.preventDefault();
-            document.getElementById('login-form').classList.add('d-none');
-            document.getElementById('signup-form').classList.add('d-none');
-            document.getElementById('reset-password-form').classList.remove('d-none');
-            document.getElementById('auth-message').classList.add('d-none');
-        }
-        
-        function showCreateTripModal() {
-            const modal = new bootstrap.Modal(document.getElementById('createTripModal'));
-            modal.show();
-        }
-        
-        function showJoinTripModal() {
-            const modal = new bootstrap.Modal(document.getElementById('joinTripModal'));
-            modal.show();
-        }
-        
-        function showAddExpenseModal() {
-            const modal = new bootstrap.Modal(document.getElementById('addExpenseModal'));
-            modal.show();
-        }
-        
-        function showAddActivityModal() {
-            // Populate days dropdown
-            const daySelect = document.getElementById('activity-day');
-            daySelect.innerHTML = '';
-            
-            if (currentTrip) {
-                const startDate = new Date(currentTrip.startDate);
-                const endDate = new Date(currentTrip.endDate);
-                const days = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
-                
-                for (let i = 1; i <= days; i++) {
-                    const option = document.createElement('option');
-                    option.value = i;
-                    option.textContent = `Day ${i}`;
-                    daySelect.appendChild(option);
-                }
-            }
-            
-            const modal = new bootstrap.Modal(document.getElementById('addActivityModal'));
-            modal.show();
-        }
-        
-        async function handleLogin(e) {
+        function handleLogin(e) {
             e.preventDefault();
             const email = document.getElementById('login-email').value;
             const password = document.getElementById('login-password').value;
             
-            try {
-                await auth.signInWithEmailAndPassword(email, password);
-                // Auth state listener will handle the rest
-            } catch (error) {
-                showAuthMessage(error.message, 'danger');
-            }
+            showAuthMessage('Logging in...', 'info');
+            
+            auth.signInWithEmailAndPassword(email, password)
+                .then(() => {
+                    showAuthMessage('Login successful!', 'success');
+                })
+                .catch(error => {
+                    showAuthMessage(error.message, 'danger');
+                });
         }
         
-        async function handleSignup(e) {
+        function handleSignup(e) {
             e.preventDefault();
             const name = document.getElementById('signup-name').value;
             const email = document.getElementById('signup-email').value;
@@ -1061,147 +1049,326 @@
             const confirmPassword = document.getElementById('signup-confirm-password').value;
             
             if (password !== confirmPassword) {
-                showAuthMessage("Passwords don't match", 'danger');
+                showAuthMessage('Passwords do not match!', 'danger');
                 return;
             }
             
-            try {
-                const result = await auth.createUserWithEmailAndPassword(email, password);
-                await result.user.updateProfile({
-                    displayName: name
+            showAuthMessage('Creating account...', 'info');
+            
+            auth.createUserWithEmailAndPassword(email, password)
+                .then(userCredential => {
+                    // Store user name in Firestore
+                    return db.collection('users').doc(userCredential.user.uid).set({
+                        name: name,
+                        email: email,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                })
+                .then(() => {
+                    showAuthMessage('Account created successfully!', 'success');
+                })
+                .catch(error => {
+                    showAuthMessage(error.message, 'danger');
                 });
-                // Auth state listener will handle the rest
-            } catch (error) {
-                showAuthMessage(error.message, 'danger');
-            }
         }
         
-        async function handleResetPassword(e) {
+        function handleResetPassword(e) {
             e.preventDefault();
             const email = document.getElementById('reset-email').value;
             
-            try {
-                await auth.sendPasswordResetEmail(email);
-                showAuthMessage('Password reset email sent!', 'success');
-            } catch (error) {
-                showAuthMessage(error.message, 'danger');
-            }
-        }
-        
-        async function handleGoogleSignIn() {
-            const provider = new firebase.auth.GoogleAuthProvider();
+            showAuthMessage('Sending reset email...', 'info');
             
-            try {
-                await auth.signInWithPopup(provider);
-                // Auth state listener will handle the rest
-            } catch (error) {
-                showAuthMessage(error.message, 'danger');
-            }
-        }
-        
-        async function handleLogout() {
-            try {
-                await auth.signOut();
-                // Auth state listener will handle the rest
-            } catch (error) {
-                console.error('Logout error:', error);
-            }
-        }
-        
-        function showAuthMessage(message, type) {
-            const messageEl = document.getElementById('auth-message');
-            messageEl.textContent = message;
-            messageEl.className = `alert alert-${type} mt-3`;
-            messageEl.classList.remove('d-none');
-        }
-        
-        async function loadUserTrips() {
-            if (!currentUser) return;
-            
-            try {
-                const tripsSnapshot = await db.collection('trips')
-                    .where('members', 'array-contains', currentUser.uid)
-                    .get();
-                
-                userTrips = [];
-                tripsSnapshot.forEach(doc => {
-                    userTrips.push({
-                        id: doc.id,
-                        ...doc.data()
-                    });
+            auth.sendPasswordResetEmail(email)
+                .then(() => {
+                    showAuthMessage('Password reset email sent!', 'success');
+                })
+                .catch(error => {
+                    showAuthMessage(error.message, 'danger');
                 });
-                
-                displayTrips();
-            } catch (error) {
-                console.error('Error loading trips:', error);
-            }
         }
         
-        function displayTrips() {
-            const tripsContainer = document.getElementById('trips-container');
-            const emptyTrips = document.getElementById('empty-trips');
+        function handleLogout() {
+            auth.signOut();
+        }
+        
+        // Auth UI helpers
+        function showAuthMessage(message, type) {
+            authMessage.textContent = message;
+            authMessage.className = `alert alert-${type} mt-3`;
+            authMessage.classList.remove('d-none');
+        }
+        
+        function showLoginForm() {
+            loginForm.classList.remove('d-none');
+            signupForm.classList.add('d-none');
+            resetPasswordForm.classList.add('d-none');
+            authMessage.classList.add('d-none');
+        }
+        
+        function showSignupForm() {
+            loginForm.classList.add('d-none');
+            signupForm.classList.remove('d-none');
+            resetPasswordForm.classList.add('d-none');
+            authMessage.classList.add('d-none');
+        }
+        
+        function showResetPasswordForm() {
+            loginForm.classList.add('d-none');
+            signupForm.classList.add('d-none');
+            resetPasswordForm.classList.remove('d-none');
+            authMessage.classList.add('d-none');
+        }
+        
+        // Load user data from Firestore
+        function loadUserData() {
+            db.collection('users').doc(currentUser.uid).get()
+                .then(doc => {
+                    if (doc.exists) {
+                        const userData = doc.data();
+                        userName.textContent = userData.name;
+                        
+                        // Set user avatar (use Google photo if available, otherwise use default)
+                        if (userData.photoURL) {
+                            userAvatar.src = userData.photoURL;
+                        } else if (currentUser.photoURL) {
+                            userAvatar.src = currentUser.photoURL;
+                        } else {
+                            // Use a default avatar or initials
+                            userAvatar.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name)}&background=4361ee&color=fff`;
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading user data:', error);
+                });
+        }
+        
+        // Trip management functions
+        function loadUserTrips() {
+            // Query Firestore for trips where current user is a member
+            db.collection('trips')
+                .where('members', 'array-contains', currentUser.uid)
+                .get()
+                .then(querySnapshot => {
+                    userTrips = [];
+                    querySnapshot.forEach(doc => {
+                        const tripData = doc.data();
+                        userTrips.push({
+                            id: doc.id,
+                            ...tripData
+                        });
+                    });
+                    renderTrips();
+                })
+                .catch(error => {
+                    console.error('Error loading trips:', error);
+                    // For demo purposes, use mock data if Firestore fails
+                    userTrips = getMockTrips();
+                    renderTrips();
+                });
+        }
+        
+        function getMockTrips() {
+            return [
+                {
+                    id: 'trip1',
+                    name: 'Goa Vacation',
+                    startLocation: 'Mumbai, India',
+                    destination: 'Goa, India',
+                    startDate: '2023-12-15',
+                    endDate: '2023-12-25',
+                    budget: 25000,
+                    code: 'GOA123',
+                    members: ['user1', 'user2'],
+                    distance: '590 km',
+                    duration: '10 hours'
+                },
+                {
+                    id: 'trip2',
+                    name: 'Himalayan Trek',
+                    startLocation: 'Delhi, India',
+                    destination: 'Manali, India',
+                    startDate: '2024-05-10',
+                    endDate: '2024-05-20',
+                    budget: 15000,
+                    code: 'HIM456',
+                    members: ['user1', 'user3', 'user4'],
+                    distance: '540 km',
+                    duration: '12 hours'
+                }
+            ];
+        }
+        
+        function renderTrips() {
+            tripsContainer.innerHTML = '';
             
             if (userTrips.length === 0) {
-                tripsContainer.innerHTML = '';
                 emptyTrips.classList.remove('d-none');
                 return;
             }
             
             emptyTrips.classList.add('d-none');
             
-            tripsContainer.innerHTML = '';
             userTrips.forEach(trip => {
-                const tripCard = createTripCard(trip);
+                const tripCard = document.createElement('div');
+                tripCard.className = 'col-md-6 col-lg-4';
+                tripCard.innerHTML = `
+                    <div class="card trip-card" data-trip-id="${trip.id}">
+                        <div class="trip-card-header">
+                            <h5 class="card-title mb-0">${trip.name}</h5>
+                        </div>
+                        <div class="card-body">
+                            <p class="card-text">
+                                <i class="fas fa-map-marker-alt me-2 text-primary"></i>${trip.startLocation} → ${trip.destination}
+                            </p>
+                            <p class="card-text">
+                                <i class="fas fa-calendar-alt me-2 text-primary"></i>${formatDate(trip.startDate)} - ${formatDate(trip.endDate)}
+                            </p>
+                            <p class="card-text">
+                                <i class="fas fa-rupee-sign me-2 text-primary"></i>Budget: ₹${trip.budget.toLocaleString('en-IN')}
+                            </p>
+                            ${trip.distance ? `<p class="card-text">
+                                <i class="fas fa-route me-2 text-primary"></i>${trip.distance} (${trip.duration})
+                            </p>` : ''}
+                            <div class="d-flex align-items-center mt-3">
+                                <div class="me-auto">
+                                    ${renderMemberAvatars(trip.members)}
+                                </div>
+                                <button class="btn btn-sm btn-outline-primary view-trip-btn">
+                                    View Details
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
                 tripsContainer.appendChild(tripCard);
+                
+                // Add event listener to the view trip button
+                tripCard.querySelector('.view-trip-btn').addEventListener('click', () => {
+                    showTripDetails(trip);
+                });
             });
         }
         
-        function createTripCard(trip) {
-            const col = document.createElement('div');
-            col.className = 'col-md-6 col-lg-4';
+        function renderMemberAvatars(members) {
+            let avatarsHtml = '';
+            const maxAvatars = 4;
             
-            const startDate = new Date(trip.startDate).toLocaleDateString();
-            const endDate = new Date(trip.endDate).toLocaleDateString();
+            for (let i = 0; i < Math.min(members.length, maxAvatars); i++) {
+                avatarsHtml += `<div class="member-avatar d-inline-block">U${i+1}</div>`;
+            }
             
-            // Calculate budget progress
-            const totalSpent = trip.expenses ? trip.expenses.reduce((sum, expense) => sum + expense.amount, 0) : 0;
-            const progressPercent = Math.min((totalSpent / trip.budget) * 100, 100);
+            if (members.length > maxAvatars) {
+                avatarsHtml += `<div class="member-avatar d-inline-block">+${members.length - maxAvatars}</div>`;
+            }
             
-            col.innerHTML = `
-                <div class="card trip-card" data-trip-id="${trip.id}">
-                    <div class="trip-card-header">
-                        <h5 class="card-title mb-1">${trip.name}</h5>
-                        <p class="card-text mb-0">${startDate} - ${endDate}</p>
-                    </div>
-                    <div class="card-body">
-                        <p class="card-text">
-                            <i class="fas fa-map-marker-alt me-2"></i>${trip.startLocation} → ${trip.destination}
-                        </p>
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <span>Budget: $${trip.budget.toFixed(2)}</span>
-                            <span>Spent: $${totalSpent.toFixed(2)}</span>
-                        </div>
-                        <div class="progress mb-3">
-                            <div class="progress-bar" role="progressbar" style="width: ${progressPercent}%"></div>
-                        </div>
-                        <div class="d-flex justify-content-between">
-                            <button class="btn btn-outline-primary btn-sm view-trip-btn">
-                                <i class="fas fa-eye me-1"></i>View
-                            </button>
-                            <span class="trip-code">${trip.code}</span>
-                        </div>
-                    </div>
+            return avatarsHtml;
+        }
+        
+        function showCreateTripModal() {
+            createTripModal.show();
+        }
+        
+        function handleDistanceCalculationToggle() {
+            if (calculateDistanceCheckbox.checked) {
+                const startLocation = document.getElementById('start-location').value;
+                const destination = document.getElementById('trip-destination').value;
+                
+                if (startLocation && destination) {
+                    calculateDistance(startLocation, destination);
+                }
+            } else {
+                distanceResults.classList.add('d-none');
+            }
+        }
+        
+        function calculateDistance(start, destination) {
+            // Show loading state
+            document.getElementById('distance-details').innerHTML = `
+                <div class="text-center">
+                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                    Calculating distance...
                 </div>
             `;
+            distanceResults.classList.remove('d-none');
             
-            col.querySelector('.view-trip-btn').addEventListener('click', () => {
-                showTripDetails(trip);
+            // Use OpenStreetMap Nominatim API for geocoding and distance calculation
+            // This is a free alternative to Google Maps API
+            Promise.all([
+                fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(start)}`),
+                fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(destination)}`)
+            ])
+            .then(responses => Promise.all(responses.map(response => response.json())))
+            .then(data => {
+                const startData = data[0];
+                const destData = data[1];
+                
+                if (startData.length === 0 || destData.length === 0) {
+                    throw new Error('Could not find one or both locations');
+                }
+                
+                const startLat = parseFloat(startData[0].lat);
+                const startLon = parseFloat(startData[0].lon);
+                const destLat = parseFloat(destData[0].lat);
+                const destLon = parseFloat(destData[0].lon);
+                
+                // Calculate distance using Haversine formula
+                const distance = calculateHaversineDistance(startLat, startLon, destLat, destLon);
+                const duration = estimateTravelTime(distance);
+                
+                displayDistanceResults(distance, duration, start, destination);
+            })
+            .catch(error => {
+                console.error('Error calculating distance:', error);
+                document.getElementById('distance-details').innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Could not calculate distance. Please check your locations and try again.
+                    </div>
+                `;
             });
-            
-            return col;
         }
         
-        async function saveTrip() {
+        function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Earth's radius in kilometers
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = 
+                Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            const distance = R * c;
+            return distance;
+        }
+        
+        function estimateTravelTime(distance) {
+            // Estimate travel time based on distance
+            // Assuming average speed of 60 km/h for road travel
+            const hours = distance / 60;
+            const wholeHours = Math.floor(hours);
+            const minutes = Math.round((hours - wholeHours) * 60);
+            
+            if (wholeHours === 0) {
+                return `${minutes} mins`;
+            } else if (minutes === 0) {
+                return `${wholeHours} hours`;
+            } else {
+                return `${wholeHours} hours ${minutes} mins`;
+            }
+        }
+        
+        function displayDistanceResults(distance, duration, start, destination) {
+            document.getElementById('distance-details').innerHTML = `
+                <p><strong>From:</strong> ${start}</p>
+                <p><strong>To:</strong> ${destination}</p>
+                <p><strong>Distance:</strong> ${distance.toFixed(1)} km</p>
+                <p><strong>Estimated Travel Time:</strong> ${duration}</p>
+            `;
+        }
+        
+        function handleCreateTrip() {
             const name = document.getElementById('trip-name').value;
             const startLocation = document.getElementById('start-location').value;
             const destination = document.getElementById('trip-destination').value;
@@ -1209,14 +1376,10 @@
             const endDate = document.getElementById('end-date').value;
             const budget = parseFloat(document.getElementById('trip-budget').value);
             
-            if (!name || !startLocation || !destination || !startDate || !endDate || !budget) {
-                alert('Please fill in all fields');
-                return;
-            }
-            
-            // Generate a unique trip code
+            // Generate a random trip code
             const code = generateTripCode();
             
+            // Prepare trip data
             const tripData = {
                 name,
                 startLocation,
@@ -1225,274 +1388,223 @@
                 endDate,
                 budget,
                 code,
-                createdBy: currentUser.uid,
                 members: [currentUser.uid],
+                createdBy: currentUser.uid,
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 expenses: [],
-                itinerary: [],
-                route: null
+                itinerary: []
             };
             
-            try {
-                const docRef = await db.collection('trips').add(tripData);
-                tripData.id = docRef.id;
+            // Add distance information if calculated
+            if (calculateDistanceCheckbox.checked) {
+                const distanceText = document.querySelector('#distance-details p:nth-child(3)').textContent.replace('Distance: ', '');
+                const durationText = document.querySelector('#distance-details p:nth-child(4)').textContent.replace('Estimated Travel Time: ', '');
                 
-                // Close modal
-                const modal = bootstrap.Modal.getInstance(document.getElementById('createTripModal'));
-                modal.hide();
-                
-                // Show share modal
-                document.getElementById('share-trip-code').textContent = code;
-                const shareModal = new bootstrap.Modal(document.getElementById('shareTripModal'));
-                shareModal.show();
-                
-                // Reload trips
-                loadUserTrips();
-            } catch (error) {
-                console.error('Error creating trip:', error);
-                alert('Error creating trip. Please try again.');
+                tripData.distance = distanceText;
+                tripData.duration = durationText;
             }
+            
+            // Save to Firestore
+            db.collection('trips').add(tripData)
+                .then(docRef => {
+                    // Add the new trip to local state
+                    const newTrip = {
+                        id: docRef.id,
+                        ...tripData
+                    };
+                    
+                    userTrips.push(newTrip);
+                    renderTrips();
+                    
+                    createTripModal.hide();
+                    shareTripCode.textContent = code;
+                    shareTripModal.show();
+                    
+                    // Reset form
+                    document.getElementById('create-trip-form').reset();
+                    distanceResults.classList.add('d-none');
+                    calculateDistanceCheckbox.checked = false;
+                })
+                .catch(error => {
+                    console.error('Error creating trip:', error);
+                    alert('Error creating trip. Please try again.');
+                });
         }
         
-        async function joinTripWithCode() {
-            const code = document.getElementById('trip-code').value.trim().toUpperCase();
+        function showJoinTripModal() {
+            document.getElementById('join-trip-message').classList.add('d-none');
+            joinTripModal.show();
+        }
+        
+        function handleJoinTrip() {
+            const code = document.getElementById('trip-code').value.toUpperCase();
             const messageEl = document.getElementById('join-trip-message');
             
-            if (!code) {
-                messageEl.textContent = 'Please enter a trip code';
-                messageEl.className = 'alert alert-danger';
-                messageEl.classList.remove('d-none');
-                return;
-            }
-            
-            try {
-                const tripsSnapshot = await db.collection('trips')
-                    .where('code', '==', code)
-                    .get();
-                
-                if (tripsSnapshot.empty) {
-                    messageEl.textContent = 'Invalid trip code';
+            // Query Firestore for a trip with this code
+            db.collection('trips')
+                .where('code', '==', code)
+                .get()
+                .then(querySnapshot => {
+                    if (!querySnapshot.empty) {
+                        const doc = querySnapshot.docs[0];
+                        const tripData = doc.data();
+                        
+                        // Check if user is already a member
+                        if (tripData.members.includes(currentUser.uid)) {
+                            messageEl.textContent = 'You are already a member of this trip.';
+                            messageEl.className = 'alert alert-warning';
+                            messageEl.classList.remove('d-none');
+                            return;
+                        }
+                        
+                        // Add user to members array
+                        return db.collection('trips').doc(doc.id).update({
+                            members: firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
+                        }).then(() => {
+                            // Add trip to local state
+                            const joinedTrip = {
+                                id: doc.id,
+                                ...tripData
+                            };
+                            
+                            userTrips.push(joinedTrip);
+                            renderTrips();
+                            
+                            messageEl.textContent = 'Successfully joined the trip!';
+                            messageEl.className = 'alert alert-success';
+                            messageEl.classList.remove('d-none');
+                            
+                            setTimeout(() => {
+                                joinTripModal.hide();
+                                showTripDetails(joinedTrip);
+                            }, 1500);
+                        });
+                    } else {
+                        messageEl.textContent = 'Trip not found. Please check the code and try again.';
+                        messageEl.className = 'alert alert-danger';
+                        messageEl.classList.remove('d-none');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error joining trip:', error);
+                    messageEl.textContent = 'Error joining trip. Please try again.';
                     messageEl.className = 'alert alert-danger';
                     messageEl.classList.remove('d-none');
-                    return;
-                }
-                
-                const tripDoc = tripsSnapshot.docs[0];
-                const trip = tripDoc.data();
-                
-                // Check if user is already a member
-                if (trip.members.includes(currentUser.uid)) {
-                    messageEl.textContent = 'You are already a member of this trip';
-                    messageEl.className = 'alert alert-warning';
-                    messageEl.classList.remove('d-none');
-                    return;
-                }
-                
-                // Add user to trip members
-                await db.collection('trips').doc(tripDoc.id).update({
-                    members: firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
                 });
-                
-                // Close modal
-                const modal = bootstrap.Modal.getInstance(document.getElementById('joinTripModal'));
-                modal.hide();
-                
-                // Reload trips
-                loadUserTrips();
-                
-                // Show success message
-                alert(`Successfully joined trip: ${trip.name}`);
-            } catch (error) {
-                console.error('Error joining trip:', error);
-                messageEl.textContent = 'Error joining trip. Please try again.';
-                messageEl.className = 'alert alert-danger';
-                messageEl.classList.remove('d-none');
-            }
-        }
-        
-        function generateTripCode() {
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-            let result = '';
-            for (let i = 0; i < 6; i++) {
-                result += chars.charAt(Math.floor(Math.random() * chars.length));
-            }
-            return result;
         }
         
         function copyTripCode() {
-            const code = document.getElementById('share-trip-code').textContent;
-            navigator.clipboard.writeText(code).then(() => {
-                const copySuccess = document.getElementById('copy-success');
-                copySuccess.classList.remove('d-none');
-                setTimeout(() => {
-                    copySuccess.classList.add('d-none');
-                }, 3000);
-            });
+            navigator.clipboard.writeText(shareTripCode.textContent)
+                .then(() => {
+                    copySuccess.classList.remove('d-none');
+                    setTimeout(() => {
+                        copySuccess.classList.add('d-none');
+                    }, 2000);
+                })
+                .catch(err => {
+                    console.error('Failed to copy: ', err);
+                });
         }
         
-        async function calculateDistance() {
-            const startLocation = document.getElementById('start-location').value;
-            const destination = document.getElementById('trip-destination').value;
+        function showTripDetails(trip) {
+            currentTrip = trip;
             
-            if (!startLocation || !destination) {
-                alert('Please enter both start location and destination');
-                return;
-            }
+            tripDetailsName.textContent = trip.name;
+            tripDetailsCode.textContent = trip.code;
             
-            // In a real implementation, you would call the Google Maps Distance Matrix API
-            // For this demo, we'll simulate the API response
-            
-            try {
-                // Simulate API call delay
-                await new Promise(resolve => setTimeout(resolve, 1500));
-                
-                // Mock response data
-                const mockResponse = {
-                    rows: [{
-                        elements: [{
-                            distance: { text: '350 km' },
-                            duration: { text: '4 hours 15 mins' },
-                            status: 'OK'
-                        }]
-                    }]
-                };
-                
-                displayDistanceResults(mockResponse);
-            } catch (error) {
-                console.error('Error calculating distance:', error);
-                alert('Error calculating distance. Please try again.');
-            }
-        }
-        
-        function displayDistanceResults(response) {
-            const distanceResults = document.getElementById('distance-results');
-            const distanceDetails = document.getElementById('distance-details');
-            
-            if (response.rows[0].elements[0].status === 'OK') {
-                const distance = response.rows[0].elements[0].distance.text;
-                const duration = response.rows[0].elements[0].duration.text;
-                
-                distanceDetails.innerHTML = `
-                    <p><strong>Distance:</strong> ${distance}</p>
-                    <p><strong>Estimated Travel Time:</strong> ${duration}</p>
-                `;
-                
-                distanceResults.classList.remove('d-none');
-            } else {
-                distanceDetails.innerHTML = '<p class="text-danger">Could not calculate distance. Please check your locations.</p>';
-                distanceResults.classList.remove('d-none');
-            }
-        }
-        
-        async function calculateRoute() {
-            if (!currentTrip) return;
-            
-            // In a real implementation, you would calculate the route using Google Maps API
-            // For this demo, we'll use mock data
-            
-            try {
-                // Simulate API call delay
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                
-                // Mock route data
-                const mockRoute = {
-                    distance: '350 km',
-                    duration: '4 hours 15 mins',
-                    steps: [
-                        'Start from ' + currentTrip.startLocation,
-                        'Take Highway 1 North for 120 km',
-                        'Merge onto Interstate 5 for 180 km',
-                        'Take exit 234 toward ' + currentTrip.destination,
-                        'Continue on Main Street for 5 km',
-                        'Arrive at destination'
-                    ]
-                };
-                
-                displayRouteDetails(mockRoute);
-            } catch (error) {
-                console.error('Error calculating route:', error);
-                alert('Error calculating route. Please try again.');
-            }
-        }
-        
-        function displayRouteDetails(route) {
-            const routeDetails = document.getElementById('route-details');
-            const emptyRoute = document.getElementById('empty-route');
-            
-            emptyRoute.classList.add('d-none');
-            
-            routeDetails.innerHTML = `
-                <div class="mb-3">
-                    <p><strong>Total Distance:</strong> ${route.distance}</p>
-                    <p><strong>Estimated Travel Time:</strong> ${route.duration}</p>
-                </div>
-                <h5>Route Steps:</h5>
-                ${route.steps.map((step, index) => `
-                    <div class="route-step">
-                        <span class="badge bg-primary me-2">${index + 1}</span>
-                        ${step}
-                    </div>
-                `).join('')}
-            `;
-        }
-        
-        function loadTripOverview(trip) {
-            // Update overview information
+            // Update overview tab
             document.getElementById('overview-start-location').textContent = trip.startLocation;
             document.getElementById('overview-destination').textContent = trip.destination;
+            document.getElementById('overview-dates').textContent = `${formatDate(trip.startDate)} - ${formatDate(trip.endDate)}`;
+            document.getElementById('overview-budget').textContent = `₹${trip.budget.toLocaleString('en-IN')}`;
             
-            const startDate = new Date(trip.startDate).toLocaleDateString();
-            const endDate = new Date(trip.endDate).toLocaleDateString();
-            document.getElementById('overview-dates').textContent = `${startDate} - ${endDate}`;
-            
-            document.getElementById('overview-budget').textContent = `$${trip.budget.toFixed(2)}`;
-            
-            // Calculate total spent and remaining
-            const totalSpent = trip.expenses ? trip.expenses.reduce((sum, expense) => sum + expense.amount, 0) : 0;
-            const remaining = trip.budget - totalSpent;
-            
-            document.getElementById('overview-remaining').textContent = `$${remaining.toFixed(2)}`;
-            
-            // Update progress bar
-            const progressPercent = Math.min((totalSpent / trip.budget) * 100, 100);
-            const progressBar = document.getElementById('budget-progress-bar');
-            progressBar.style.width = `${progressPercent}%`;
-            progressBar.textContent = `${progressPercent.toFixed(1)}%`;
-            
-            // Update distance if available
-            if (trip.route) {
-                document.getElementById('overview-distance').textContent = trip.route.distance;
+            if (trip.distance) {
+                document.getElementById('overview-distance').textContent = `${trip.distance} (${trip.duration})`;
             } else {
                 document.getElementById('overview-distance').textContent = 'Not calculated';
             }
             
-            // Load members
+            // Calculate and display remaining budget
+            updateBudgetOverview(trip);
+            
+            // Update members list
             loadTripMembers(trip);
+            
+            // Load itinerary for this trip
+            loadTripItinerary(trip);
+            
+            // Load route information
+            loadRouteInformation(trip);
+            
+            // Load expenses
+            loadTripExpenses(trip);
+            
+            dashboardScreen.classList.add('d-none');
+            tripDetailsScreen.classList.remove('d-none');
         }
         
-        async function loadTripMembers(trip) {
+        function updateBudgetOverview(trip) {
+            const totalSpent = trip.expenses ? trip.expenses.reduce((sum, expense) => sum + expense.amount, 0) : 0;
+            const remaining = trip.budget - totalSpent;
+            const spentPercentage = (totalSpent / trip.budget) * 100;
+            
+            document.getElementById('overview-remaining').textContent = `₹${remaining.toLocaleString('en-IN')}`;
+            
+            const progressBar = document.getElementById('budget-progress-bar');
+            progressBar.style.width = `${spentPercentage}%`;
+            progressBar.textContent = `${spentPercentage.toFixed(1)}%`;
+        }
+        
+        function loadTripMembers(trip) {
             const membersList = document.getElementById('members-list');
             membersList.innerHTML = '';
             
-            // In a real implementation, you would fetch user details for each member ID
-            // For this demo, we'll just show the member IDs
-            
-            trip.members.forEach(memberId => {
-                const memberDiv = document.createElement('div');
-                memberDiv.className = 'd-flex align-items-center mb-2';
-                
-                // In a real app, you would fetch the user's name and avatar from Firestore
-                memberDiv.innerHTML = `
-                    <div class="member-avatar me-2">
-                        ${memberId === currentUser.uid ? 'You' : 'U'}
-                    </div>
-                    <div>
-                        ${memberId === currentUser.uid ? 'You' : 'User ' + memberId.substring(0, 5)}
-                    </div>
-                `;
-                
-                membersList.appendChild(memberDiv);
+            // Get user details for each member
+            const memberPromises = trip.members.map(memberId => {
+                return db.collection('users').doc(memberId).get()
+                    .then(doc => {
+                        if (doc.exists) {
+                            return doc.data();
+                        } else {
+                            return { name: 'Unknown User', photoURL: null };
+                        }
+                    })
+                    .catch(() => {
+                        return { name: 'Unknown User', photoURL: null };
+                    });
             });
+            
+            Promise.all(memberPromises)
+                .then(members => {
+                    members.forEach((member, index) => {
+                        const memberEl = document.createElement('div');
+                        memberEl.className = 'd-flex align-items-center mb-2';
+                        
+                        const avatarSrc = member.photoURL || 
+                            `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}&background=4361ee&color=fff`;
+                        
+                        memberEl.innerHTML = `
+                            <img src="${avatarSrc}" class="user-avatar me-2" alt="${member.name}">
+                            <span>${member.name}</span>
+                            ${trip.members[index] === trip.createdBy ? '<span class="badge bg-primary ms-2">Creator</span>' : ''}
+                        `;
+                        membersList.appendChild(memberEl);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error loading members:', error);
+                    // Fallback to simple display
+                    trip.members.forEach((memberId, index) => {
+                        const memberEl = document.createElement('div');
+                        memberEl.className = 'd-flex align-items-center mb-2';
+                        memberEl.innerHTML = `
+                            <div class="member-avatar me-2">U${index+1}</div>
+                            <span>User ${index+1}</span>
+                            ${memberId === trip.createdBy ? '<span class="badge bg-primary ms-2">Creator</span>' : ''}
+                        `;
+                        membersList.appendChild(memberEl);
+                    });
+                });
         }
         
         function loadTripExpenses(trip) {
@@ -1507,32 +1619,25 @@
             }
             
             emptyExpenses.classList.add('d-none');
-            
             expensesList.innerHTML = '';
-            trip.expenses.forEach((expense, index) => {
-                const expenseItem = document.createElement('div');
-                expenseItem.className = 'expense-item';
-                
-                const categoryClass = `category-${expense.category}`;
-                const categoryName = expense.category.charAt(0).toUpperCase() + expense.category.slice(1);
-                
-                expenseItem.innerHTML = `
-                    <div class="d-flex justify-content-between align-items-start">
+            
+            trip.expenses.forEach(expense => {
+                const expenseEl = document.createElement('div');
+                expenseEl.className = 'expense-item';
+                expenseEl.innerHTML = `
+                    <div class="d-flex justify-content-between">
                         <div>
                             <h6 class="mb-1">${expense.description}</h6>
-                            <small class="text-muted">${new Date(expense.date).toLocaleDateString()}</small>
-                            <span class="category-badge ${categoryClass}">${categoryName}</span>
+                            <span class="category-badge category-${expense.category}">${expense.category.charAt(0).toUpperCase() + expense.category.slice(1)}</span>
+                            <small class="text-muted">${formatDate(expense.date)}</small>
                         </div>
                         <div class="text-end">
-                            <strong>$${expense.amount.toFixed(2)}</strong>
-                            <div>
-                                <small class="text-muted">by ${expense.addedBy === currentUser.uid ? 'You' : 'Member'}</small>
-                            </div>
+                            <div class="fw-bold">₹${expense.amount.toLocaleString('en-IN')}</div>
+                            <small class="text-muted">Added by User</small>
                         </div>
                     </div>
                 `;
-                
-                expensesList.appendChild(expenseItem);
+                expensesList.appendChild(expenseEl);
             });
             
             updateBudgetSummary(trip);
@@ -1540,25 +1645,31 @@
         }
         
         function updateBudgetSummary(trip) {
+            const totalBudget = trip.budget;
             const totalSpent = trip.expenses ? trip.expenses.reduce((sum, expense) => sum + expense.amount, 0) : 0;
-            const remaining = trip.budget - totalSpent;
-            const progressPercent = Math.min((totalSpent / trip.budget) * 100, 100);
+            const remaining = totalBudget - totalSpent;
+            const spentPercentage = (totalSpent / totalBudget) * 100;
             
-            document.getElementById('summary-total-budget').textContent = `$${trip.budget.toFixed(2)}`;
-            document.getElementById('summary-total-spent').textContent = `$${totalSpent.toFixed(2)}`;
-            document.getElementById('summary-remaining').textContent = `$${remaining.toFixed(2)}`;
+            document.getElementById('summary-total-budget').textContent = `₹${totalBudget.toLocaleString('en-IN')}`;
+            document.getElementById('summary-total-spent').textContent = `₹${totalSpent.toLocaleString('en-IN')}`;
+            document.getElementById('summary-remaining').textContent = `₹${remaining.toLocaleString('en-IN')}`;
             
             const progressBar = document.getElementById('summary-progress-bar');
-            progressBar.style.width = `${progressPercent}%`;
-            progressBar.textContent = `${progressPercent.toFixed(1)}%`;
+            progressBar.style.width = `${spentPercentage}%`;
+            progressBar.textContent = `${spentPercentage.toFixed(1)}%`;
         }
         
         function renderExpenseChart(trip) {
+            const ctx = document.getElementById('expense-chart').getContext('2d');
+            
+            // Destroy previous chart if it exists
+            if (expenseChart) {
+                expenseChart.destroy();
+            }
+            
             if (!trip.expenses || trip.expenses.length === 0) {
                 return;
             }
-            
-            const ctx = document.getElementById('expense-chart').getContext('2d');
             
             // Group expenses by category
             const categories = {
@@ -1573,29 +1684,34 @@
                 categories[expense.category] += expense.amount;
             });
             
-            const data = {
-                labels: ['Fuel', 'Hotel', 'Food', 'Activities', 'Other'],
-                datasets: [{
-                    data: [
-                        categories.fuel,
-                        categories.hotel,
-                        categories.food,
-                        categories.activities,
-                        categories.other
-                    ],
-                    backgroundColor: [
-                        '#ffd166',
-                        '#06d6a0',
-                        '#ef476f',
-                        '#118ab2',
-                        '#073b4c'
-                    ]
-                }]
-            };
+            // Filter out categories with no expenses
+            const labels = [];
+            const data = [];
+            const backgroundColors = [
+                '#ffd166', // fuel
+                '#06d6a0', // hotel
+                '#ef476f', // food
+                '#118ab2', // activities
+                '#073b4c'  // other
+            ];
             
-            new Chart(ctx, {
-                type: 'doughnut',
-                data: data,
+            Object.keys(categories).forEach((category, index) => {
+                if (categories[category] > 0) {
+                    labels.push(category.charAt(0).toUpperCase() + category.slice(1));
+                    data.push(categories[category]);
+                }
+            });
+            
+            expenseChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: backgroundColors.slice(0, labels.length),
+                        borderWidth: 1
+                    }]
+                },
                 options: {
                     responsive: true,
                     plugins: {
@@ -1618,6 +1734,7 @@
             }
             
             emptyItinerary.classList.add('d-none');
+            itineraryDays.innerHTML = '';
             
             // Group activities by day
             const activitiesByDay = {};
@@ -1628,131 +1745,275 @@
                 activitiesByDay[activity.day].push(activity);
             });
             
-            itineraryDays.innerHTML = '';
+            // Display activities by day
             Object.keys(activitiesByDay).forEach(day => {
                 const dayCard = document.createElement('div');
-                dayCard.className = 'card itinerary-card mb-3';
-                
+                dayCard.className = 'card mb-3';
                 dayCard.innerHTML = `
                     <div class="card-header">
                         <h5 class="mb-0">Day ${day}</h5>
                     </div>
                     <div class="card-body">
                         ${activitiesByDay[day].map(activity => `
-                            <div class="d-flex mb-3">
-                                <div class="me-3">
-                                    <strong>${activity.time}</strong>
-                                </div>
-                                <div>
-                                    <h6 class="mb-1">${activity.place}</h6>
-                                    <p class="mb-0 text-muted">${activity.notes || ''}</p>
+                            <div class="itinerary-card">
+                                <div class="card-body">
+                                    <div class="d-flex">
+                                        <div class="me-3">
+                                            <i class="fas fa-clock text-primary"></i>
+                                            <span class="ms-1 fw-bold">${activity.time}</span>
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <h6 class="card-title mb-1">${activity.place}</h6>
+                                            <p class="card-text mb-0">${activity.notes || ''}</p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         `).join('')}
                     </div>
                 `;
-                
                 itineraryDays.appendChild(dayCard);
             });
         }
         
-        function loadTripRoute(trip) {
-            if (trip.route) {
-                displayRouteDetails(trip.route);
+        function loadRouteInformation(trip) {
+            const routeDetails = document.getElementById('route-details');
+            const emptyRoute = document.getElementById('empty-route');
+            
+            if (trip.distance) {
+                emptyRoute.classList.add('d-none');
+                routeDetails.innerHTML = `
+                    <h5>${trip.startLocation} → ${trip.destination}</h5>
+                    <div class="distance-info mt-3">
+                        <p><strong>Distance:</strong> ${trip.distance}</p>
+                        <p><strong>Estimated Travel Time:</strong> ${trip.duration}</p>
+                    </div>
+                    <div class="mt-3">
+                        <h6>Suggested Route:</h6>
+                        <div class="route-step">
+                            <i class="fas fa-car me-2 text-primary"></i>
+                            <strong>Road Trip:</strong> ${trip.startLocation} to ${trip.destination}
+                        </div>
+                        <div class="route-step">
+                            <i class="fas fa-map-signs me-2 text-primary"></i>
+                            <strong>Navigation:</strong> Follow NH48 for the most direct route
+                        </div>
+                    </div>
+                `;
             } else {
-                document.getElementById('route-details').innerHTML = '';
-                document.getElementById('empty-route').classList.remove('d-none');
+                routeDetails.innerHTML = '';
+                emptyRoute.classList.remove('d-none');
             }
         }
         
-        async function saveExpense() {
+        function calculateRoute() {
+            if (!currentTrip) return;
+            
+            // Show loading state
+            document.getElementById('route-details').innerHTML = `
+                <div class="text-center">
+                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                    Calculating route...
+                </div>
+            `;
+            
+            // Use OpenStreetMap Nominatim API for geocoding
+            Promise.all([
+                fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(currentTrip.startLocation)}`),
+                fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(currentTrip.destination)}`)
+            ])
+            .then(responses => Promise.all(responses.map(response => response.json())))
+            .then(data => {
+                const startData = data[0];
+                const destData = data[1];
+                
+                if (startData.length === 0 || destData.length === 0) {
+                    throw new Error('Could not find one or both locations');
+                }
+                
+                const startLat = parseFloat(startData[0].lat);
+                const startLon = parseFloat(startData[0].lon);
+                const destLat = parseFloat(destData[0].lat);
+                const destLon = parseFloat(destData[0].lon);
+                
+                // Calculate distance using Haversine formula
+                const distance = calculateHaversineDistance(startLat, startLon, destLat, destLon);
+                const duration = estimateTravelTime(distance);
+                
+                displayRouteResults(distance, duration);
+            })
+            .catch(error => {
+                console.error('Error calculating route:', error);
+                document.getElementById('route-details').innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Could not calculate route. Please try again.
+                    </div>
+                `;
+            });
+        }
+        
+        function displayRouteResults(distance, duration) {
+            const routeDetails = document.getElementById('route-details');
+            const emptyRoute = document.getElementById('empty-route');
+            
+            emptyRoute.classList.add('d-none');
+            routeDetails.innerHTML = `
+                <h5>${currentTrip.startLocation} → ${currentTrip.destination}</h5>
+                <div class="distance-info mt-3">
+                    <p><strong>Distance:</strong> ${distance.toFixed(1)} km</p>
+                    <p><strong>Estimated Travel Time:</strong> ${duration}</p>
+                </div>
+                <div class="mt-3">
+                    <h6>Suggested Route:</h6>
+                    <div class="route-step">
+                        <i class="fas fa-car me-2 text-primary"></i>
+                        <strong>Road Trip:</strong> ${currentTrip.startLocation} to ${currentTrip.destination}
+                    </div>
+                    <div class="route-step">
+                        <i class="fas fa-map-signs me-2 text-primary"></i>
+                        <strong>Navigation:</strong> Follow the main highway for the most direct route
+                    </div>
+                </div>
+            `;
+            
+            // Update the trip with distance information
+            db.collection('trips').doc(currentTrip.id).update({
+                distance: `${distance.toFixed(1)} km`,
+                duration: duration
+            }).then(() => {
+                // Update local state
+                currentTrip.distance = `${distance.toFixed(1)} km`;
+                currentTrip.duration = duration;
+                
+                // Update overview tab
+                document.getElementById('overview-distance').textContent = `${currentTrip.distance} (${currentTrip.duration})`;
+            });
+        }
+        
+        function showAddExpenseModal() {
+            // Set today's date as default
+            document.getElementById('expense-date').valueAsDate = new Date();
+            addExpenseModal.show();
+        }
+        
+        function handleAddExpense() {
             const description = document.getElementById('expense-description').value;
             const amount = parseFloat(document.getElementById('expense-amount').value);
             const category = document.getElementById('expense-category').value;
             const date = document.getElementById('expense-date').value;
             
-            if (!description || !amount || !category || !date) {
-                alert('Please fill in all fields');
-                return;
-            }
-            
+            // Create expense object
             const expense = {
                 description,
                 amount,
                 category,
                 date,
                 addedBy: currentUser.uid,
-                addedAt: firebase.firestore.FieldValue.serverTimestamp()
+                addedAt: new Date().toISOString()
             };
             
-            try {
-                // Update the trip document with the new expense
-                await db.collection('trips').doc(currentTrip.id).update({
-                    expenses: firebase.firestore.FieldValue.arrayUnion(expense)
-                });
+            // Update the trip with the new expense
+            db.collection('trips').doc(currentTrip.id).update({
+                expenses: firebase.firestore.FieldValue.arrayUnion(expense)
+            })
+            .then(() => {
+                // Reload expenses to show the new one
+                const updatedTrip = { ...currentTrip };
+                if (!updatedTrip.expenses) {
+                    updatedTrip.expenses = [];
+                }
+                updatedTrip.expenses.push(expense);
+                showTripDetails(updatedTrip);
                 
-                // Close modal
-                const modal = bootstrap.Modal.getInstance(document.getElementById('addExpenseModal'));
-                modal.hide();
+                addExpenseModal.hide();
                 
                 // Reset form
                 document.getElementById('add-expense-form').reset();
-                
-                // Reload trip details
-                const updatedTrip = await db.collection('trips').doc(currentTrip.id).get();
-                showTripDetails({
-                    id: updatedTrip.id,
-                    ...updatedTrip.data()
-                });
-            } catch (error) {
+            })
+            .catch(error => {
                 console.error('Error adding expense:', error);
                 alert('Error adding expense. Please try again.');
+            });
+        }
+        
+        function showAddActivityModal() {
+            addActivityModal.show();
+            
+            // Populate the day dropdown
+            const activityDaySelect = document.getElementById('activity-day');
+            activityDaySelect.innerHTML = '';
+            
+            // Generate options for all days of the trip
+            const startDate = new Date(currentTrip.startDate);
+            const endDate = new Date(currentTrip.endDate);
+            const currentDate = new Date(startDate);
+            let dayCount = 1;
+            
+            while (currentDate <= endDate) {
+                const option = document.createElement('option');
+                option.value = dayCount;
+                option.textContent = `Day ${dayCount} (${formatDate(currentDate.toISOString().split('T')[0])})`;
+                activityDaySelect.appendChild(option);
+                
+                currentDate.setDate(currentDate.getDate() + 1);
+                dayCount++;
             }
         }
         
-        async function saveActivity() {
+        function handleAddActivity() {
             const day = parseInt(document.getElementById('activity-day').value);
             const time = document.getElementById('activity-time').value;
             const place = document.getElementById('activity-place').value;
             const notes = document.getElementById('activity-notes').value;
             
-            if (!day || !time || !place) {
-                alert('Please fill in all required fields');
-                return;
-            }
-            
+            // Create activity object
             const activity = {
                 day,
                 time,
                 place,
                 notes,
                 addedBy: currentUser.uid,
-                addedAt: firebase.firestore.FieldValue.serverTimestamp()
+                addedAt: new Date().toISOString()
             };
             
-            try {
-                // Update the trip document with the new activity
-                await db.collection('trips').doc(currentTrip.id).update({
-                    itinerary: firebase.firestore.FieldValue.arrayUnion(activity)
-                });
+            // Update the trip with the new activity
+            db.collection('trips').doc(currentTrip.id).update({
+                itinerary: firebase.firestore.FieldValue.arrayUnion(activity)
+            })
+            .then(() => {
+                // Reload itinerary to show the new activity
+                const updatedTrip = { ...currentTrip };
+                if (!updatedTrip.itinerary) {
+                    updatedTrip.itinerary = [];
+                }
+                updatedTrip.itinerary.push(activity);
+                showTripDetails(updatedTrip);
                 
-                // Close modal
-                const modal = bootstrap.Modal.getInstance(document.getElementById('addActivityModal'));
-                modal.hide();
+                addActivityModal.hide();
                 
                 // Reset form
                 document.getElementById('add-activity-form').reset();
-                
-                // Reload trip details
-                const updatedTrip = await db.collection('trips').doc(currentTrip.id).get();
-                showTripDetails({
-                    id: updatedTrip.id,
-                    ...updatedTrip.data()
-                });
-            } catch (error) {
+            })
+            .catch(error => {
                 console.error('Error adding activity:', error);
                 alert('Error adding activity. Please try again.');
+            });
+        }
+        
+        // Utility functions
+        function generateTripCode() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let result = '';
+            for (let i = 0; i < 6; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
             }
+            return result;
+        }
+        
+        function formatDate(dateString) {
+            const options = { year: 'numeric', month: 'short', day: 'numeric' };
+            return new Date(dateString).toLocaleDateString(undefined, options);
         }
     </script>
 </body>
