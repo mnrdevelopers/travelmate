@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/png" href="https://example.com/favicon.png">
     <title>TravelMate - Trip Management</title>
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -233,6 +232,16 @@
         
         .rupee-symbol {
             font-family: Arial, sans-serif;
+        }
+        
+        .budget-warning {
+            color: #e63946;
+            font-weight: bold;
+        }
+        
+        .budget-safe {
+            color: #06d6a0;
+            font-weight: bold;
         }
     </style>
 </head>
@@ -613,6 +622,7 @@
                                         <div class="progress mt-2">
                                             <div id="budget-progress-bar" class="progress-bar" role="progressbar" style="width: 0%"></div>
                                         </div>
+                                        <div class="mt-2" id="budget-status"></div>
                                     </div>
                                 </div>
                             </div>
@@ -854,7 +864,7 @@
         const db = firebase.firestore();
         
         // OpenRouteService API key (replace with your own)
-        const OPENROUTESERVICE_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImU4ZjhiMTllYmM5NjRhZDc5ZmZlZDA5NTdiM2NiYTRkIiwiaCI6Im11cm11cjY0In0=";
+        const OPENROUTESERVICE_API_KEY = "YOUR_OPENROUTESERVICE_API_KEY_HERE";
         
         // App state
         let currentUser = null;
@@ -1234,8 +1244,7 @@
                 members: [currentUser.uid],
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 expenses: [],
-                itinerary: [],
-                route: null
+                itinerary: []
             };
             
             try {
@@ -1577,19 +1586,29 @@
             const endDate = new Date(trip.endDate).toLocaleDateString();
             document.getElementById('overview-dates').textContent = `${startDate} - ${endDate}`;
             
-            document.getElementById('overview-budget').textContent = `<span class="rupee-symbol">₹</span>${trip.budget.toFixed(2)}`;
+            document.getElementById('overview-budget').innerHTML = `<span class="rupee-symbol">₹</span>${trip.budget.toFixed(2)}`;
             
             // Calculate total spent and remaining
             const totalSpent = trip.expenses ? trip.expenses.reduce((sum, expense) => sum + expense.amount, 0) : 0;
             const remaining = trip.budget - totalSpent;
             
-            document.getElementById('overview-remaining').textContent = `<span class="rupee-symbol">₹</span>${remaining.toFixed(2)}`;
+            document.getElementById('overview-remaining').innerHTML = `<span class="rupee-symbol">₹</span>${remaining.toFixed(2)}`;
             
             // Update progress bar
             const progressPercent = Math.min((totalSpent / trip.budget) * 100, 100);
             const progressBar = document.getElementById('budget-progress-bar');
             progressBar.style.width = `${progressPercent}%`;
             progressBar.textContent = `${progressPercent.toFixed(1)}%`;
+            
+            // Update budget status
+            const budgetStatus = document.getElementById('budget-status');
+            if (remaining < 0) {
+                budgetStatus.innerHTML = `<span class="budget-warning"><i class="fas fa-exclamation-triangle me-1"></i>Over budget by <span class="rupee-symbol">₹</span>${Math.abs(remaining).toFixed(2)}</span>`;
+            } else if (remaining < trip.budget * 0.2) {
+                budgetStatus.innerHTML = `<span class="budget-warning"><i class="fas fa-exclamation-circle me-1"></i>Low budget - Only <span class="rupee-symbol">₹</span>${remaining.toFixed(2)} remaining</span>`;
+            } else {
+                budgetStatus.innerHTML = `<span class="budget-safe"><i class="fas fa-check-circle me-1"></i>Budget is on track</span>`;
+            }
             
             // Update distance if available
             if (trip.route) {
@@ -1620,6 +1639,7 @@
                     </div>
                     <div>
                         ${memberId === currentUser.uid ? 'You' : 'User ' + memberId.substring(0, 5)}
+                        ${memberId === trip.createdBy ? '<span class="badge bg-primary ms-2">Creator</span>' : ''}
                     </div>
                 `;
                 
@@ -1827,13 +1847,20 @@
                 category,
                 date,
                 addedBy: currentUser.uid,
-                addedAt: firebase.firestore.FieldValue.serverTimestamp()
+                addedAt: new Date().toISOString() // Use regular Date instead of FieldValue
             };
             
             try {
-                // Update the trip document with the new expense
+                // Get the current trip data first
+                const tripDoc = await db.collection('trips').doc(currentTrip.id).get();
+                const tripData = tripDoc.data();
+                
+                // Update the expenses array
+                const updatedExpenses = [...(tripData.expenses || []), expense];
+                
+                // Update the trip document with the new expenses array
                 await db.collection('trips').doc(currentTrip.id).update({
-                    expenses: firebase.firestore.FieldValue.arrayUnion(expense)
+                    expenses: updatedExpenses
                 });
                 
                 // Close modal
@@ -1849,6 +1876,9 @@
                     id: updatedTrip.id,
                     ...updatedTrip.data()
                 });
+                
+                // Show success message
+                alert('Expense added successfully!');
             } catch (error) {
                 console.error('Error adding expense:', error);
                 alert('Error adding expense. Please try again.');
@@ -1872,13 +1902,20 @@
                 place,
                 notes,
                 addedBy: currentUser.uid,
-                addedAt: firebase.firestore.FieldValue.serverTimestamp()
+                addedAt: new Date().toISOString() // Use regular Date instead of FieldValue
             };
             
             try {
-                // Update the trip document with the new activity
+                // Get the current trip data first
+                const tripDoc = await db.collection('trips').doc(currentTrip.id).get();
+                const tripData = tripDoc.data();
+                
+                // Update the itinerary array
+                const updatedItinerary = [...(tripData.itinerary || []), activity];
+                
+                // Update the trip document with the new itinerary array
                 await db.collection('trips').doc(currentTrip.id).update({
-                    itinerary: firebase.firestore.FieldValue.arrayUnion(activity)
+                    itinerary: updatedItinerary
                 });
                 
                 // Close modal
@@ -1894,6 +1931,9 @@
                     id: updatedTrip.id,
                     ...updatedTrip.data()
                 });
+                
+                // Show success message
+                alert('Activity added successfully!');
             } catch (error) {
                 console.error('Error adding activity:', error);
                 alert('Error adding activity. Please try again.');
