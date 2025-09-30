@@ -4,1406 +4,1471 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TravelMate - Trip Management</title>
-    <!-- Bootstrap 5 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Lottie Player -->
-    <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    
+    <!-- Bootstrap & FontAwesome -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Lottie Animations -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.10.2/lottie.min.js"></script>
+    
     <style>
         :root {
-            --primary-color: #4361ee;
-            --secondary-color: #3f37c9;
-            --success-color: #4cc9f0;
-            --light-color: #f8f9fa;
-            --dark-color: #212529;
-            --danger-color: #e63946;
+            --primary: #4A6FA5;
+            --secondary: #6B8E23;
+            --accent: #FF6B6B;
+            --light: #F8F9FA;
+            --dark: #343A40;
+            --success: #28A745;
+            --warning: #FFC107;
+            --info: #17A2B8;
         }
         
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f5f7fb;
-            color: #333;
-        }
-        
-        .auth-container {
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: linear-gradient(135deg, #4361ee, #3a0ca3);
-        }
-        
-        .auth-card {
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-            width: 100%;
-            max-width: 450px;
-        }
-        
-        .auth-header {
-            background: var(--primary-color);
-            color: white;
-            padding: 25px;
-            text-align: center;
-        }
-        
-        .auth-body {
-            padding: 30px;
-        }
-        
-        .btn-primary {
-            background-color: var(--primary-color);
-            border-color: var(--primary-color);
-        }
-        
-        .btn-primary:hover {
-            background-color: var(--secondary-color);
-            border-color: var(--secondary-color);
+            background-color: #f5f7fa;
+            color: var(--dark);
+            padding-bottom: 80px;
         }
         
         .navbar {
+            background: linear-gradient(135deg, var(--primary), #2C5282);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .nav-link {
+            color: white !important;
+            font-weight: 500;
+        }
+        
+        .nav-link.active {
+            background-color: rgba(255,255,255,0.2);
+            border-radius: 20px;
+        }
+        
+        .card {
+            border-radius: 15px;
+            border: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+            transition: transform 0.3s;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .card-header {
             background-color: white;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+            border-radius: 15px 15px 0 0 !important;
+            font-weight: 600;
+        }
+        
+        .btn-primary {
+            background-color: var(--primary);
+            border: none;
+            border-radius: 10px;
+            padding: 8px 20px;
+        }
+        
+        .btn-success {
+            background-color: var(--secondary);
+            border: none;
+            border-radius: 10px;
+            padding: 8px 20px;
+        }
+        
+        .page {
+            display: none;
+            padding: 20px 15px;
+        }
+        
+        .page.active {
+            display: block;
+            animation: fadeIn 0.5s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
         
         .trip-card {
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-            transition: transform 0.3s, box-shadow 0.3s;
-            margin-bottom: 20px;
-            border: none;
-            overflow: hidden;
-        }
-        
-        .trip-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
-        }
-        
-        .trip-card-header {
-            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            background: linear-gradient(135deg, #4A6FA5, #6B8E23);
             color: white;
-            padding: 15px;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.1);
         }
         
         .progress {
-            height: 8px;
-            border-radius: 4px;
+            height: 10px;
+            border-radius: 10px;
+            margin: 10px 0;
         }
         
-        .member-avatar {
-            width: 35px;
-            height: 35px;
+        .expense-item {
+            border-bottom: 1px solid #eee;
+            padding: 12px 0;
+        }
+        
+        .expense-item:last-child {
+            border-bottom: none;
+        }
+        
+        .checklist-item {
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .checklist-item:last-child {
+            border-bottom: none;
+        }
+        
+        .checklist-item.completed {
+            text-decoration: line-through;
+            color: #6c757d;
+        }
+        
+        .budget-meter {
+            height: 20px;
+            border-radius: 10px;
+            background-color: #e9ecef;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .budget-fill {
+            height: 100%;
+            border-radius: 10px;
+            transition: width 0.5s;
+        }
+        
+        .lottie-container {
+            width: 100%;
+            height: 200px;
+            margin: 0 auto;
+        }
+        
+        .stats-card {
+            text-align: center;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+        }
+        
+        .stats-card i {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: white;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            padding: 10px 0;
+            z-index: 1000;
+        }
+        
+        .nav-item {
+            text-align: center;
+        }
+        
+        .nav-icon {
+            font-size: 20px;
+            margin-bottom: 5px;
+        }
+        
+        .nav-label {
+            font-size: 12px;
+        }
+        
+        .add-btn {
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
             border-radius: 50%;
-            background-color: var(--primary-color);
+            background-color: var(--accent);
             color: white;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 14px;
-            font-weight: bold;
-            margin-right: 5px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 1000;
         }
         
-        .empty-state {
-            text-align: center;
-            padding: 40px 20px;
-            color: #6c757d;
-        }
-        
-        .tab-content {
-            background-color: white;
-            border-radius: 0 0 10px 10px;
-            padding: 20px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-        }
-        
-        .nav-tabs .nav-link.active {
-            background-color: white;
-            border-bottom-color: white;
-            color: var(--primary-color);
-            font-weight: 600;
-        }
-        
-        .expense-item {
-            border-left: 4px solid var(--primary-color);
-            padding-left: 15px;
-            margin-bottom: 15px;
-        }
-        
-        .itinerary-card {
-            border-left: 4px solid var(--success-color);
-            margin-bottom: 15px;
-        }
-        
-        .success-animation {
-            display: flex;
-            justify-content: center;
-            margin: 20px 0;
-        }
-        
-        .trip-code {
-            font-family: monospace;
-            background-color: #e9ecef;
-            padding: 5px 10px;
-            border-radius: 5px;
-            font-weight: bold;
-        }
-        
-        .category-badge {
-            display: inline-block;
-            padding: 5px 10px;
+        .trip-badge {
+            background-color: var(--info);
+            color: white;
             border-radius: 20px;
+            padding: 3px 10px;
             font-size: 12px;
-            font-weight: 600;
-            margin-right: 5px;
         }
         
-        .category-fuel { background-color: #ffd166; color: #333; }
-        .category-hotel { background-color: #06d6a0; color: white; }
-        .category-food { background-color: #ef476f; color: white; }
-        .category-activities { background-color: #118ab2; color: white; }
-        .category-other { background-color: #073b4c; color: white; }
+        .expense-category {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            margin-right: 15px;
+        }
+        
+        .food { background-color: #FF6B6B; }
+        .transport { background-color: #4ECDC4; }
+        .accommodation { background-color: #45B7D1; }
+        .activities { background-color: #96CEB4; }
+        .shopping { background-color: #FFEAA7; color: #333; }
+        .other { background-color: #DDA0DD; }
+        
+        .map-container {
+            height: 200px;
+            background-color: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 15px 0;
+        }
+        
+        .distance-result {
+            background-color: var(--light);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .login-container {
+            max-width: 400px;
+            margin: 100px auto;
+            padding: 30px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+        
+        .dropdown-menu {
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            border: none;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1100;
+            border-radius: 10px;
+        }
     </style>
 </head>
 <body>
-    <!-- Authentication Screen -->
-    <div id="auth-screen" class="auth-container">
-        <div class="auth-card">
-            <div class="auth-header">
-                <h2><i class="fas fa-map-marked-alt me-2"></i>TravelMate</h2>
-                <p class="mb-0">Plan your trips together</p>
-            </div>
-            <div class="auth-body">
-                <div id="auth-animation" class="text-center mb-4">
-                    <lottie-player 
-                        src="https://assets1.lottiefiles.com/packages/lf20_sk5h1kfn.json" 
-                        background="transparent" 
-                        speed="1" 
-                        style="width: 200px; height: 200px; margin: 0 auto;" 
-                        loop 
-                        autoplay>
-                    </lottie-player>
-                </div>
-                
-                <form id="login-form">
-                    <div class="mb-3">
-                        <label for="login-email" class="form-label">Email</label>
-                        <input type="email" class="form-control" id="login-email" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="login-password" class="form-label">Password</label>
-                        <input type="password" class="form-control" id="login-password" required>
-                    </div>
-                    <div class="d-grid mb-3">
-                        <button type="submit" class="btn btn-primary">Login</button>
-                    </div>
-                    <div class="text-center">
-                        <a href="#" id="show-signup">Don't have an account? Sign up</a>
-                    </div>
-                    <div class="text-center mt-2">
-                        <a href="#" id="forgot-password">Forgot password?</a>
-                    </div>
-                </form>
-                
-                <form id="signup-form" class="d-none">
-                    <div class="mb-3">
-                        <label for="signup-name" class="form-label">Full Name</label>
-                        <input type="text" class="form-control" id="signup-name" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="signup-email" class="form-label">Email</label>
-                        <input type="email" class="form-control" id="signup-email" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="signup-password" class="form-label">Password</label>
-                        <input type="password" class="form-control" id="signup-password" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="signup-confirm-password" class="form-label">Confirm Password</label>
-                        <input type="password" class="form-control" id="signup-confirm-password" required>
-                    </div>
-                    <div class="d-grid mb-3">
-                        <button type="submit" class="btn btn-primary">Sign Up</button>
-                    </div>
-                    <div class="text-center">
-                        <a href="#" id="show-login">Already have an account? Login</a>
-                    </div>
-                </form>
-                
-                <form id="reset-password-form" class="d-none">
-                    <div class="mb-3">
-                        <label for="reset-email" class="form-label">Email</label>
-                        <input type="email" class="form-control" id="reset-email" required>
-                    </div>
-                    <div class="d-grid mb-3">
-                        <button type="submit" class="btn btn-primary">Reset Password</button>
-                    </div>
-                    <div class="text-center">
-                        <a href="#" id="back-to-login">Back to Login</a>
-                    </div>
-                </form>
-                
-                <div id="auth-message" class="alert d-none mt-3"></div>
-            </div>
+    <!-- Login Page -->
+    <div id="login-page" class="page active">
+        <div class="login-container">
+            <div class="lottie-container" id="login-animation"></div>
+            <h2 class="mb-4">Welcome to TravelMate</h2>
+            <p class="text-muted mb-4">Your ultimate trip management companion</p>
+            <button id="google-signin" class="btn btn-primary w-100 mb-3">
+                <i class="fab fa-google me-2"></i> Sign in with Google
+            </button>
+            <button id="anonymous-signin" class="btn btn-outline-secondary w-100">
+                <i class="fas fa-user me-2"></i> Continue as Guest
+            </button>
         </div>
     </div>
-    
-    <!-- Main App -->
-    <div id="app" class="d-none">
-        <!-- Navigation -->
-        <nav class="navbar navbar-expand-lg navbar-light sticky-top">
+
+    <!-- App Content (Hidden until authenticated) -->
+    <div id="app-content" class="d-none">
+        <!-- Top Navigation -->
+        <nav class="navbar navbar-expand-lg navbar-dark">
             <div class="container">
                 <a class="navbar-brand fw-bold" href="#">
-                    <i class="fas fa-map-marked-alt me-2 text-primary"></i>TravelMate
+                    <i class="fas fa-route me-2"></i>TravelMate
                 </a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="collapse navbar-collapse" id="navbarNav">
-                    <ul class="navbar-nav me-auto">
-                        <li class="nav-item">
-                            <a class="nav-link active" href="#" id="nav-dashboard">
-                                <i class="fas fa-home me-1"></i>Dashboard
-                            </a>
-                        </li>
-                    </ul>
-                    <div class="d-flex align-items-center">
-                        <span class="me-3" id="user-name">User</span>
-                        <button class="btn btn-outline-primary btn-sm" id="logout-btn">
-                            <i class="fas fa-sign-out-alt me-1"></i>Logout
-                        </button>
+                <div class="navbar-nav ms-auto">
+                    <div class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                            <img id="user-avatar" class="user-avatar" src="" alt="User">
+                            <span id="user-name">User</span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="#"><i class="fas fa-user me-2"></i> Profile</a></li>
+                            <li><a class="dropdown-item" href="#"><i class="fas fa-cog me-2"></i> Settings</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#" id="sign-out"><i class="fas fa-sign-out-alt me-2"></i> Sign Out</a></li>
+                        </ul>
                     </div>
                 </div>
             </div>
         </nav>
-        
-        <!-- Dashboard -->
-        <div id="dashboard-screen" class="container mt-4">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2>My Trips</h2>
-                <div>
-                    <button class="btn btn-primary me-2" id="create-trip-btn">
-                        <i class="fas fa-plus me-1"></i>New Trip
-                    </button>
-                    <button class="btn btn-outline-primary" id="join-trip-btn">
-                        <i class="fas fa-user-plus me-1"></i>Join Trip
-                    </button>
-                </div>
-            </div>
-            
-            <div id="trips-container" class="row">
-                <!-- Trips will be loaded here -->
-            </div>
-            
-            <div id="empty-trips" class="empty-state">
-                <lottie-player 
-                    src="https://assets2.lottiefiles.com/packages/lf20_vybwn7df.json" 
-                    background="transparent" 
-                    speed="1" 
-                    style="width: 300px; height: 300px; margin: 0 auto;" 
-                    loop 
-                    autoplay>
-                </lottie-player>
-                <h4>No trips yet</h4>
-                <p>Create your first trip or join an existing one to get started!</p>
-                <button class="btn btn-primary mt-2" id="create-first-trip-btn">
-                    <i class="fas fa-plus me-1"></i>Create Your First Trip
-                </button>
-            </div>
-        </div>
-        
-        <!-- Create Trip Modal -->
-        <div class="modal fade" id="createTripModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Create New Trip</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+
+        <!-- Main Content -->
+        <div class="container mt-4">
+            <!-- Dashboard Page -->
+            <div id="dashboard-page" class="page active">
+                <h2 class="mb-4">My Trips</h2>
+                
+                <!-- Current Trip Card -->
+                <div class="trip-card">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h4 id="current-trip-name">Road Trip to Mountains</h4>
+                            <p class="mb-1" id="current-trip-dates">June 15 - June 20, 2023</p>
+                            <span class="trip-badge">Active</span>
+                        </div>
+                        <div class="text-end">
+                            <p class="mb-1" id="current-trip-travelers">4 Friends</p>
+                            <p class="mb-0">Budget: <span id="current-trip-budget">$1,200</span></p>
+                        </div>
                     </div>
-                    <div class="modal-body">
-                        <form id="create-trip-form">
-                            <div class="mb-3">
-                                <label for="trip-name" class="form-label">Trip Name</label>
-                                <input type="text" class="form-control" id="trip-name" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="trip-destination" class="form-label">Destination</label>
-                                <input type="text" class="form-control" id="trip-destination" required>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="start-date" class="form-label">Start Date</label>
-                                    <input type="date" class="form-control" id="start-date" required>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="end-date" class="form-label">End Date</label>
-                                    <input type="date" class="form-control" id="end-date" required>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="trip-budget" class="form-label">Total Budget ($)</label>
-                                <input type="number" class="form-control" id="trip-budget" min="0" step="0.01" required>
-                            </div>
-                        </form>
+                    
+                    <div class="progress mt-3">
+                        <div id="budget-progress" class="progress-bar bg-warning" role="progressbar" style="width: 65%"></div>
                     </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-primary" id="save-trip-btn">Create Trip</button>
+                    <div class="d-flex justify-content-between">
+                        <small>Budget Used: <span id="budget-used-percent">65%</span></small>
+                        <small>$<span id="budget-used">780</span> / $<span id="budget-total">1,200</span></small>
                     </div>
                 </div>
-            </div>
-        </div>
-        
-        <!-- Join Trip Modal -->
-        <div class="modal fade" id="joinTripModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Join a Trip</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                
+                <!-- Stats Cards -->
+                <div class="row">
+                    <div class="col-6">
+                        <div class="stats-card bg-primary text-white">
+                            <i class="fas fa-road"></i>
+                            <h5 id="stats-distance">325 km</h5>
+                            <p>Distance</p>
+                        </div>
                     </div>
-                    <div class="modal-body">
+                    <div class="col-6">
+                        <div class="stats-card bg-success text-white">
+                            <i class="fas fa-gas-pump"></i>
+                            <h5 id="stats-fuel">28 L</h5>
+                            <p>Fuel Used</p>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="stats-card bg-info text-white">
+                            <i class="fas fa-dollar-sign"></i>
+                            <h5 id="stats-expenses">$245</h5>
+                            <p>Expenses</p>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="stats-card bg-warning text-dark">
+                            <i class="fas fa-tasks"></i>
+                            <h5 id="stats-checklist">8/12</h5>
+                            <p>Checklist</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Upcoming Trips -->
+                <h4 class="mt-4 mb-3">Upcoming Trips</h4>
+                <div id="upcoming-trips-list">
+                    <!-- Upcoming trips will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Distance & Mileage Page -->
+            <div id="distance-page" class="page">
+                <h2 class="mb-4">Distance & Mileage</h2>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-route me-2"></i> Route Calculator
+                    </div>
+                    <div class="card-body">
                         <div class="mb-3">
-                            <label for="trip-code" class="form-label">Trip Code</label>
-                            <input type="text" class="form-control" id="trip-code" placeholder="Enter 6-8 character code">
+                            <label class="form-label">Starting Point</label>
+                            <input type="text" class="form-control" id="start-location" placeholder="Enter starting location" value="New York, NY">
                         </div>
-                        <div id="join-trip-message" class="alert d-none"></div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-primary" id="join-trip-code-btn">Join Trip</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Share Trip Code Modal -->
-        <div class="modal fade" id="shareTripModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Share Trip Code</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body text-center">
-                        <div class="success-animation">
-                            <lottie-player 
-                                src="https://assets10.lottiefiles.com/packages/lf20_ykqwfq2g.json" 
-                                background="transparent" 
-                                speed="1" 
-                                style="width: 150px; height: 150px;" 
-                                autoplay>
-                            </lottie-player>
+                        <div class="mb-3">
+                            <label class="form-label">Destination</label>
+                            <input type="text" class="form-control" id="end-location" placeholder="Enter destination" value="Boston, MA">
                         </div>
-                        <h4 class="mb-3">Trip Created Successfully!</h4>
-                        <p>Share this code with your travel companions:</p>
-                        <div class="d-flex justify-content-center align-items-center mb-3">
-                            <span class="trip-code me-3" id="share-trip-code">ABC123</span>
-                            <button class="btn btn-outline-primary btn-sm" id="copy-code-btn">
-                                <i class="fas fa-copy me-1"></i>Copy
-                            </button>
+                        <div class="mb-3">
+                            <label class="form-label">Vehicle Mileage (km/L)</label>
+                            <input type="number" class="form-control" id="vehicle-mileage" value="12">
                         </div>
-                        <div id="copy-success" class="alert alert-success d-none mt-3">
-                            Code copied to clipboard!
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Done</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Trip Details Screen -->
-        <div id="trip-details-screen" class="container mt-4 d-none">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <div>
-                    <button class="btn btn-outline-secondary me-2" id="back-to-dashboard">
-                        <i class="fas fa-arrow-left me-1"></i>Back
-                    </button>
-                    <h2 id="trip-details-name" class="d-inline-block ms-2">Trip Name</h2>
-                </div>
-                <span class="trip-code" id="trip-details-code">ABC123</span>
-            </div>
-            
-            <ul class="nav nav-tabs" id="trip-tabs">
-                <li class="nav-item">
-                    <a class="nav-link active" data-bs-toggle="tab" href="#overview">
-                        <i class="fas fa-info-circle me-1"></i>Overview
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" data-bs-toggle="tab" href="#expenses">
-                        <i class="fas fa-dollar-sign me-1"></i>Expenses
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" data-bs-toggle="tab" href="#itinerary">
-                        <i class="fas fa-route me-1"></i>Itinerary
-                    </a>
-                </li>
-            </ul>
-            
-            <div class="tab-content" id="trip-tab-content">
-                <!-- Overview Tab -->
-                <div class="tab-pane fade show active" id="overview">
-                    <div class="row">
-                        <div class="col-md-8">
-                            <h4>Trip Information</h4>
-                            <div class="card mb-4">
-                                <div class="card-body">
-                                    <div class="row">
-                                        <div class="col-sm-6 mb-3">
-                                            <strong><i class="fas fa-map-marker-alt me-2 text-primary"></i>Destination:</strong>
-                                            <span id="overview-destination">-</span>
-                                        </div>
-                                        <div class="col-sm-6 mb-3">
-                                            <strong><i class="fas fa-calendar-alt me-2 text-primary"></i>Dates:</strong>
-                                            <span id="overview-dates">-</span>
-                                        </div>
-                                        <div class="col-sm-6 mb-3">
-                                            <strong><i class="fas fa-dollar-sign me-2 text-primary"></i>Total Budget:</strong>
-                                            <span id="overview-budget">-</span>
-                                        </div>
-                                        <div class="col-sm-6 mb-3">
-                                            <strong><i class="fas fa-wallet me-2 text-primary"></i>Remaining Budget:</strong>
-                                            <span id="overview-remaining">-</span>
-                                        </div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <strong>Budget Progress:</strong>
-                                        <div class="progress mt-2">
-                                            <div id="budget-progress-bar" class="progress-bar" role="progressbar" style="width: 0%"></div>
-                                        </div>
-                                    </div>
-                                </div>
+                        <div class="mb-3">
+                            <label class="form-label">Fuel Price (per liter)</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" id="fuel-price" value="1.2" step="0.01">
                             </div>
                         </div>
-                        <div class="col-md-4">
-                            <h4>Trip Members</h4>
-                            <div class="card">
-                                <div class="card-body">
-                                    <div id="members-list">
-                                        <!-- Members will be loaded here -->
-                                    </div>
-                                </div>
-                            </div>
+                        <button class="btn btn-primary w-100" id="calculate-route">Calculate Route</button>
+                    </div>
+                </div>
+                
+                <div class="distance-result d-none" id="route-result">
+                    <h5>Route Summary</h5>
+                    <div class="row text-center mt-3">
+                        <div class="col-4">
+                            <h6>Distance</h6>
+                            <h4 class="text-primary" id="result-distance">306 km</h4>
+                        </div>
+                        <div class="col-4">
+                            <h6>Duration</h6>
+                            <h4 class="text-primary" id="result-duration">3h 45m</h4>
+                        </div>
+                        <div class="col-4">
+                            <h6>Fuel Cost</h6>
+                            <h4 class="text-primary" id="result-fuel-cost">$30.60</h4>
                         </div>
                     </div>
                 </div>
                 
-                <!-- Expenses Tab -->
-                <div class="tab-pane fade" id="expenses">
-                    <div class="row">
-                        <div class="col-md-8">
-                            <div class="d-flex justify-content-between align-items-center mb-4">
-                                <h4>Expenses</h4>
-                                <button class="btn btn-primary" id="add-expense-btn">
-                                    <i class="fas fa-plus me-1"></i>Add Expense
-                                </button>
-                            </div>
-                            
-                            <div id="expenses-list">
-                                <!-- Expenses will be loaded here -->
-                            </div>
-                            
-                            <div id="empty-expenses" class="empty-state">
-                                <lottie-player 
-                                    src="https://assets10.lottiefiles.com/packages/lf20_6wutsrox.json" 
-                                    background="transparent" 
-                                    speed="1" 
-                                    style="width: 200px; height: 200px; margin: 0 auto;" 
-                                    loop 
-                                    autoplay>
-                                </lottie-player>
-                                <h4>No expenses yet</h4>
-                                <p>Start adding expenses to track your spending!</p>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <h4>Budget Summary</h4>
-                            <div class="card mb-4">
-                                <div class="card-body">
-                                    <div class="mb-3">
-                                        <strong>Total Budget:</strong>
-                                        <span id="summary-total-budget" class="float-end">$0</span>
-                                    </div>
-                                    <div class="mb-3">
-                                        <strong>Total Spent:</strong>
-                                        <span id="summary-total-spent" class="float-end">$0</span>
-                                    </div>
-                                    <div class="mb-3">
-                                        <strong>Remaining:</strong>
-                                        <span id="summary-remaining" class="float-end">$0</span>
-                                    </div>
-                                    <div class="progress mt-3">
-                                        <div id="summary-progress-bar" class="progress-bar" role="progressbar" style="width: 0%"></div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <h4>Spending by Category</h4>
-                            <div class="card">
-                                <div class="card-body">
-                                    <canvas id="expense-chart" height="250"></canvas>
-                                </div>
-                            </div>
+                <div class="map-container">
+                    <!-- Placeholder for map -->
+                    <div class="d-flex justify-content-center align-items-center h-100 text-muted">
+                        <div class="text-center">
+                            <i class="fas fa-map-marked-alt fa-3x mb-3"></i>
+                            <p>Interactive Map</p>
                         </div>
                     </div>
                 </div>
                 
-                <!-- Itinerary Tab -->
-                <div class="tab-pane fade" id="itinerary">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h4>Itinerary</h4>
-                        <button class="btn btn-primary" id="add-activity-btn">
-                            <i class="fas fa-plus me-1"></i>Add Activity
-                        </button>
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-history me-2"></i> Recent Routes
                     </div>
-                    
-                    <div id="itinerary-days">
-                        <!-- Itinerary will be loaded here -->
+                    <div class="card-body" id="recent-routes">
+                        <!-- Recent routes will be loaded here -->
                     </div>
-                    
-                    <div id="empty-itinerary" class="empty-state">
-                        <lottie-player 
-                            src="https://assets7.lottiefiles.com/packages/lf20_0skurerf.json" 
-                            background="transparent" 
-                            speed="1" 
-                            style="width: 250px; height: 250px; margin: 0 auto;" 
-                            loop 
-                            autoplay>
-                        </lottie-player>
-                        <h4>No activities planned yet</h4>
-                        <p>Start adding activities to your itinerary!</p>
+                </div>
+            </div>
+
+            <!-- Expenses Page -->
+            <div id="expenses-page" class="page">
+                <h2 class="mb-4">Expenses</h2>
+                
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-money-bill-wave me-2"></i> Expense Summary</span>
+                        <span class="fw-bold" id="total-expenses">$245.75</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Total Budget</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" id="trip-budget" value="1200">
+                            </div>
+                        </div>
+                        
+                        <div class="budget-meter">
+                            <div class="budget-fill bg-warning" id="budget-meter-fill" style="width: 20%"></div>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <small id="budget-percent">20% of budget used</small>
+                            <small>$<span id="expenses-amount">245</span> / $<span id="budget-amount">1,200</span></small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-list me-2"></i> Recent Expenses</span>
+                        <button class="btn btn-sm btn-primary" id="add-expense-btn">Add Expense</button>
+                    </div>
+                    <div class="card-body" id="expenses-list">
+                        <!-- Expenses will be loaded here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Checklist Page -->
+            <div id="checklist-page" class="page">
+                <h2 class="mb-4">Trip Checklist</h2>
+                
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-tasks me-2"></i> Packing List</span>
+                        <span class="badge bg-primary" id="packing-progress">8/12 items</span>
+                    </div>
+                    <div class="card-body" id="packing-checklist">
+                        <!-- Packing checklist will be loaded here -->
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-car me-2"></i> Vehicle Preparation</span>
+                        <button class="btn btn-sm btn-primary" id="add-checklist-item">Add Item</button>
+                    </div>
+                    <div class="card-body" id="vehicle-checklist">
+                        <!-- Vehicle checklist will be loaded here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Budget Page -->
+            <div id="budget-page" class="page">
+                <h2 class="mb-4">Budget Tracking</h2>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-chart-pie me-2"></i> Budget Overview
+                    </div>
+                    <div class="card-body">
+                        <div class="lottie-container" id="budget-chart">
+                            <!-- Lottie animation will be loaded here -->
+                        </div>
+                        
+                        <div class="row text-center mt-3" id="budget-categories">
+                            <!-- Budget categories will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-exchange-alt me-2"></i> Expense Distribution
+                    </div>
+                    <div class="card-body" id="expense-distribution">
+                        <!-- Expense distribution will be loaded here -->
                     </div>
                 </div>
             </div>
         </div>
-        
-        <!-- Add Expense Modal -->
-        <div class="modal fade" id="addExpenseModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Add Expense</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+
+        <!-- Bottom Navigation -->
+        <div class="bottom-nav">
+            <div class="container">
+                <div class="row">
+                    <div class="col nav-item">
+                        <a href="#" class="nav-link active" data-page="dashboard-page">
+                            <div class="nav-icon"><i class="fas fa-home"></i></div>
+                            <div class="nav-label">Dashboard</div>
+                        </a>
                     </div>
-                    <div class="modal-body">
-                        <form id="add-expense-form">
-                            <div class="mb-3">
-                                <label for="expense-description" class="form-label">Description</label>
-                                <input type="text" class="form-control" id="expense-description" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="expense-amount" class="form-label">Amount ($)</label>
-                                <input type="number" class="form-control" id="expense-amount" min="0" step="0.01" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="expense-category" class="form-label">Category</label>
-                                <select class="form-select" id="expense-category" required>
-                                    <option value="fuel">Fuel</option>
-                                    <option value="hotel">Hotel</option>
-                                    <option value="food">Food</option>
-                                    <option value="activities">Activities</option>
-                                    <option value="other">Other</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label for="expense-date" class="form-label">Date</label>
-                                <input type="date" class="form-control" id="expense-date" required>
-                            </div>
-                        </form>
+                    <div class="col nav-item">
+                        <a href="#" class="nav-link" data-page="distance-page">
+                            <div class="nav-icon"><i class="fas fa-route"></i></div>
+                            <div class="nav-label">Distance</div>
+                        </a>
                     </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-primary" id="save-expense-btn">Add Expense</button>
+                    <div class="col nav-item">
+                        <a href="#" class="nav-link" data-page="expenses-page">
+                            <div class="nav-icon"><i class="fas fa-money-bill-wave"></i></div>
+                            <div class="nav-label">Expenses</div>
+                        </a>
+                    </div>
+                    <div class="col nav-item">
+                        <a href="#" class="nav-link" data-page="checklist-page">
+                            <div class="nav-icon"><i class="fas fa-tasks"></i></div>
+                            <div class="nav-label">Checklist</div>
+                        </a>
+                    </div>
+                    <div class="col nav-item">
+                        <a href="#" class="nav-link" data-page="budget-page">
+                            <div class="nav-icon"><i class="fas fa-chart-bar"></i></div>
+                            <div class="nav-label">Budget</div>
+                        </a>
                     </div>
                 </div>
             </div>
         </div>
-        
-        <!-- Add Activity Modal -->
-        <div class="modal fade" id="addActivityModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Add Activity</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <form id="add-activity-form">
-                            <div class="mb-3">
-                                <label for="activity-day" class="form-label">Day</label>
-                                <select class="form-select" id="activity-day" required>
-                                    <!-- Days will be populated dynamically -->
-                                </select>
+
+        <!-- Add Button -->
+        <div class="add-btn">
+            <i class="fas fa-plus fa-lg"></i>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+
+        <!-- Toast Notifications -->
+        <div class="toast align-items-center text-white bg-success border-0" id="success-toast" role="alert">
+            <div class="d-flex">
+                <div class="toast-body" id="success-message">
+                    Operation completed successfully!
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+
+        <div class="toast align-items-center text-white bg-danger border-0" id="error-toast" role="alert">
+            <div class="d-flex">
+                <div class="toast-body" id="error-message">
+                    An error occurred!
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Expense Modal -->
+    <div class="modal fade" id="expenseModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Expense</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="expense-form">
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            <input type="text" class="form-control" id="expense-description" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Amount</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" id="expense-amount" step="0.01" required>
                             </div>
-                            <div class="mb-3">
-                                <label for="activity-time" class="form-label">Time</label>
-                                <input type="time" class="form-control" id="activity-time" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="activity-place" class="form-label">Place</label>
-                                <input type="text" class="form-control" id="activity-place" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="activity-notes" class="form-label">Notes</label>
-                                <textarea class="form-control" id="activity-notes" rows="3"></textarea>
-                            </div>
-                        </form>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-primary" id="save-activity-btn">Add Activity</button>
-                    </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Category</label>
+                            <select class="form-select" id="expense-category" required>
+                                <option value="food">Food & Dining</option>
+                                <option value="transport">Transport</option>
+                                <option value="accommodation">Accommodation</option>
+                                <option value="activities">Activities</option>
+                                <option value="shopping">Shopping</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Date</label>
+                            <input type="date" class="form-control" id="expense-date" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="save-expense">Save Expense</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Bootstrap JS -->
+    <!-- Add Checklist Item Modal -->
+    <div class="modal fade" id="checklistModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Checklist Item</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="checklist-form">
+                        <div class="mb-3">
+                            <label class="form-label">Item Name</label>
+                            <input type="text" class="form-control" id="checklist-item-name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Category</label>
+                            <select class="form-select" id="checklist-category" required>
+                                <option value="packing">Packing</option>
+                                <option value="vehicle">Vehicle</option>
+                                <option value="documents">Documents</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="save-checklist-item">Save Item</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-    
     <script>
-        // Firebase configuration
+        // Firebase Configuration
         const firebaseConfig = {
-            // Replace with your Firebase project configuration
-            apiKey: "your-api-key",
+            // Replace with your Firebase config
+            apiKey: "AIzaSyDummyKeyReplaceWithYours",
             authDomain: "your-project.firebaseapp.com",
             projectId: "your-project-id",
             storageBucket: "your-project.appspot.com",
             messagingSenderId: "123456789",
-            appId: "your-app-id"
+            appId: "1:123456789:web:abcdef123456"
         };
-        
+
         // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
-        
-        // App state
+
+        // Google Provider
+        const googleProvider = new firebase.auth.GoogleAuthProvider();
+
+        // App State
         let currentUser = null;
         let currentTrip = null;
         let userTrips = [];
-        let expenseChart = null;
-        
+        let userExpenses = [];
+        let userChecklist = [];
+
         // DOM Elements
-        const authScreen = document.getElementById('auth-screen');
-        const app = document.getElementById('app');
-        const loginForm = document.getElementById('login-form');
-        const signupForm = document.getElementById('signup-form');
-        const resetPasswordForm = document.getElementById('reset-password-form');
-        const authMessage = document.getElementById('auth-message');
-        const showSignup = document.getElementById('show-signup');
-        const showLogin = document.getElementById('show-login');
-        const forgotPassword = document.getElementById('forgot-password');
-        const backToLogin = document.getElementById('back-to-login');
-        const logoutBtn = document.getElementById('logout-btn');
+        const loginPage = document.getElementById('login-page');
+        const appContent = document.getElementById('app-content');
+        const googleSignInBtn = document.getElementById('google-signin');
+        const anonymousSignInBtn = document.getElementById('anonymous-signin');
+        const signOutBtn = document.getElementById('sign-out');
+        const userAvatar = document.getElementById('user-avatar');
         const userName = document.getElementById('user-name');
-        const dashboardScreen = document.getElementById('dashboard-screen');
-        const tripsContainer = document.getElementById('trips-container');
-        const emptyTrips = document.getElementById('empty-trips');
-        const createTripBtn = document.getElementById('create-trip-btn');
-        const joinTripBtn = document.getElementById('join-trip-btn');
-        const createFirstTripBtn = document.getElementById('create-first-trip-btn');
-        const createTripModal = new bootstrap.Modal(document.getElementById('createTripModal'));
-        const joinTripModal = new bootstrap.Modal(document.getElementById('joinTripModal'));
-        const shareTripModal = new bootstrap.Modal(document.getElementById('shareTripModal'));
-        const saveTripBtn = document.getElementById('save-trip-btn');
-        const joinTripCodeBtn = document.getElementById('join-trip-code-btn');
-        const copyCodeBtn = document.getElementById('copy-code-btn');
-        const shareTripCode = document.getElementById('share-trip-code');
-        const copySuccess = document.getElementById('copy-success');
-        const tripDetailsScreen = document.getElementById('trip-details-screen');
-        const backToDashboard = document.getElementById('back-to-dashboard');
-        const tripDetailsName = document.getElementById('trip-details-name');
-        const tripDetailsCode = document.getElementById('trip-details-code');
-        const addExpenseBtn = document.getElementById('add-expense-btn');
-        const addExpenseModal = new bootstrap.Modal(document.getElementById('addExpenseModal'));
-        const saveExpenseBtn = document.getElementById('save-expense-btn');
-        const addActivityBtn = document.getElementById('add-activity-btn');
-        const addActivityModal = new bootstrap.Modal(document.getElementById('addActivityModal'));
-        const saveActivityBtn = document.getElementById('save-activity-btn');
-        
+        const loadingIndicator = document.getElementById('loading');
+        const successToast = new bootstrap.Toast(document.getElementById('success-toast'));
+        const errorToast = new bootstrap.Toast(document.getElementById('error-toast'));
+
         // Initialize the app
         document.addEventListener('DOMContentLoaded', function() {
             initAuth();
-            setupEventListeners();
+            initEventListeners();
+            initLottieAnimations();
         });
-        
-        // Initialize authentication state listener
+
+        // Authentication Functions
         function initAuth() {
             auth.onAuthStateChanged(user => {
                 if (user) {
                     currentUser = user;
                     showApp();
                     loadUserData();
-                    loadUserTrips();
                 } else {
-                    currentUser = null;
-                    showAuth();
+                    showLogin();
                 }
             });
         }
-        
-        // Set up event listeners
-        function setupEventListeners() {
-            // Auth form events
-            loginForm.addEventListener('submit', handleLogin);
-            signupForm.addEventListener('submit', handleSignup);
-            resetPasswordForm.addEventListener('submit', handleResetPassword);
-            showSignup.addEventListener('click', showSignupForm);
-            showLogin.addEventListener('click', showLoginForm);
-            forgotPassword.addEventListener('click', showResetPasswordForm);
-            backToLogin.addEventListener('click', showLoginForm);
-            logoutBtn.addEventListener('click', handleLogout);
-            
-            // Trip management events
-            createTripBtn.addEventListener('click', showCreateTripModal);
-            createFirstTripBtn.addEventListener('click', showCreateTripModal);
-            joinTripBtn.addEventListener('click', showJoinTripModal);
-            saveTripBtn.addEventListener('click', handleCreateTrip);
-            joinTripCodeBtn.addEventListener('click', handleJoinTrip);
-            copyCodeBtn.addEventListener('click', copyTripCode);
-            backToDashboard.addEventListener('click', showDashboard);
-            
-            // Expense and itinerary events
-            addExpenseBtn.addEventListener('click', showAddExpenseModal);
-            saveExpenseBtn.addEventListener('click', handleAddExpense);
-            addActivityBtn.addEventListener('click', showAddActivityModal);
-            saveActivityBtn.addEventListener('click', handleAddActivity);
-        }
-        
-        // Authentication handlers
-        function handleLogin(e) {
-            e.preventDefault();
-            const email = document.getElementById('login-email').value;
-            const password = document.getElementById('login-password').value;
-            
-            showAuthMessage('Logging in...', 'info');
-            
-            auth.signInWithEmailAndPassword(email, password)
-                .then(() => {
-                    showAuthMessage('Login successful!', 'success');
+
+        function signInWithGoogle() {
+            showLoading();
+            auth.signInWithPopup(googleProvider)
+                .then(result => {
+                    hideLoading();
+                    showSuccess('Signed in successfully!');
                 })
                 .catch(error => {
-                    showAuthMessage(error.message, 'danger');
+                    hideLoading();
+                    showError('Failed to sign in: ' + error.message);
                 });
         }
-        
-        function handleSignup(e) {
-            e.preventDefault();
-            const name = document.getElementById('signup-name').value;
-            const email = document.getElementById('signup-email').value;
-            const password = document.getElementById('signup-password').value;
-            const confirmPassword = document.getElementById('signup-confirm-password').value;
-            
-            if (password !== confirmPassword) {
-                showAuthMessage('Passwords do not match!', 'danger');
-                return;
-            }
-            
-            showAuthMessage('Creating account...', 'info');
-            
-            auth.createUserWithEmailAndPassword(email, password)
-                .then(userCredential => {
-                    // Store user name in Firestore
-                    return db.collection('users').doc(userCredential.user.uid).set({
-                        name: name,
-                        email: email,
-                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                })
-                .then(() => {
-                    showAuthMessage('Account created successfully!', 'success');
+
+        function signInAnonymously() {
+            showLoading();
+            auth.signInAnonymously()
+                .then(result => {
+                    hideLoading();
+                    showSuccess('Signed in as guest!');
                 })
                 .catch(error => {
-                    showAuthMessage(error.message, 'danger');
+                    hideLoading();
+                    showError('Failed to sign in: ' + error.message);
                 });
         }
-        
-        function handleResetPassword(e) {
-            e.preventDefault();
-            const email = document.getElementById('reset-email').value;
-            
-            showAuthMessage('Sending reset email...', 'info');
-            
-            auth.sendPasswordResetEmail(email)
+
+        function signOut() {
+            showLoading();
+            auth.signOut()
                 .then(() => {
-                    showAuthMessage('Password reset email sent!', 'success');
+                    hideLoading();
+                    showSuccess('Signed out successfully!');
                 })
                 .catch(error => {
-                    showAuthMessage(error.message, 'danger');
+                    hideLoading();
+                    showError('Failed to sign out: ' + error.message);
                 });
         }
-        
-        function handleLogout() {
-            auth.signOut();
+
+        // UI Functions
+        function showLogin() {
+            loginPage.classList.add('active');
+            appContent.classList.add('d-none');
         }
-        
-        // Auth UI helpers
-        function showAuthMessage(message, type) {
-            authMessage.textContent = message;
-            authMessage.className = `alert alert-${type} mt-3`;
-            authMessage.classList.remove('d-none');
-        }
-        
-        function showLoginForm() {
-            loginForm.classList.remove('d-none');
-            signupForm.classList.add('d-none');
-            resetPasswordForm.classList.add('d-none');
-            authMessage.classList.add('d-none');
-        }
-        
-        function showSignupForm() {
-            loginForm.classList.add('d-none');
-            signupForm.classList.remove('d-none');
-            resetPasswordForm.classList.add('d-none');
-            authMessage.classList.add('d-none');
-        }
-        
-        function showResetPasswordForm() {
-            loginForm.classList.add('d-none');
-            signupForm.classList.add('d-none');
-            resetPasswordForm.classList.remove('d-none');
-            authMessage.classList.add('d-none');
-        }
-        
-        function showAuth() {
-            authScreen.classList.remove('d-none');
-            app.classList.add('d-none');
-        }
-        
+
         function showApp() {
-            authScreen.classList.add('d-none');
-            app.classList.remove('d-none');
+            loginPage.classList.remove('active');
+            appContent.classList.remove('d-none');
+            
+            // Update user info
+            if (currentUser.photoURL) {
+                userAvatar.src = currentUser.photoURL;
+            } else {
+                userAvatar.src = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(currentUser.displayName || 'User') + '&background=4A6FA5&color=fff';
+            }
+            userName.textContent = currentUser.displayName || 'User';
         }
-        
-        // Load user data from Firestore
+
+        function showLoading() {
+            loadingIndicator.style.display = 'block';
+        }
+
+        function hideLoading() {
+            loadingIndicator.style.display = 'none';
+        }
+
+        function showSuccess(message) {
+            document.getElementById('success-message').textContent = message;
+            successToast.show();
+        }
+
+        function showError(message) {
+            document.getElementById('error-message').textContent = message;
+            errorToast.show();
+        }
+
+        // Data Management Functions
         function loadUserData() {
-            db.collection('users').doc(currentUser.uid).get()
-                .then(doc => {
-                    if (doc.exists) {
-                        const userData = doc.data();
-                        userName.textContent = userData.name;
+            showLoading();
+            
+            // Load user trips
+            db.collection('trips').where('userId', '==', currentUser.uid)
+                .get()
+                .then(snapshot => {
+                    userTrips = [];
+                    snapshot.forEach(doc => {
+                        userTrips.push({ id: doc.id, ...doc.data() });
+                    });
+                    
+                    // Set current trip (for demo, using the first one)
+                    if (userTrips.length > 0) {
+                        currentTrip = userTrips[0];
+                        updateDashboard();
+                    } else {
+                        // Create a demo trip if none exists
+                        createDemoTrip();
                     }
+                    
+                    // Load expenses
+                    return db.collection('expenses').where('tripId', '==', currentTrip.id).get();
+                })
+                .then(snapshot => {
+                    userExpenses = [];
+                    snapshot.forEach(doc => {
+                        userExpenses.push({ id: doc.id, ...doc.data() });
+                    });
+                    updateExpensesPage();
+                    
+                    // Load checklist
+                    return db.collection('checklist').where('tripId', '==', currentTrip.id).get();
+                })
+                .then(snapshot => {
+                    userChecklist = [];
+                    snapshot.forEach(doc => {
+                        userChecklist.push({ id: doc.id, ...doc.data() });
+                    });
+                    updateChecklistPage();
+                    
+                    hideLoading();
                 })
                 .catch(error => {
-                    console.error('Error loading user data:', error);
+                    hideLoading();
+                    showError('Failed to load data: ' + error.message);
                 });
         }
-        
-        // Trip management functions
-        function loadUserTrips() {
-            // In a real app, we would query Firestore for trips where current user is a member
-            // For this demo, we'll use mock data
-            userTrips = [
-                {
-                    id: 'trip1',
-                    name: 'Summer Vacation',
-                    destination: 'Bali, Indonesia',
-                    startDate: '2023-07-15',
-                    endDate: '2023-07-25',
-                    budget: 2500,
-                    code: 'BAL123',
-                    members: ['user1', 'user2']
-                },
-                {
-                    id: 'trip2',
-                    name: 'Business Conference',
-                    destination: 'San Francisco, USA',
-                    startDate: '2023-09-10',
-                    endDate: '2023-09-15',
-                    budget: 1800,
-                    code: 'SFO456',
-                    members: ['user1', 'user3', 'user4']
-                }
+
+        function createDemoTrip() {
+            const demoTrip = {
+                userId: currentUser.uid,
+                name: 'Road Trip to Mountains',
+                startDate: '2023-06-15',
+                endDate: '2023-06-20',
+                travelers: 4,
+                budget: 1200,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            
+            db.collection('trips').add(demoTrip)
+                .then(docRef => {
+                    currentTrip = { id: docRef.id, ...demoTrip };
+                    userTrips.push(currentTrip);
+                    updateDashboard();
+                    
+                    // Create demo expenses
+                    createDemoExpenses(docRef.id);
+                    // Create demo checklist
+                    createDemoChecklist(docRef.id);
+                })
+                .catch(error => {
+                    showError('Failed to create demo trip: ' + error.message);
+                });
+        }
+
+        function createDemoExpenses(tripId) {
+            const demoExpenses = [
+                { description: 'Dinner at Restaurant', amount: 64.50, category: 'food', date: '2023-06-15', tripId },
+                { description: 'Fuel', amount: 45.00, category: 'transport', date: '2023-06-15', tripId },
+                { description: 'Hotel Stay', amount: 120.00, category: 'accommodation', date: '2023-06-14', tripId },
+                { description: 'Park Entrance', amount: 16.25, category: 'activities', date: '2023-06-14', tripId }
             ];
             
-            renderTrips();
+            demoExpenses.forEach(expense => {
+                db.collection('expenses').add(expense);
+            });
         }
-        
-        function renderTrips() {
-            tripsContainer.innerHTML = '';
+
+        function createDemoChecklist(tripId) {
+            const demoChecklist = [
+                { name: 'Passport/ID', category: 'documents', completed: true, tripId },
+                { name: 'Phone & Charger', category: 'packing', completed: true, tripId },
+                { name: 'Wallet with Cash/Cards', category: 'packing', completed: true, tripId },
+                { name: 'First Aid Kit', category: 'packing', completed: false, tripId },
+                { name: 'Snacks & Water', category: 'packing', completed: true, tripId },
+                { name: 'Maps & Directions', category: 'documents', completed: false, tripId },
+                { name: 'Clothing', category: 'packing', completed: true, tripId },
+                { name: 'Toiletries', category: 'packing', completed: false, tripId },
+                { name: 'Check Oil & Fluids', category: 'vehicle', completed: true, tripId },
+                { name: 'Inspect Tires', category: 'vehicle', completed: true, tripId },
+                { name: 'Check Brakes', category: 'vehicle', completed: false, tripId },
+                { name: 'Fill Up Fuel Tank', category: 'vehicle', completed: true, tripId }
+            ];
             
-            if (userTrips.length === 0) {
-                emptyTrips.classList.remove('d-none');
-                return;
-            }
+            demoChecklist.forEach(item => {
+                db.collection('checklist').add(item);
+            });
+        }
+
+        // Update UI Functions
+        function updateDashboard() {
+            if (!currentTrip) return;
             
-            emptyTrips.classList.add('d-none');
+            document.getElementById('current-trip-name').textContent = currentTrip.name;
+            document.getElementById('current-trip-dates').textContent = 
+                `${formatDate(currentTrip.startDate)} - ${formatDate(currentTrip.endDate)}`;
+            document.getElementById('current-trip-travelers').textContent = 
+                `${currentTrip.travelers} ${currentTrip.travelers === 1 ? 'Person' : 'People'}`;
+            document.getElementById('current-trip-budget').textContent = `$${currentTrip.budget}`;
             
-            userTrips.forEach(trip => {
+            // Calculate budget usage
+            const totalExpenses = userExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+            const budgetPercent = Math.min(100, (totalExpenses / currentTrip.budget) * 100);
+            
+            document.getElementById('budget-progress').style.width = `${budgetPercent}%`;
+            document.getElementById('budget-used-percent').textContent = `${Math.round(budgetPercent)}%`;
+            document.getElementById('budget-used').textContent = totalExpenses.toFixed(2);
+            document.getElementById('budget-total').textContent = currentTrip.budget;
+            
+            // Update stats
+            document.getElementById('stats-expenses').textContent = `$${totalExpenses.toFixed(2)}`;
+            
+            // Calculate completed checklist items
+            const completedItems = userChecklist.filter(item => item.completed).length;
+            const totalItems = userChecklist.length;
+            document.getElementById('stats-checklist').textContent = `${completedItems}/${totalItems}`;
+            
+            // Update upcoming trips
+            updateUpcomingTrips();
+        }
+
+        function updateUpcomingTrips() {
+            const upcomingTripsList = document.getElementById('upcoming-trips-list');
+            upcomingTripsList.innerHTML = '';
+            
+            // For demo, show some placeholder trips
+            const demoUpcomingTrips = [
+                { name: 'Beach Vacation', date: '2023-07-10', travelers: 6, budget: 800 },
+                { name: 'City Break', date: '2023-08-05', travelers: 2, budget: 400 }
+            ];
+            
+            demoUpcomingTrips.forEach(trip => {
                 const tripCard = document.createElement('div');
-                tripCard.className = 'col-md-6 col-lg-4';
+                tripCard.className = 'card';
                 tripCard.innerHTML = `
-                    <div class="card trip-card" data-trip-id="${trip.id}">
-                        <div class="trip-card-header">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
                             <h5 class="card-title mb-0">${trip.name}</h5>
+                            <span class="trip-badge bg-secondary">${formatDate(trip.date)}</span>
                         </div>
-                        <div class="card-body">
-                            <p class="card-text">
-                                <i class="fas fa-map-marker-alt me-2 text-primary"></i>${trip.destination}
-                            </p>
-                            <p class="card-text">
-                                <i class="fas fa-calendar-alt me-2 text-primary"></i>${formatDate(trip.startDate)} - ${formatDate(trip.endDate)}
-                            </p>
-                            <p class="card-text">
-                                <i class="fas fa-dollar-sign me-2 text-primary"></i>Budget: $${trip.budget}
-                            </p>
-                            <div class="d-flex align-items-center mt-3">
-                                <div class="me-auto">
-                                    ${renderMemberAvatars(trip.members)}
-                                </div>
-                                <button class="btn btn-sm btn-outline-primary view-trip-btn">
-                                    View Details
-                                </button>
-                            </div>
+                        <p class="card-text">${trip.travelers} ${trip.travelers === 1 ? 'Person' : 'People'}</p>
+                        <div class="d-flex justify-content-between">
+                            <span><i class="fas fa-users me-1"></i> ${trip.travelers} People</span>
+                            <span><i class="fas fa-dollar-sign me-1"></i> $${trip.budget} Budget</span>
                         </div>
                     </div>
                 `;
-                
-                tripsContainer.appendChild(tripCard);
-                
-                // Add event listener to the view trip button
-                tripCard.querySelector('.view-trip-btn').addEventListener('click', () => {
-                    showTripDetails(trip);
-                });
+                upcomingTripsList.appendChild(tripCard);
             });
         }
-        
-        function renderMemberAvatars(members) {
-            let avatarsHtml = '';
-            const maxAvatars = 4;
+
+        function updateExpensesPage() {
+            if (!currentTrip) return;
             
-            for (let i = 0; i < Math.min(members.length, maxAvatars); i++) {
-                avatarsHtml += `<div class="member-avatar d-inline-block">U${i+1}</div>`;
-            }
+            // Update budget summary
+            const totalExpenses = userExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+            document.getElementById('total-expenses').textContent = `$${totalExpenses.toFixed(2)}`;
+            document.getElementById('expenses-amount').textContent = totalExpenses.toFixed(2);
+            document.getElementById('budget-amount').textContent = currentTrip.budget;
             
-            if (members.length > maxAvatars) {
-                avatarsHtml += `<div class="member-avatar d-inline-block">+${members.length - maxAvatars}</div>`;
-            }
+            const budgetPercent = Math.min(100, (totalExpenses / currentTrip.budget) * 100);
+            document.getElementById('budget-meter-fill').style.width = `${budgetPercent}%`;
+            document.getElementById('budget-percent').textContent = `${Math.round(budgetPercent)}% of budget used`;
             
-            return avatarsHtml;
-        }
-        
-        function showCreateTripModal() {
-            createTripModal.show();
-        }
-        
-        function handleCreateTrip() {
-            const name = document.getElementById('trip-name').value;
-            const destination = document.getElementById('trip-destination').value;
-            const startDate = document.getElementById('start-date').value;
-            const endDate = document.getElementById('end-date').value;
-            const budget = parseFloat(document.getElementById('trip-budget').value);
-            
-            // Generate a random trip code (in a real app, ensure uniqueness)
-            const code = generateTripCode();
-            
-            // In a real app, we would save to Firestore
-            const newTrip = {
-                id: 'trip' + Date.now(),
-                name,
-                destination,
-                startDate,
-                endDate,
-                budget,
-                code,
-                members: [currentUser.uid]
-            };
-            
-            userTrips.push(newTrip);
-            renderTrips();
-            
-            createTripModal.hide();
-            shareTripCode.textContent = code;
-            shareTripModal.show();
-            
-            // Reset form
-            document.getElementById('create-trip-form').reset();
-        }
-        
-        function showJoinTripModal() {
-            document.getElementById('join-trip-message').classList.add('d-none');
-            joinTripModal.show();
-        }
-        
-        function handleJoinTrip() {
-            const code = document.getElementById('trip-code').value.toUpperCase();
-            const messageEl = document.getElementById('join-trip-message');
-            
-            // In a real app, we would query Firestore for a trip with this code
-            // For demo purposes, we'll simulate finding a trip
-            if (code === 'DEMO123') {
-                // Simulate adding user to trip
-                const joinedTrip = {
-                    id: 'trip3',
-                    name: 'Demo Trip',
-                    destination: 'Paris, France',
-                    startDate: '2023-08-20',
-                    endDate: '2023-08-27',
-                    budget: 2000,
-                    code: 'DEMO123',
-                    members: ['user5', 'user6', currentUser.uid]
-                };
-                
-                userTrips.push(joinedTrip);
-                renderTrips();
-                
-                messageEl.textContent = 'Successfully joined the trip!';
-                messageEl.className = 'alert alert-success';
-                messageEl.classList.remove('d-none');
-                
-                setTimeout(() => {
-                    joinTripModal.hide();
-                    showTripDetails(joinedTrip);
-                }, 1500);
-            } else {
-                messageEl.textContent = 'Trip not found. Please check the code and try again.';
-                messageEl.className = 'alert alert-danger';
-                messageEl.classList.remove('d-none');
-            }
-        }
-        
-        function copyTripCode() {
-            navigator.clipboard.writeText(shareTripCode.textContent)
-                .then(() => {
-                    copySuccess.classList.remove('d-none');
-                    setTimeout(() => {
-                        copySuccess.classList.add('d-none');
-                    }, 2000);
-                })
-                .catch(err => {
-                    console.error('Failed to copy: ', err);
-                });
-        }
-        
-        function showDashboard() {
-            dashboardScreen.classList.remove('d-none');
-            tripDetailsScreen.classList.add('d-none');
-        }
-        
-        function showTripDetails(trip) {
-            currentTrip = trip;
-            
-            tripDetailsName.textContent = trip.name;
-            tripDetailsCode.textContent = trip.code;
-            
-            // Update overview tab
-            document.getElementById('overview-destination').textContent = trip.destination;
-            document.getElementById('overview-dates').textContent = `${formatDate(trip.startDate)} - ${formatDate(trip.endDate)}`;
-            document.getElementById('overview-budget').textContent = `$${trip.budget}`;
-            
-            // Calculate and display remaining budget (mock data)
-            const totalSpent = 850; // Mock value
-            const remaining = trip.budget - totalSpent;
-            const spentPercentage = (totalSpent / trip.budget) * 100;
-            
-            document.getElementById('overview-remaining').textContent = `$${remaining}`;
-            document.getElementById('budget-progress-bar').style.width = `${spentPercentage}%`;
-            
-            // Update members list
-            const membersList = document.getElementById('members-list');
-            membersList.innerHTML = '';
-            
-            trip.members.forEach((memberId, index) => {
-                const memberEl = document.createElement('div');
-                memberEl.className = 'd-flex align-items-center mb-2';
-                memberEl.innerHTML = `
-                    <div class="member-avatar me-2">U${index+1}</div>
-                    <span>User ${index+1}</span>
-                `;
-                membersList.appendChild(memberEl);
-            });
-            
-            // Load expenses and itinerary for this trip
-            loadTripExpenses();
-            loadTripItinerary();
-            
-            dashboardScreen.classList.add('d-none');
-            tripDetailsScreen.classList.remove('d-none');
-        }
-        
-        function loadTripExpenses() {
-            // Mock expenses data
-            const expenses = [
-                { id: 'exp1', description: 'Flight tickets', amount: 450, category: 'other', date: '2023-07-15', addedBy: 'user1' },
-                { id: 'exp2', description: 'Hotel deposit', amount: 200, category: 'hotel', date: '2023-07-16', addedBy: 'user2' },
-                { id: 'exp3', description: 'Dinner', amount: 75, category: 'food', date: '2023-07-17', addedBy: 'user1' },
-                { id: 'exp4', description: 'Car rental', amount: 125, category: 'other', date: '2023-07-18', addedBy: 'user2' }
-            ];
-            
-            renderExpenses(expenses);
-            updateBudgetSummary(expenses);
-            renderExpenseChart(expenses);
-        }
-        
-        function renderExpenses(expenses) {
+            // Update expenses list
             const expensesList = document.getElementById('expenses-list');
-            const emptyExpenses = document.getElementById('empty-expenses');
-            
-            if (expenses.length === 0) {
-                expensesList.innerHTML = '';
-                emptyExpenses.classList.remove('d-none');
-                return;
-            }
-            
-            emptyExpenses.classList.add('d-none');
             expensesList.innerHTML = '';
             
-            expenses.forEach(expense => {
-                const expenseEl = document.createElement('div');
-                expenseEl.className = 'expense-item';
-                expenseEl.innerHTML = `
-                    <div class="d-flex justify-content-between">
-                        <div>
-                            <h6 class="mb-1">${expense.description}</h6>
-                            <span class="category-badge category-${expense.category}">${expense.category.charAt(0).toUpperCase() + expense.category.slice(1)}</span>
-                            <small class="text-muted">${formatDate(expense.date)}</small>
-                        </div>
-                        <div class="text-end">
-                            <div class="fw-bold">$${expense.amount}</div>
-                            <small class="text-muted">Added by User</small>
-                        </div>
-                    </div>
-                `;
-                expensesList.appendChild(expenseEl);
-            });
-        }
-        
-        function updateBudgetSummary(expenses) {
-            const totalBudget = currentTrip.budget;
-            const totalSpent = expenses.reduce((sum, expense) => sum + expense.amount, 0);
-            const remaining = totalBudget - totalSpent;
-            const spentPercentage = (totalSpent / totalBudget) * 100;
-            
-            document.getElementById('summary-total-budget').textContent = `$${totalBudget}`;
-            document.getElementById('summary-total-spent').textContent = `$${totalSpent}`;
-            document.getElementById('summary-remaining').textContent = `$${remaining}`;
-            document.getElementById('summary-progress-bar').style.width = `${spentPercentage}%`;
-        }
-        
-        function renderExpenseChart(expenses) {
-            const ctx = document.getElementById('expense-chart').getContext('2d');
-            
-            // Destroy previous chart if it exists
-            if (expenseChart) {
-                expenseChart.destroy();
-            }
-            
-            // Group expenses by category
-            const categories = {
-                fuel: 0,
-                hotel: 0,
-                food: 0,
-                activities: 0,
-                other: 0
-            };
-            
-            expenses.forEach(expense => {
-                categories[expense.category] += expense.amount;
-            });
-            
-            // Filter out categories with no expenses
-            const labels = [];
-            const data = [];
-            const backgroundColors = [
-                '#ffd166', // fuel
-                '#06d6a0', // hotel
-                '#ef476f', // food
-                '#118ab2', // activities
-                '#073b4c'  // other
-            ];
-            
-            Object.keys(categories).forEach((category, index) => {
-                if (categories[category] > 0) {
-                    labels.push(category.charAt(0).toUpperCase() + category.slice(1));
-                    data.push(categories[category]);
-                }
-            });
-            
-            expenseChart = new Chart(ctx, {
-                type: 'pie',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: data,
-                        backgroundColor: backgroundColors.slice(0, labels.length),
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            position: 'bottom'
-                        }
-                    }
-                }
-            });
-        }
-        
-        function loadTripItinerary() {
-            // Mock itinerary data
-            const itinerary = {
-                '2023-07-15': [
-                    { id: 'act1', time: '10:00', place: 'Airport', notes: 'Flight arrival' },
-                    { id: 'act2', time: '14:00', place: 'Hotel', notes: 'Check-in and rest' },
-                    { id: 'act3', time: '19:00', place: 'Beach Restaurant', notes: 'Welcome dinner' }
-                ],
-                '2023-07-16': [
-                    { id: 'act4', time: '09:00', place: 'Temple Visit', notes: 'Guided tour' },
-                    { id: 'act5', time: '13:00', place: 'Local Market', notes: 'Lunch and shopping' }
-                ]
-            };
-            
-            renderItinerary(itinerary);
-        }
-        
-        function renderItinerary(itinerary) {
-            const itineraryDays = document.getElementById('itinerary-days');
-            const emptyItinerary = document.getElementById('empty-itinerary');
-            
-            const days = Object.keys(itinerary);
-            
-            if (days.length === 0) {
-                itineraryDays.innerHTML = '';
-                emptyItinerary.classList.remove('d-none');
+            if (userExpenses.length === 0) {
+                expensesList.innerHTML = '<p class="text-muted text-center">No expenses yet</p>';
                 return;
             }
             
-            emptyItinerary.classList.add('d-none');
-            itineraryDays.innerHTML = '';
+            // Sort expenses by date (newest first)
+            const sortedExpenses = [...userExpenses].sort((a, b) => new Date(b.date) - new Date(a.date));
             
-            days.forEach(day => {
-                const dayEl = document.createElement('div');
-                dayEl.className = 'mb-4';
-                dayEl.innerHTML = `
-                    <h5 class="mb-3">${formatDate(day)}</h5>
+            sortedExpenses.forEach(expense => {
+                const expenseItem = document.createElement('div');
+                expenseItem.className = 'expense-item d-flex align-items-center';
+                
+                const categoryClass = getCategoryClass(expense.category);
+                const categoryIcon = getCategoryIcon(expense.category);
+                
+                expenseItem.innerHTML = `
+                    <div class="expense-category ${categoryClass}">
+                        <i class="${categoryIcon}"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <h6 class="mb-1">${expense.description}</h6>
+                        <small class="text-muted">${formatDate(expense.date)}</small>
+                    </div>
+                    <div class="text-end">
+                        <h6 class="mb-1">$${expense.amount.toFixed(2)}</h6>
+                        <small class="text-muted">You paid</small>
+                    </div>
                 `;
                 
-                itinerary[day].forEach(activity => {
-                    const activityEl = document.createElement('div');
-                    activityEl.className = 'card itinerary-card';
-                    activityEl.innerHTML = `
-                        <div class="card-body">
-                            <div class="d-flex">
-                                <div class="me-3">
-                                    <i class="fas fa-clock text-primary"></i>
-                                    <span class="ms-1 fw-bold">${activity.time}</span>
-                                </div>
-                                <div class="flex-grow-1">
-                                    <h6 class="card-title mb-1">${activity.place}</h6>
-                                    <p class="card-text mb-0">${activity.notes}</p>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                    dayEl.appendChild(activityEl);
-                });
-                
-                itineraryDays.appendChild(dayEl);
+                expensesList.appendChild(expenseItem);
+            });
+        }
+
+        function updateChecklistPage() {
+            // Group checklist items by category
+            const packingItems = userChecklist.filter(item => item.category === 'packing' || item.category === 'documents');
+            const vehicleItems = userChecklist.filter(item => item.category === 'vehicle');
+            
+            // Update packing checklist
+            const packingChecklist = document.getElementById('packing-checklist');
+            packingChecklist.innerHTML = '';
+            
+            packingItems.forEach(item => {
+                const checklistItem = createChecklistItemElement(item);
+                packingChecklist.appendChild(checklistItem);
             });
             
-            // Populate the day dropdown in the add activity modal
-            const activityDaySelect = document.getElementById('activity-day');
-            activityDaySelect.innerHTML = '';
+            // Update vehicle checklist
+            const vehicleChecklist = document.getElementById('vehicle-checklist');
+            vehicleChecklist.innerHTML = '';
             
-            // Generate options for all days of the trip
-            const startDate = new Date(currentTrip.startDate);
-            const endDate = new Date(currentTrip.endDate);
-            const currentDate = new Date(startDate);
+            vehicleItems.forEach(item => {
+                const checklistItem = createChecklistItemElement(item);
+                vehicleChecklist.appendChild(checklistItem);
+            });
             
-            while (currentDate <= endDate) {
-                const dateStr = currentDate.toISOString().split('T')[0];
-                const option = document.createElement('option');
-                option.value = dateStr;
-                option.textContent = formatDate(dateStr);
-                activityDaySelect.appendChild(option);
+            // Update progress
+            const completedItems = userChecklist.filter(item => item.completed).length;
+            const totalItems = userChecklist.length;
+            document.getElementById('packing-progress').textContent = `${completedItems}/${totalItems} items`;
+        }
+
+        function createChecklistItemElement(item) {
+            const checklistItem = document.createElement('div');
+            checklistItem.className = `checklist-item ${item.completed ? 'completed' : ''}`;
+            checklistItem.innerHTML = `
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="checklist-${item.id}" ${item.completed ? 'checked' : ''}>
+                    <label class="form-check-label" for="checklist-${item.id}">
+                        ${item.name}
+                    </label>
+                </div>
+            `;
+            
+            // Add event listener for checkbox
+            const checkbox = checklistItem.querySelector('input');
+            checkbox.addEventListener('change', function() {
+                updateChecklistItem(item.id, this.checked);
+            });
+            
+            return checklistItem;
+        }
+
+        function updateChecklistItem(itemId, completed) {
+            db.collection('checklist').doc(itemId).update({
+                completed: completed,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            })
+            .then(() => {
+                // Update local data
+                const itemIndex = userChecklist.findIndex(item => item.id === itemId);
+                if (itemIndex !== -1) {
+                    userChecklist[itemIndex].completed = completed;
+                }
                 
-                currentDate.setDate(currentDate.getDate() + 1);
+                // Update UI
+                updateChecklistPage();
+                updateDashboard();
+            })
+            .catch(error => {
+                showError('Failed to update checklist: ' + error.message);
+            });
+        }
+
+        // Distance Matrix API Integration
+        function calculateDistance() {
+            const startLocation = document.getElementById('start-location').value;
+            const endLocation = document.getElementById('end-location').value;
+            const vehicleMileage = parseFloat(document.getElementById('vehicle-mileage').value);
+            const fuelPrice = parseFloat(document.getElementById('fuel-price').value);
+            
+            if (!startLocation || !endLocation) {
+                showError('Please enter both start and end locations');
+                return;
+            }
+            
+            showLoading();
+            
+            // In a real implementation, you would call the Distance Matrix API here
+            // For demo purposes, we'll use mock data
+            setTimeout(() => {
+                // Mock API response
+                const mockResponse = {
+                    distance: { text: '306 km', value: 306000 },
+                    duration: { text: '3 hours 45 mins', value: 13500 },
+                    status: 'OK'
+                };
+                
+                if (mockResponse.status === 'OK') {
+                    const distance = mockResponse.distance.value / 1000; // Convert to km
+                    const duration = mockResponse.duration.text;
+                    
+                    // Calculate fuel cost
+                    const fuelRequired = distance / vehicleMileage;
+                    const fuelCost = fuelRequired * fuelPrice;
+                    
+                    // Display results
+                    document.getElementById('result-distance').textContent = `${distance} km`;
+                    document.getElementById('result-duration').textContent = duration;
+                    document.getElementById('result-fuel-cost').textContent = `$${fuelCost.toFixed(2)}`;
+                    
+                    document.getElementById('route-result').classList.remove('d-none');
+                    
+                    // Save to recent routes
+                    saveRecentRoute(startLocation, endLocation, distance, duration, fuelCost);
+                    
+                    hideLoading();
+                    showSuccess('Route calculated successfully!');
+                } else {
+                    hideLoading();
+                    showError('Failed to calculate route. Please check your locations.');
+                }
+            }, 1500);
+        }
+
+        function saveRecentRoute(start, end, distance, duration, cost) {
+            const routeData = {
+                start,
+                end,
+                distance,
+                duration,
+                cost,
+                calculatedAt: new Date().toISOString()
+            };
+            
+            // In a real app, you would save this to Firestore
+            // For now, we'll just update the UI
+            updateRecentRoutes(routeData);
+        }
+
+        function updateRecentRoutes(newRoute) {
+            const recentRoutesContainer = document.getElementById('recent-routes');
+            
+            // Create route element
+            const routeElement = document.createElement('div');
+            routeElement.className = 'd-flex justify-content-between py-2 border-bottom';
+            routeElement.innerHTML = `
+                <div>
+                    <h6 class="mb-1">${newRoute.start} to ${newRoute.end}</h6>
+                    <small class="text-muted">${newRoute.distance} km • ${newRoute.duration}</small>
+                </div>
+                <div class="text-end">
+                    <h6 class="mb-1">$${newRoute.cost.toFixed(2)}</h6>
+                    <small class="text-muted">${formatDate(newRoute.calculatedAt, true)}</small>
+                </div>
+            `;
+            
+            // Add to the top of the list
+            if (recentRoutesContainer.children.length > 0) {
+                recentRoutesContainer.insertBefore(routeElement, recentRoutesContainer.firstChild);
+            } else {
+                recentRoutesContainer.appendChild(routeElement);
+            }
+            
+            // Limit to 5 recent routes
+            if (recentRoutesContainer.children.length > 5) {
+                recentRoutesContainer.removeChild(recentRoutesContainer.lastChild);
             }
         }
-        
-        function showAddExpenseModal() {
-            // Set today's date as default
-            document.getElementById('expense-date').valueAsDate = new Date();
-            addExpenseModal.show();
-        }
-        
-        function handleAddExpense() {
-            const description = document.getElementById('expense-description').value;
-            const amount = parseFloat(document.getElementById('expense-amount').value);
-            const category = document.getElementById('expense-category').value;
-            const date = document.getElementById('expense-date').value;
-            
-            // In a real app, we would save to Firestore
-            // For demo, we'll just reload the expenses to show the UI update
-            loadTripExpenses();
-            
-            addExpenseModal.hide();
-            
-            // Reset form
-            document.getElementById('add-expense-form').reset();
-            
-            // Show success animation
-            showSuccessAnimation('expense');
-        }
-        
-        function showAddActivityModal() {
-            addActivityModal.show();
-        }
-        
-        function handleAddActivity() {
-            const day = document.getElementById('activity-day').value;
-            const time = document.getElementById('activity-time').value;
-            const place = document.getElementById('activity-place').value;
-            const notes = document.getElementById('activity-notes').value;
-            
-            // In a real app, we would save to Firestore
-            // For demo, we'll just reload the itinerary to show the UI update
-            loadTripItinerary();
-            
-            addActivityModal.hide();
-            
-            // Reset form
-            document.getElementById('add-activity-form').reset();
-            
-            // Show success animation
-            showSuccessAnimation('activity');
-        }
-        
-        function showSuccessAnimation(type) {
-            // In a real app, we would show a Lottie animation
-            // For this demo, we'll just show an alert
-            alert(`${type.charAt(0).toUpperCase() + type.slice(1)} added successfully!`);
-        }
-        
-        // Utility functions
-        function generateTripCode() {
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-            let result = '';
-            for (let i = 0; i < 6; i++) {
-                result += chars.charAt(Math.floor(Math.random() * chars.length));
+
+        // Utility Functions
+        function formatDate(dateString, includeTime = false) {
+            const date = new Date(dateString);
+            if (includeTime) {
+                return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             }
-            return result;
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         }
-        
-        function formatDate(dateString) {
-            const options = { year: 'numeric', month: 'short', day: 'numeric' };
-            return new Date(dateString).toLocaleDateString(undefined, options);
+
+        function getCategoryClass(category) {
+            const classes = {
+                'food': 'food',
+                'transport': 'transport',
+                'accommodation': 'accommodation',
+                'activities': 'activities',
+                'shopping': 'shopping',
+                'other': 'other'
+            };
+            return classes[category] || 'other';
+        }
+
+        function getCategoryIcon(category) {
+            const icons = {
+                'food': 'fas fa-utensils',
+                'transport': 'fas fa-gas-pump',
+                'accommodation': 'fas fa-hotel',
+                'activities': 'fas fa-ticket-alt',
+                'shopping': 'fas fa-shopping-bag',
+                'other': 'fas fa-receipt'
+            };
+            return icons[category] || 'fas fa-receipt';
+        }
+
+        // Event Listeners
+        function initEventListeners() {
+            // Auth events
+            googleSignInBtn.addEventListener('click', signInWithGoogle);
+            anonymousSignInBtn.addEventListener('click', signInAnonymously);
+            signOutBtn.addEventListener('click', signOut);
+            
+            // Navigation
+            document.querySelectorAll('.nav-link[data-page]').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    
+                    // Remove active class from all nav links
+                    document.querySelectorAll('.nav-link').forEach(nav => {
+                        nav.classList.remove('active');
+                    });
+                    
+                    // Add active class to clicked nav link
+                    this.classList.add('active');
+                    
+                    // Hide all pages
+                    document.querySelectorAll('.page').forEach(page => {
+                        page.classList.remove('active');
+                    });
+                    
+                    // Show selected page
+                    const pageId = this.getAttribute('data-page');
+                    document.getElementById(pageId).classList.add('active');
+                });
+            });
+            
+            // Distance calculation
+            document.getElementById('calculate-route').addEventListener('click', calculateDistance);
+            
+            // Expense management
+            document.getElementById('add-expense-btn').addEventListener('click', function() {
+                // Reset form
+                document.getElementById('expense-form').reset();
+                document.getElementById('expense-date').valueAsDate = new Date();
+                
+                // Show modal
+                const expenseModal = new bootstrap.Modal(document.getElementById('expenseModal'));
+                expenseModal.show();
+            });
+            
+            document.getElementById('save-expense').addEventListener('click', function() {
+                const description = document.getElementById('expense-description').value;
+                const amount = parseFloat(document.getElementById('expense-amount').value);
+                const category = document.getElementById('expense-category').value;
+                const date = document.getElementById('expense-date').value;
+                
+                if (!description || !amount || !category || !date) {
+                    showError('Please fill all fields');
+                    return;
+                }
+                
+                const expenseData = {
+                    description,
+                    amount,
+                    category,
+                    date,
+                    tripId: currentTrip.id,
+                    userId: currentUser.uid,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                
+                showLoading();
+                
+                db.collection('expenses').add(expenseData)
+                    .then(docRef => {
+                        // Add to local data
+                        userExpenses.push({ id: docRef.id, ...expenseData });
+                        
+                        // Update UI
+                        updateExpensesPage();
+                        updateDashboard();
+                        
+                        // Hide modal
+                        bootstrap.Modal.getInstance(document.getElementById('expenseModal')).hide();
+                        
+                        hideLoading();
+                        showSuccess('Expense added successfully!');
+                    })
+                    .catch(error => {
+                        hideLoading();
+                        showError('Failed to add expense: ' + error.message);
+                    });
+            });
+            
+            // Checklist management
+            document.getElementById('add-checklist-item').addEventListener('click', function() {
+                // Reset form
+                document.getElementById('checklist-form').reset();
+                
+                // Show modal
+                const checklistModal = new bootstrap.Modal(document.getElementById('checklistModal'));
+                checklistModal.show();
+            });
+            
+            document.getElementById('save-checklist-item').addEventListener('click', function() {
+                const name = document.getElementById('checklist-item-name').value;
+                const category = document.getElementById('checklist-category').value;
+                
+                if (!name || !category) {
+                    showError('Please fill all fields');
+                    return;
+                }
+                
+                const checklistData = {
+                    name,
+                    category,
+                    completed: false,
+                    tripId: currentTrip.id,
+                    userId: currentUser.uid,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                
+                showLoading();
+                
+                db.collection('checklist').add(checklistData)
+                    .then(docRef => {
+                        // Add to local data
+                        userChecklist.push({ id: docRef.id, ...checklistData });
+                        
+                        // Update UI
+                        updateChecklistPage();
+                        updateDashboard();
+                        
+                        // Hide modal
+                        bootstrap.Modal.getInstance(document.getElementById('checklistModal')).hide();
+                        
+                        hideLoading();
+                        showSuccess('Checklist item added successfully!');
+                    })
+                    .catch(error => {
+                        hideLoading();
+                        showError('Failed to add checklist item: ' + error.message);
+                    });
+            });
+            
+            // Add button functionality
+            document.querySelector('.add-btn').addEventListener('click', function() {
+                // Determine which page is active
+                const activePage = document.querySelector('.page.active').id;
+                
+                switch(activePage) {
+                    case 'dashboard-page':
+                        // In a real app, this would open a "Create Trip" modal
+                        showSuccess('Create new trip feature would open here');
+                        break;
+                    case 'distance-page':
+                        // Focus on the calculate button
+                        document.getElementById('calculate-route').scrollIntoView({ behavior: 'smooth' });
+                        break;
+                    case 'expenses-page':
+                        document.getElementById('add-expense-btn').click();
+                        break;
+                    case 'checklist-page':
+                        document.getElementById('add-checklist-item').click();
+                        break;
+                    case 'budget-page':
+                        // In a real app, this would open a "Set Budget" modal
+                        showSuccess('Set budget feature would open here');
+                        break;
+                }
+            });
+        }
+
+        function initLottieAnimations() {
+            // Login animation
+            lottie.loadAnimation({
+                container: document.getElementById('login-animation'),
+                renderer: 'svg',
+                loop: true,
+                autoplay: true,
+                path: 'https://assets5.lottiefiles.com/packages/lf20_kdxn8dys.json' // Travel animation
+            });
+            
+            // Budget chart animation
+            lottie.loadAnimation({
+                container: document.getElementById('budget-chart'),
+                renderer: 'svg',
+                loop: true,
+                autoplay: true,
+                path: 'https://assets5.lottiefiles.com/packages/lf20_myejiggj.json' // Chart animation
+            });
         }
     </script>
 </body>
