@@ -1,0 +1,1410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TravelMate - Trip Management</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Lottie Player -->
+    <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <style>
+        :root {
+            --primary-color: #4361ee;
+            --secondary-color: #3f37c9;
+            --success-color: #4cc9f0;
+            --light-color: #f8f9fa;
+            --dark-color: #212529;
+            --danger-color: #e63946;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f7fb;
+            color: #333;
+        }
+        
+        .auth-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #4361ee, #3a0ca3);
+        }
+        
+        .auth-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            width: 100%;
+            max-width: 450px;
+        }
+        
+        .auth-header {
+            background: var(--primary-color);
+            color: white;
+            padding: 25px;
+            text-align: center;
+        }
+        
+        .auth-body {
+            padding: 30px;
+        }
+        
+        .btn-primary {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        
+        .btn-primary:hover {
+            background-color: var(--secondary-color);
+            border-color: var(--secondary-color);
+        }
+        
+        .navbar {
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .trip-card {
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s, box-shadow 0.3s;
+            margin-bottom: 20px;
+            border: none;
+            overflow: hidden;
+        }
+        
+        .trip-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        .trip-card-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 15px;
+        }
+        
+        .progress {
+            height: 8px;
+            border-radius: 4px;
+        }
+        
+        .member-avatar {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            background-color: var(--primary-color);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            margin-right: 5px;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #6c757d;
+        }
+        
+        .tab-content {
+            background-color: white;
+            border-radius: 0 0 10px 10px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+        
+        .nav-tabs .nav-link.active {
+            background-color: white;
+            border-bottom-color: white;
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+        
+        .expense-item {
+            border-left: 4px solid var(--primary-color);
+            padding-left: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .itinerary-card {
+            border-left: 4px solid var(--success-color);
+            margin-bottom: 15px;
+        }
+        
+        .success-animation {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        
+        .trip-code {
+            font-family: monospace;
+            background-color: #e9ecef;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        
+        .category-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 5px;
+        }
+        
+        .category-fuel { background-color: #ffd166; color: #333; }
+        .category-hotel { background-color: #06d6a0; color: white; }
+        .category-food { background-color: #ef476f; color: white; }
+        .category-activities { background-color: #118ab2; color: white; }
+        .category-other { background-color: #073b4c; color: white; }
+    </style>
+</head>
+<body>
+    <!-- Authentication Screen -->
+    <div id="auth-screen" class="auth-container">
+        <div class="auth-card">
+            <div class="auth-header">
+                <h2><i class="fas fa-map-marked-alt me-2"></i>TravelMate</h2>
+                <p class="mb-0">Plan your trips together</p>
+            </div>
+            <div class="auth-body">
+                <div id="auth-animation" class="text-center mb-4">
+                    <lottie-player 
+                        src="https://assets1.lottiefiles.com/packages/lf20_sk5h1kfn.json" 
+                        background="transparent" 
+                        speed="1" 
+                        style="width: 200px; height: 200px; margin: 0 auto;" 
+                        loop 
+                        autoplay>
+                    </lottie-player>
+                </div>
+                
+                <form id="login-form">
+                    <div class="mb-3">
+                        <label for="login-email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="login-email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="login-password" class="form-label">Password</label>
+                        <input type="password" class="form-control" id="login-password" required>
+                    </div>
+                    <div class="d-grid mb-3">
+                        <button type="submit" class="btn btn-primary">Login</button>
+                    </div>
+                    <div class="text-center">
+                        <a href="#" id="show-signup">Don't have an account? Sign up</a>
+                    </div>
+                    <div class="text-center mt-2">
+                        <a href="#" id="forgot-password">Forgot password?</a>
+                    </div>
+                </form>
+                
+                <form id="signup-form" class="d-none">
+                    <div class="mb-3">
+                        <label for="signup-name" class="form-label">Full Name</label>
+                        <input type="text" class="form-control" id="signup-name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="signup-email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="signup-email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="signup-password" class="form-label">Password</label>
+                        <input type="password" class="form-control" id="signup-password" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="signup-confirm-password" class="form-label">Confirm Password</label>
+                        <input type="password" class="form-control" id="signup-confirm-password" required>
+                    </div>
+                    <div class="d-grid mb-3">
+                        <button type="submit" class="btn btn-primary">Sign Up</button>
+                    </div>
+                    <div class="text-center">
+                        <a href="#" id="show-login">Already have an account? Login</a>
+                    </div>
+                </form>
+                
+                <form id="reset-password-form" class="d-none">
+                    <div class="mb-3">
+                        <label for="reset-email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="reset-email" required>
+                    </div>
+                    <div class="d-grid mb-3">
+                        <button type="submit" class="btn btn-primary">Reset Password</button>
+                    </div>
+                    <div class="text-center">
+                        <a href="#" id="back-to-login">Back to Login</a>
+                    </div>
+                </form>
+                
+                <div id="auth-message" class="alert d-none mt-3"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main App -->
+    <div id="app" class="d-none">
+        <!-- Navigation -->
+        <nav class="navbar navbar-expand-lg navbar-light sticky-top">
+            <div class="container">
+                <a class="navbar-brand fw-bold" href="#">
+                    <i class="fas fa-map-marked-alt me-2 text-primary"></i>TravelMate
+                </a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav me-auto">
+                        <li class="nav-item">
+                            <a class="nav-link active" href="#" id="nav-dashboard">
+                                <i class="fas fa-home me-1"></i>Dashboard
+                            </a>
+                        </li>
+                    </ul>
+                    <div class="d-flex align-items-center">
+                        <span class="me-3" id="user-name">User</span>
+                        <button class="btn btn-outline-primary btn-sm" id="logout-btn">
+                            <i class="fas fa-sign-out-alt me-1"></i>Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+        
+        <!-- Dashboard -->
+        <div id="dashboard-screen" class="container mt-4">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>My Trips</h2>
+                <div>
+                    <button class="btn btn-primary me-2" id="create-trip-btn">
+                        <i class="fas fa-plus me-1"></i>New Trip
+                    </button>
+                    <button class="btn btn-outline-primary" id="join-trip-btn">
+                        <i class="fas fa-user-plus me-1"></i>Join Trip
+                    </button>
+                </div>
+            </div>
+            
+            <div id="trips-container" class="row">
+                <!-- Trips will be loaded here -->
+            </div>
+            
+            <div id="empty-trips" class="empty-state">
+                <lottie-player 
+                    src="https://assets2.lottiefiles.com/packages/lf20_vybwn7df.json" 
+                    background="transparent" 
+                    speed="1" 
+                    style="width: 300px; height: 300px; margin: 0 auto;" 
+                    loop 
+                    autoplay>
+                </lottie-player>
+                <h4>No trips yet</h4>
+                <p>Create your first trip or join an existing one to get started!</p>
+                <button class="btn btn-primary mt-2" id="create-first-trip-btn">
+                    <i class="fas fa-plus me-1"></i>Create Your First Trip
+                </button>
+            </div>
+        </div>
+        
+        <!-- Create Trip Modal -->
+        <div class="modal fade" id="createTripModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Create New Trip</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="create-trip-form">
+                            <div class="mb-3">
+                                <label for="trip-name" class="form-label">Trip Name</label>
+                                <input type="text" class="form-control" id="trip-name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="trip-destination" class="form-label">Destination</label>
+                                <input type="text" class="form-control" id="trip-destination" required>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="start-date" class="form-label">Start Date</label>
+                                    <input type="date" class="form-control" id="start-date" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="end-date" class="form-label">End Date</label>
+                                    <input type="date" class="form-control" id="end-date" required>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="trip-budget" class="form-label">Total Budget ($)</label>
+                                <input type="number" class="form-control" id="trip-budget" min="0" step="0.01" required>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" id="save-trip-btn">Create Trip</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Join Trip Modal -->
+        <div class="modal fade" id="joinTripModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Join a Trip</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="trip-code" class="form-label">Trip Code</label>
+                            <input type="text" class="form-control" id="trip-code" placeholder="Enter 6-8 character code">
+                        </div>
+                        <div id="join-trip-message" class="alert d-none"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" id="join-trip-code-btn">Join Trip</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Share Trip Code Modal -->
+        <div class="modal fade" id="shareTripModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Share Trip Code</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body text-center">
+                        <div class="success-animation">
+                            <lottie-player 
+                                src="https://assets10.lottiefiles.com/packages/lf20_ykqwfq2g.json" 
+                                background="transparent" 
+                                speed="1" 
+                                style="width: 150px; height: 150px;" 
+                                autoplay>
+                            </lottie-player>
+                        </div>
+                        <h4 class="mb-3">Trip Created Successfully!</h4>
+                        <p>Share this code with your travel companions:</p>
+                        <div class="d-flex justify-content-center align-items-center mb-3">
+                            <span class="trip-code me-3" id="share-trip-code">ABC123</span>
+                            <button class="btn btn-outline-primary btn-sm" id="copy-code-btn">
+                                <i class="fas fa-copy me-1"></i>Copy
+                            </button>
+                        </div>
+                        <div id="copy-success" class="alert alert-success d-none mt-3">
+                            Code copied to clipboard!
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Done</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Trip Details Screen -->
+        <div id="trip-details-screen" class="container mt-4 d-none">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <button class="btn btn-outline-secondary me-2" id="back-to-dashboard">
+                        <i class="fas fa-arrow-left me-1"></i>Back
+                    </button>
+                    <h2 id="trip-details-name" class="d-inline-block ms-2">Trip Name</h2>
+                </div>
+                <span class="trip-code" id="trip-details-code">ABC123</span>
+            </div>
+            
+            <ul class="nav nav-tabs" id="trip-tabs">
+                <li class="nav-item">
+                    <a class="nav-link active" data-bs-toggle="tab" href="#overview">
+                        <i class="fas fa-info-circle me-1"></i>Overview
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-bs-toggle="tab" href="#expenses">
+                        <i class="fas fa-dollar-sign me-1"></i>Expenses
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-bs-toggle="tab" href="#itinerary">
+                        <i class="fas fa-route me-1"></i>Itinerary
+                    </a>
+                </li>
+            </ul>
+            
+            <div class="tab-content" id="trip-tab-content">
+                <!-- Overview Tab -->
+                <div class="tab-pane fade show active" id="overview">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <h4>Trip Information</h4>
+                            <div class="card mb-4">
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-sm-6 mb-3">
+                                            <strong><i class="fas fa-map-marker-alt me-2 text-primary"></i>Destination:</strong>
+                                            <span id="overview-destination">-</span>
+                                        </div>
+                                        <div class="col-sm-6 mb-3">
+                                            <strong><i class="fas fa-calendar-alt me-2 text-primary"></i>Dates:</strong>
+                                            <span id="overview-dates">-</span>
+                                        </div>
+                                        <div class="col-sm-6 mb-3">
+                                            <strong><i class="fas fa-dollar-sign me-2 text-primary"></i>Total Budget:</strong>
+                                            <span id="overview-budget">-</span>
+                                        </div>
+                                        <div class="col-sm-6 mb-3">
+                                            <strong><i class="fas fa-wallet me-2 text-primary"></i>Remaining Budget:</strong>
+                                            <span id="overview-remaining">-</span>
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <strong>Budget Progress:</strong>
+                                        <div class="progress mt-2">
+                                            <div id="budget-progress-bar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <h4>Trip Members</h4>
+                            <div class="card">
+                                <div class="card-body">
+                                    <div id="members-list">
+                                        <!-- Members will be loaded here -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Expenses Tab -->
+                <div class="tab-pane fade" id="expenses">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="d-flex justify-content-between align-items-center mb-4">
+                                <h4>Expenses</h4>
+                                <button class="btn btn-primary" id="add-expense-btn">
+                                    <i class="fas fa-plus me-1"></i>Add Expense
+                                </button>
+                            </div>
+                            
+                            <div id="expenses-list">
+                                <!-- Expenses will be loaded here -->
+                            </div>
+                            
+                            <div id="empty-expenses" class="empty-state">
+                                <lottie-player 
+                                    src="https://assets10.lottiefiles.com/packages/lf20_6wutsrox.json" 
+                                    background="transparent" 
+                                    speed="1" 
+                                    style="width: 200px; height: 200px; margin: 0 auto;" 
+                                    loop 
+                                    autoplay>
+                                </lottie-player>
+                                <h4>No expenses yet</h4>
+                                <p>Start adding expenses to track your spending!</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <h4>Budget Summary</h4>
+                            <div class="card mb-4">
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <strong>Total Budget:</strong>
+                                        <span id="summary-total-budget" class="float-end">$0</span>
+                                    </div>
+                                    <div class="mb-3">
+                                        <strong>Total Spent:</strong>
+                                        <span id="summary-total-spent" class="float-end">$0</span>
+                                    </div>
+                                    <div class="mb-3">
+                                        <strong>Remaining:</strong>
+                                        <span id="summary-remaining" class="float-end">$0</span>
+                                    </div>
+                                    <div class="progress mt-3">
+                                        <div id="summary-progress-bar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <h4>Spending by Category</h4>
+                            <div class="card">
+                                <div class="card-body">
+                                    <canvas id="expense-chart" height="250"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Itinerary Tab -->
+                <div class="tab-pane fade" id="itinerary">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h4>Itinerary</h4>
+                        <button class="btn btn-primary" id="add-activity-btn">
+                            <i class="fas fa-plus me-1"></i>Add Activity
+                        </button>
+                    </div>
+                    
+                    <div id="itinerary-days">
+                        <!-- Itinerary will be loaded here -->
+                    </div>
+                    
+                    <div id="empty-itinerary" class="empty-state">
+                        <lottie-player 
+                            src="https://assets7.lottiefiles.com/packages/lf20_0skurerf.json" 
+                            background="transparent" 
+                            speed="1" 
+                            style="width: 250px; height: 250px; margin: 0 auto;" 
+                            loop 
+                            autoplay>
+                        </lottie-player>
+                        <h4>No activities planned yet</h4>
+                        <p>Start adding activities to your itinerary!</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Add Expense Modal -->
+        <div class="modal fade" id="addExpenseModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Add Expense</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="add-expense-form">
+                            <div class="mb-3">
+                                <label for="expense-description" class="form-label">Description</label>
+                                <input type="text" class="form-control" id="expense-description" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="expense-amount" class="form-label">Amount ($)</label>
+                                <input type="number" class="form-control" id="expense-amount" min="0" step="0.01" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="expense-category" class="form-label">Category</label>
+                                <select class="form-select" id="expense-category" required>
+                                    <option value="fuel">Fuel</option>
+                                    <option value="hotel">Hotel</option>
+                                    <option value="food">Food</option>
+                                    <option value="activities">Activities</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="expense-date" class="form-label">Date</label>
+                                <input type="date" class="form-control" id="expense-date" required>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" id="save-expense-btn">Add Expense</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Add Activity Modal -->
+        <div class="modal fade" id="addActivityModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Add Activity</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="add-activity-form">
+                            <div class="mb-3">
+                                <label for="activity-day" class="form-label">Day</label>
+                                <select class="form-select" id="activity-day" required>
+                                    <!-- Days will be populated dynamically -->
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="activity-time" class="form-label">Time</label>
+                                <input type="time" class="form-control" id="activity-time" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="activity-place" class="form-label">Place</label>
+                                <input type="text" class="form-control" id="activity-place" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="activity-notes" class="form-label">Notes</label>
+                                <textarea class="form-control" id="activity-notes" rows="3"></textarea>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" id="save-activity-btn">Add Activity</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Firebase configuration
+        const firebaseConfig = {
+            // Replace with your Firebase project configuration
+            apiKey: "your-api-key",
+            authDomain: "your-project.firebaseapp.com",
+            projectId: "your-project-id",
+            storageBucket: "your-project.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "your-app-id"
+        };
+        
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        
+        // App state
+        let currentUser = null;
+        let currentTrip = null;
+        let userTrips = [];
+        let expenseChart = null;
+        
+        // DOM Elements
+        const authScreen = document.getElementById('auth-screen');
+        const app = document.getElementById('app');
+        const loginForm = document.getElementById('login-form');
+        const signupForm = document.getElementById('signup-form');
+        const resetPasswordForm = document.getElementById('reset-password-form');
+        const authMessage = document.getElementById('auth-message');
+        const showSignup = document.getElementById('show-signup');
+        const showLogin = document.getElementById('show-login');
+        const forgotPassword = document.getElementById('forgot-password');
+        const backToLogin = document.getElementById('back-to-login');
+        const logoutBtn = document.getElementById('logout-btn');
+        const userName = document.getElementById('user-name');
+        const dashboardScreen = document.getElementById('dashboard-screen');
+        const tripsContainer = document.getElementById('trips-container');
+        const emptyTrips = document.getElementById('empty-trips');
+        const createTripBtn = document.getElementById('create-trip-btn');
+        const joinTripBtn = document.getElementById('join-trip-btn');
+        const createFirstTripBtn = document.getElementById('create-first-trip-btn');
+        const createTripModal = new bootstrap.Modal(document.getElementById('createTripModal'));
+        const joinTripModal = new bootstrap.Modal(document.getElementById('joinTripModal'));
+        const shareTripModal = new bootstrap.Modal(document.getElementById('shareTripModal'));
+        const saveTripBtn = document.getElementById('save-trip-btn');
+        const joinTripCodeBtn = document.getElementById('join-trip-code-btn');
+        const copyCodeBtn = document.getElementById('copy-code-btn');
+        const shareTripCode = document.getElementById('share-trip-code');
+        const copySuccess = document.getElementById('copy-success');
+        const tripDetailsScreen = document.getElementById('trip-details-screen');
+        const backToDashboard = document.getElementById('back-to-dashboard');
+        const tripDetailsName = document.getElementById('trip-details-name');
+        const tripDetailsCode = document.getElementById('trip-details-code');
+        const addExpenseBtn = document.getElementById('add-expense-btn');
+        const addExpenseModal = new bootstrap.Modal(document.getElementById('addExpenseModal'));
+        const saveExpenseBtn = document.getElementById('save-expense-btn');
+        const addActivityBtn = document.getElementById('add-activity-btn');
+        const addActivityModal = new bootstrap.Modal(document.getElementById('addActivityModal'));
+        const saveActivityBtn = document.getElementById('save-activity-btn');
+        
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', function() {
+            initAuth();
+            setupEventListeners();
+        });
+        
+        // Initialize authentication state listener
+        function initAuth() {
+            auth.onAuthStateChanged(user => {
+                if (user) {
+                    currentUser = user;
+                    showApp();
+                    loadUserData();
+                    loadUserTrips();
+                } else {
+                    currentUser = null;
+                    showAuth();
+                }
+            });
+        }
+        
+        // Set up event listeners
+        function setupEventListeners() {
+            // Auth form events
+            loginForm.addEventListener('submit', handleLogin);
+            signupForm.addEventListener('submit', handleSignup);
+            resetPasswordForm.addEventListener('submit', handleResetPassword);
+            showSignup.addEventListener('click', showSignupForm);
+            showLogin.addEventListener('click', showLoginForm);
+            forgotPassword.addEventListener('click', showResetPasswordForm);
+            backToLogin.addEventListener('click', showLoginForm);
+            logoutBtn.addEventListener('click', handleLogout);
+            
+            // Trip management events
+            createTripBtn.addEventListener('click', showCreateTripModal);
+            createFirstTripBtn.addEventListener('click', showCreateTripModal);
+            joinTripBtn.addEventListener('click', showJoinTripModal);
+            saveTripBtn.addEventListener('click', handleCreateTrip);
+            joinTripCodeBtn.addEventListener('click', handleJoinTrip);
+            copyCodeBtn.addEventListener('click', copyTripCode);
+            backToDashboard.addEventListener('click', showDashboard);
+            
+            // Expense and itinerary events
+            addExpenseBtn.addEventListener('click', showAddExpenseModal);
+            saveExpenseBtn.addEventListener('click', handleAddExpense);
+            addActivityBtn.addEventListener('click', showAddActivityModal);
+            saveActivityBtn.addEventListener('click', handleAddActivity);
+        }
+        
+        // Authentication handlers
+        function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            
+            showAuthMessage('Logging in...', 'info');
+            
+            auth.signInWithEmailAndPassword(email, password)
+                .then(() => {
+                    showAuthMessage('Login successful!', 'success');
+                })
+                .catch(error => {
+                    showAuthMessage(error.message, 'danger');
+                });
+        }
+        
+        function handleSignup(e) {
+            e.preventDefault();
+            const name = document.getElementById('signup-name').value;
+            const email = document.getElementById('signup-email').value;
+            const password = document.getElementById('signup-password').value;
+            const confirmPassword = document.getElementById('signup-confirm-password').value;
+            
+            if (password !== confirmPassword) {
+                showAuthMessage('Passwords do not match!', 'danger');
+                return;
+            }
+            
+            showAuthMessage('Creating account...', 'info');
+            
+            auth.createUserWithEmailAndPassword(email, password)
+                .then(userCredential => {
+                    // Store user name in Firestore
+                    return db.collection('users').doc(userCredential.user.uid).set({
+                        name: name,
+                        email: email,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                })
+                .then(() => {
+                    showAuthMessage('Account created successfully!', 'success');
+                })
+                .catch(error => {
+                    showAuthMessage(error.message, 'danger');
+                });
+        }
+        
+        function handleResetPassword(e) {
+            e.preventDefault();
+            const email = document.getElementById('reset-email').value;
+            
+            showAuthMessage('Sending reset email...', 'info');
+            
+            auth.sendPasswordResetEmail(email)
+                .then(() => {
+                    showAuthMessage('Password reset email sent!', 'success');
+                })
+                .catch(error => {
+                    showAuthMessage(error.message, 'danger');
+                });
+        }
+        
+        function handleLogout() {
+            auth.signOut();
+        }
+        
+        // Auth UI helpers
+        function showAuthMessage(message, type) {
+            authMessage.textContent = message;
+            authMessage.className = `alert alert-${type} mt-3`;
+            authMessage.classList.remove('d-none');
+        }
+        
+        function showLoginForm() {
+            loginForm.classList.remove('d-none');
+            signupForm.classList.add('d-none');
+            resetPasswordForm.classList.add('d-none');
+            authMessage.classList.add('d-none');
+        }
+        
+        function showSignupForm() {
+            loginForm.classList.add('d-none');
+            signupForm.classList.remove('d-none');
+            resetPasswordForm.classList.add('d-none');
+            authMessage.classList.add('d-none');
+        }
+        
+        function showResetPasswordForm() {
+            loginForm.classList.add('d-none');
+            signupForm.classList.add('d-none');
+            resetPasswordForm.classList.remove('d-none');
+            authMessage.classList.add('d-none');
+        }
+        
+        function showAuth() {
+            authScreen.classList.remove('d-none');
+            app.classList.add('d-none');
+        }
+        
+        function showApp() {
+            authScreen.classList.add('d-none');
+            app.classList.remove('d-none');
+        }
+        
+        // Load user data from Firestore
+        function loadUserData() {
+            db.collection('users').doc(currentUser.uid).get()
+                .then(doc => {
+                    if (doc.exists) {
+                        const userData = doc.data();
+                        userName.textContent = userData.name;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading user data:', error);
+                });
+        }
+        
+        // Trip management functions
+        function loadUserTrips() {
+            // In a real app, we would query Firestore for trips where current user is a member
+            // For this demo, we'll use mock data
+            userTrips = [
+                {
+                    id: 'trip1',
+                    name: 'Summer Vacation',
+                    destination: 'Bali, Indonesia',
+                    startDate: '2023-07-15',
+                    endDate: '2023-07-25',
+                    budget: 2500,
+                    code: 'BAL123',
+                    members: ['user1', 'user2']
+                },
+                {
+                    id: 'trip2',
+                    name: 'Business Conference',
+                    destination: 'San Francisco, USA',
+                    startDate: '2023-09-10',
+                    endDate: '2023-09-15',
+                    budget: 1800,
+                    code: 'SFO456',
+                    members: ['user1', 'user3', 'user4']
+                }
+            ];
+            
+            renderTrips();
+        }
+        
+        function renderTrips() {
+            tripsContainer.innerHTML = '';
+            
+            if (userTrips.length === 0) {
+                emptyTrips.classList.remove('d-none');
+                return;
+            }
+            
+            emptyTrips.classList.add('d-none');
+            
+            userTrips.forEach(trip => {
+                const tripCard = document.createElement('div');
+                tripCard.className = 'col-md-6 col-lg-4';
+                tripCard.innerHTML = `
+                    <div class="card trip-card" data-trip-id="${trip.id}">
+                        <div class="trip-card-header">
+                            <h5 class="card-title mb-0">${trip.name}</h5>
+                        </div>
+                        <div class="card-body">
+                            <p class="card-text">
+                                <i class="fas fa-map-marker-alt me-2 text-primary"></i>${trip.destination}
+                            </p>
+                            <p class="card-text">
+                                <i class="fas fa-calendar-alt me-2 text-primary"></i>${formatDate(trip.startDate)} - ${formatDate(trip.endDate)}
+                            </p>
+                            <p class="card-text">
+                                <i class="fas fa-dollar-sign me-2 text-primary"></i>Budget: $${trip.budget}
+                            </p>
+                            <div class="d-flex align-items-center mt-3">
+                                <div class="me-auto">
+                                    ${renderMemberAvatars(trip.members)}
+                                </div>
+                                <button class="btn btn-sm btn-outline-primary view-trip-btn">
+                                    View Details
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                tripsContainer.appendChild(tripCard);
+                
+                // Add event listener to the view trip button
+                tripCard.querySelector('.view-trip-btn').addEventListener('click', () => {
+                    showTripDetails(trip);
+                });
+            });
+        }
+        
+        function renderMemberAvatars(members) {
+            let avatarsHtml = '';
+            const maxAvatars = 4;
+            
+            for (let i = 0; i < Math.min(members.length, maxAvatars); i++) {
+                avatarsHtml += `<div class="member-avatar d-inline-block">U${i+1}</div>`;
+            }
+            
+            if (members.length > maxAvatars) {
+                avatarsHtml += `<div class="member-avatar d-inline-block">+${members.length - maxAvatars}</div>`;
+            }
+            
+            return avatarsHtml;
+        }
+        
+        function showCreateTripModal() {
+            createTripModal.show();
+        }
+        
+        function handleCreateTrip() {
+            const name = document.getElementById('trip-name').value;
+            const destination = document.getElementById('trip-destination').value;
+            const startDate = document.getElementById('start-date').value;
+            const endDate = document.getElementById('end-date').value;
+            const budget = parseFloat(document.getElementById('trip-budget').value);
+            
+            // Generate a random trip code (in a real app, ensure uniqueness)
+            const code = generateTripCode();
+            
+            // In a real app, we would save to Firestore
+            const newTrip = {
+                id: 'trip' + Date.now(),
+                name,
+                destination,
+                startDate,
+                endDate,
+                budget,
+                code,
+                members: [currentUser.uid]
+            };
+            
+            userTrips.push(newTrip);
+            renderTrips();
+            
+            createTripModal.hide();
+            shareTripCode.textContent = code;
+            shareTripModal.show();
+            
+            // Reset form
+            document.getElementById('create-trip-form').reset();
+        }
+        
+        function showJoinTripModal() {
+            document.getElementById('join-trip-message').classList.add('d-none');
+            joinTripModal.show();
+        }
+        
+        function handleJoinTrip() {
+            const code = document.getElementById('trip-code').value.toUpperCase();
+            const messageEl = document.getElementById('join-trip-message');
+            
+            // In a real app, we would query Firestore for a trip with this code
+            // For demo purposes, we'll simulate finding a trip
+            if (code === 'DEMO123') {
+                // Simulate adding user to trip
+                const joinedTrip = {
+                    id: 'trip3',
+                    name: 'Demo Trip',
+                    destination: 'Paris, France',
+                    startDate: '2023-08-20',
+                    endDate: '2023-08-27',
+                    budget: 2000,
+                    code: 'DEMO123',
+                    members: ['user5', 'user6', currentUser.uid]
+                };
+                
+                userTrips.push(joinedTrip);
+                renderTrips();
+                
+                messageEl.textContent = 'Successfully joined the trip!';
+                messageEl.className = 'alert alert-success';
+                messageEl.classList.remove('d-none');
+                
+                setTimeout(() => {
+                    joinTripModal.hide();
+                    showTripDetails(joinedTrip);
+                }, 1500);
+            } else {
+                messageEl.textContent = 'Trip not found. Please check the code and try again.';
+                messageEl.className = 'alert alert-danger';
+                messageEl.classList.remove('d-none');
+            }
+        }
+        
+        function copyTripCode() {
+            navigator.clipboard.writeText(shareTripCode.textContent)
+                .then(() => {
+                    copySuccess.classList.remove('d-none');
+                    setTimeout(() => {
+                        copySuccess.classList.add('d-none');
+                    }, 2000);
+                })
+                .catch(err => {
+                    console.error('Failed to copy: ', err);
+                });
+        }
+        
+        function showDashboard() {
+            dashboardScreen.classList.remove('d-none');
+            tripDetailsScreen.classList.add('d-none');
+        }
+        
+        function showTripDetails(trip) {
+            currentTrip = trip;
+            
+            tripDetailsName.textContent = trip.name;
+            tripDetailsCode.textContent = trip.code;
+            
+            // Update overview tab
+            document.getElementById('overview-destination').textContent = trip.destination;
+            document.getElementById('overview-dates').textContent = `${formatDate(trip.startDate)} - ${formatDate(trip.endDate)}`;
+            document.getElementById('overview-budget').textContent = `$${trip.budget}`;
+            
+            // Calculate and display remaining budget (mock data)
+            const totalSpent = 850; // Mock value
+            const remaining = trip.budget - totalSpent;
+            const spentPercentage = (totalSpent / trip.budget) * 100;
+            
+            document.getElementById('overview-remaining').textContent = `$${remaining}`;
+            document.getElementById('budget-progress-bar').style.width = `${spentPercentage}%`;
+            
+            // Update members list
+            const membersList = document.getElementById('members-list');
+            membersList.innerHTML = '';
+            
+            trip.members.forEach((memberId, index) => {
+                const memberEl = document.createElement('div');
+                memberEl.className = 'd-flex align-items-center mb-2';
+                memberEl.innerHTML = `
+                    <div class="member-avatar me-2">U${index+1}</div>
+                    <span>User ${index+1}</span>
+                `;
+                membersList.appendChild(memberEl);
+            });
+            
+            // Load expenses and itinerary for this trip
+            loadTripExpenses();
+            loadTripItinerary();
+            
+            dashboardScreen.classList.add('d-none');
+            tripDetailsScreen.classList.remove('d-none');
+        }
+        
+        function loadTripExpenses() {
+            // Mock expenses data
+            const expenses = [
+                { id: 'exp1', description: 'Flight tickets', amount: 450, category: 'other', date: '2023-07-15', addedBy: 'user1' },
+                { id: 'exp2', description: 'Hotel deposit', amount: 200, category: 'hotel', date: '2023-07-16', addedBy: 'user2' },
+                { id: 'exp3', description: 'Dinner', amount: 75, category: 'food', date: '2023-07-17', addedBy: 'user1' },
+                { id: 'exp4', description: 'Car rental', amount: 125, category: 'other', date: '2023-07-18', addedBy: 'user2' }
+            ];
+            
+            renderExpenses(expenses);
+            updateBudgetSummary(expenses);
+            renderExpenseChart(expenses);
+        }
+        
+        function renderExpenses(expenses) {
+            const expensesList = document.getElementById('expenses-list');
+            const emptyExpenses = document.getElementById('empty-expenses');
+            
+            if (expenses.length === 0) {
+                expensesList.innerHTML = '';
+                emptyExpenses.classList.remove('d-none');
+                return;
+            }
+            
+            emptyExpenses.classList.add('d-none');
+            expensesList.innerHTML = '';
+            
+            expenses.forEach(expense => {
+                const expenseEl = document.createElement('div');
+                expenseEl.className = 'expense-item';
+                expenseEl.innerHTML = `
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="mb-1">${expense.description}</h6>
+                            <span class="category-badge category-${expense.category}">${expense.category.charAt(0).toUpperCase() + expense.category.slice(1)}</span>
+                            <small class="text-muted">${formatDate(expense.date)}</small>
+                        </div>
+                        <div class="text-end">
+                            <div class="fw-bold">$${expense.amount}</div>
+                            <small class="text-muted">Added by User</small>
+                        </div>
+                    </div>
+                `;
+                expensesList.appendChild(expenseEl);
+            });
+        }
+        
+        function updateBudgetSummary(expenses) {
+            const totalBudget = currentTrip.budget;
+            const totalSpent = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+            const remaining = totalBudget - totalSpent;
+            const spentPercentage = (totalSpent / totalBudget) * 100;
+            
+            document.getElementById('summary-total-budget').textContent = `$${totalBudget}`;
+            document.getElementById('summary-total-spent').textContent = `$${totalSpent}`;
+            document.getElementById('summary-remaining').textContent = `$${remaining}`;
+            document.getElementById('summary-progress-bar').style.width = `${spentPercentage}%`;
+        }
+        
+        function renderExpenseChart(expenses) {
+            const ctx = document.getElementById('expense-chart').getContext('2d');
+            
+            // Destroy previous chart if it exists
+            if (expenseChart) {
+                expenseChart.destroy();
+            }
+            
+            // Group expenses by category
+            const categories = {
+                fuel: 0,
+                hotel: 0,
+                food: 0,
+                activities: 0,
+                other: 0
+            };
+            
+            expenses.forEach(expense => {
+                categories[expense.category] += expense.amount;
+            });
+            
+            // Filter out categories with no expenses
+            const labels = [];
+            const data = [];
+            const backgroundColors = [
+                '#ffd166', // fuel
+                '#06d6a0', // hotel
+                '#ef476f', // food
+                '#118ab2', // activities
+                '#073b4c'  // other
+            ];
+            
+            Object.keys(categories).forEach((category, index) => {
+                if (categories[category] > 0) {
+                    labels.push(category.charAt(0).toUpperCase() + category.slice(1));
+                    data.push(categories[category]);
+                }
+            });
+            
+            expenseChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: backgroundColors.slice(0, labels.length),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+        
+        function loadTripItinerary() {
+            // Mock itinerary data
+            const itinerary = {
+                '2023-07-15': [
+                    { id: 'act1', time: '10:00', place: 'Airport', notes: 'Flight arrival' },
+                    { id: 'act2', time: '14:00', place: 'Hotel', notes: 'Check-in and rest' },
+                    { id: 'act3', time: '19:00', place: 'Beach Restaurant', notes: 'Welcome dinner' }
+                ],
+                '2023-07-16': [
+                    { id: 'act4', time: '09:00', place: 'Temple Visit', notes: 'Guided tour' },
+                    { id: 'act5', time: '13:00', place: 'Local Market', notes: 'Lunch and shopping' }
+                ]
+            };
+            
+            renderItinerary(itinerary);
+        }
+        
+        function renderItinerary(itinerary) {
+            const itineraryDays = document.getElementById('itinerary-days');
+            const emptyItinerary = document.getElementById('empty-itinerary');
+            
+            const days = Object.keys(itinerary);
+            
+            if (days.length === 0) {
+                itineraryDays.innerHTML = '';
+                emptyItinerary.classList.remove('d-none');
+                return;
+            }
+            
+            emptyItinerary.classList.add('d-none');
+            itineraryDays.innerHTML = '';
+            
+            days.forEach(day => {
+                const dayEl = document.createElement('div');
+                dayEl.className = 'mb-4';
+                dayEl.innerHTML = `
+                    <h5 class="mb-3">${formatDate(day)}</h5>
+                `;
+                
+                itinerary[day].forEach(activity => {
+                    const activityEl = document.createElement('div');
+                    activityEl.className = 'card itinerary-card';
+                    activityEl.innerHTML = `
+                        <div class="card-body">
+                            <div class="d-flex">
+                                <div class="me-3">
+                                    <i class="fas fa-clock text-primary"></i>
+                                    <span class="ms-1 fw-bold">${activity.time}</span>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <h6 class="card-title mb-1">${activity.place}</h6>
+                                    <p class="card-text mb-0">${activity.notes}</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    dayEl.appendChild(activityEl);
+                });
+                
+                itineraryDays.appendChild(dayEl);
+            });
+            
+            // Populate the day dropdown in the add activity modal
+            const activityDaySelect = document.getElementById('activity-day');
+            activityDaySelect.innerHTML = '';
+            
+            // Generate options for all days of the trip
+            const startDate = new Date(currentTrip.startDate);
+            const endDate = new Date(currentTrip.endDate);
+            const currentDate = new Date(startDate);
+            
+            while (currentDate <= endDate) {
+                const dateStr = currentDate.toISOString().split('T')[0];
+                const option = document.createElement('option');
+                option.value = dateStr;
+                option.textContent = formatDate(dateStr);
+                activityDaySelect.appendChild(option);
+                
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+        }
+        
+        function showAddExpenseModal() {
+            // Set today's date as default
+            document.getElementById('expense-date').valueAsDate = new Date();
+            addExpenseModal.show();
+        }
+        
+        function handleAddExpense() {
+            const description = document.getElementById('expense-description').value;
+            const amount = parseFloat(document.getElementById('expense-amount').value);
+            const category = document.getElementById('expense-category').value;
+            const date = document.getElementById('expense-date').value;
+            
+            // In a real app, we would save to Firestore
+            // For demo, we'll just reload the expenses to show the UI update
+            loadTripExpenses();
+            
+            addExpenseModal.hide();
+            
+            // Reset form
+            document.getElementById('add-expense-form').reset();
+            
+            // Show success animation
+            showSuccessAnimation('expense');
+        }
+        
+        function showAddActivityModal() {
+            addActivityModal.show();
+        }
+        
+        function handleAddActivity() {
+            const day = document.getElementById('activity-day').value;
+            const time = document.getElementById('activity-time').value;
+            const place = document.getElementById('activity-place').value;
+            const notes = document.getElementById('activity-notes').value;
+            
+            // In a real app, we would save to Firestore
+            // For demo, we'll just reload the itinerary to show the UI update
+            loadTripItinerary();
+            
+            addActivityModal.hide();
+            
+            // Reset form
+            document.getElementById('add-activity-form').reset();
+            
+            // Show success animation
+            showSuccessAnimation('activity');
+        }
+        
+        function showSuccessAnimation(type) {
+            // In a real app, we would show a Lottie animation
+            // For this demo, we'll just show an alert
+            alert(`${type.charAt(0).toUpperCase() + type.slice(1)} added successfully!`);
+        }
+        
+        // Utility functions
+        function generateTripCode() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let result = '';
+            for (let i = 0; i < 6; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return result;
+        }
+        
+        function formatDate(dateString) {
+            const options = { year: 'numeric', month: 'short', day: 'numeric' };
+            return new Date(dateString).toLocaleDateString(undefined, options);
+        }
+    </script>
+</body>
+</html>
