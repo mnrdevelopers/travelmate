@@ -927,10 +927,11 @@ async function calculateRoute() {
         
     } catch (error) {
         console.error('Error calculating route:', error);
+        const errorMessage = handleRouteCalculationError(error);
         document.getElementById('route-details').innerHTML = `
             <div class="alert alert-danger">
                 <i class="fas fa-exclamation-triangle me-2"></i>
-                Error calculating route. Please try again.
+                ${errorMessage}
             </div>
         `;
         showToast('Error calculating route', 'danger');
@@ -939,6 +940,7 @@ async function calculateRoute() {
         document.getElementById('calculate-route-btn').innerHTML = '<i class="fas fa-route me-1"></i>Calculate Route';
     }
 }
+
 
 // Enhanced CRUD Operations
 function showCustomCategoryModal() {
