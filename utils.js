@@ -37,13 +37,14 @@ function hideLoading(element, content) {
 }
 
 // Store trip data for navigation
-function setCurrentTrip(trip) {
-    sessionStorage.setItem('currentTrip', JSON.stringify(trip));
-}
-
 function getCurrentTrip() {
     const trip = sessionStorage.getItem('currentTrip');
     return trip ? JSON.parse(trip) : null;
+}
+
+function setCurrentTrip(trip) {
+    sessionStorage.setItem('currentTrip', JSON.stringify(trip));
+    currentTrip = trip;
 }
 
 function clearCurrentTrip() {
