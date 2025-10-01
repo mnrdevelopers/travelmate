@@ -1,6 +1,7 @@
 // Trip Details functionality
 let currentTrip = null;
 let expenseChart = null;
+let customCategories = [];
 
 document.addEventListener('DOMContentLoaded', function() {
     checkAuthState();
