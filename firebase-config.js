@@ -13,6 +13,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
+const storage = firebase.storage();
 
 // OpenRouteService API key
 const OPENROUTESERVICE_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImU4ZjhiMTllYmM5NjRhZDc5ZmZlZDA5NTdiM2NiYTRkIiwiaCI6Im11cm11cjY0In0=";
