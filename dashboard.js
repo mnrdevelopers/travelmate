@@ -48,67 +48,38 @@ function checkAuthState() {
 }
 
 function loadUserData() {
-    document.getElementById('user-name').textContent = currentUser.displayName || currentUser.email;
-    document.getElementById('user-avatar').src = currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || currentUser.email)}&background=4361ee&color=fff`;
+    if (!currentUser) return;
+    
+    document.getElementById('user-name').textContent = currentUser.displayName || 'Traveler';
+    document.getElementById('user-avatar').src = currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || 'Traveler')}&background=4361ee&color=fff`;
 }
 
 async function loadUserTrips() {
     try {
         showLoadingState(true);
         
-        // Method 1: First try the optimized query with index
-        try {
-            const tripsSnapshot = await db.collection('trips')
-                .where('members', 'array-contains', currentUser.uid)
-                .orderBy('createdAt', 'desc')
-                .get();
-            
-            userTrips = [];
-            tripsSnapshot.forEach(doc => {
-                const tripData = doc.data();
-                userTrips.push({
-                    id: doc.id,
-                    ...tripData
-                });
+        // Simple query without ordering - we'll sort client-side
+        const tripsSnapshot = await db.collection('trips')
+            .where('members', 'array-contains', currentUser.uid)
+            .get();
+        
+        userTrips = [];
+        tripsSnapshot.forEach(doc => {
+            const tripData = doc.data();
+            userTrips.push({
+                id: doc.id,
+                ...tripData
             });
-            
-            displayTrips();
-            return;
-            
-        } catch (indexError) {
-            if (indexError.code === 'failed-precondition') {
-                console.log('Index not ready, falling back to client-side sorting');
-                
-                // Method 2: Fallback - get all trips and sort client-side
-                const allTripsSnapshot = await db.collection('trips')
-                    .where('members', 'array-contains', currentUser.uid)
-                    .get();
-                
-                userTrips = [];
-                allTripsSnapshot.forEach(doc => {
-                    const tripData = doc.data();
-                    userTrips.push({
-                        id: doc.id,
-                        ...tripData
-                    });
-                });
-                
-                // Sort by createdAt on client side
-                userTrips.sort((a, b) => {
-                    const dateA = a.createdAt ? a.createdAt.toDate() : new Date(0);
-                    const dateB = b.createdAt ? b.createdAt.toDate() : new Date(0);
-                    return dateB - dateA; // Descending order
-                });
-                
-                displayTrips();
-                
-                // Show info about creating index for better performance
-                showIndexCreationInfo();
-                
-            } else {
-                throw indexError; // Re-throw other errors
-            }
-        }
+        });
+        
+        // Sort by createdAt on client side (newest first)
+        userTrips.sort((a, b) => {
+            const dateA = a.createdAt ? a.createdAt.toDate() : new Date(0);
+            const dateB = b.createdAt ? b.createdAt.toDate() : new Date(0);
+            return dateB - dateA; // Descending order
+        });
+        
+        displayTrips();
         
     } catch (error) {
         console.error('Error loading trips:', error);
@@ -116,92 +87,6 @@ async function loadUserTrips() {
     } finally {
         showLoadingState(false);
     }
-}
-
-function showIndexCreationInfo() {
-    // Only show this once per session
-    if (!sessionStorage.getItem('indexInfoShown')) {
-        const infoDiv = document.createElement('div');
-        infoDiv.className = 'alert alert-info alert-dismissible fade show mt-3';
-        infoDiv.innerHTML = `
-            <i class="fas fa-info-circle me-2"></i>
-            <strong>Performance Tip:</strong> For faster loading, create a Firestore index. 
-            <a href="#" id="create-index-link" class="alert-link">Click here for instructions</a>.
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
-        
-        document.querySelector('.container').insertBefore(infoDiv, document.querySelector('.container').firstChild);
-        
-        // Add click handler for the link
-        document.getElementById('create-index-link').addEventListener('click', function(e) {
-            e.preventDefault();
-            showIndexCreationModal();
-        });
-        
-        sessionStorage.setItem('indexInfoShown', 'true');
-    }
-}
-
-function showIndexCreationModal() {
-    const modalHtml = `
-        <div class="modal fade" id="indexCreationModal" tabindex="-1">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Create Firestore Index</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <h6>Follow these steps to create the required index:</h6>
-                        <ol class="mt-3">
-                            <li>Go to the <a href="https://console.firebase.google.com" target="_blank">Firebase Console</a></li>
-                            <li>Select your project "travel-mate-5729f"</li>
-                            <li>Go to Firestore Database → Indexes</li>
-                            <li>Click "Create Index"</li>
-                            <li>Fill in the following details:
-                                <ul class="mt-2">
-                                    <li><strong>Collection ID:</strong> trips</li>
-                                    <li><strong>Fields to index:</strong>
-                                        <ul>
-                                            <li>Field 1: <code>members</code> (Array) → Ascending</li>
-                                            <li>Field 2: <code>createdAt</code> (Date) → Descending</li>
-                                        </ul>
-                                    </li>
-                                    <li><strong>Query scope:</strong> Collection</li>
-                                </ul>
-                            </li>
-                            <li>Click "Create"</li>
-                        </ol>
-                        <div class="alert alert-warning mt-3">
-                            <i class="fas fa-exclamation-triangle me-2"></i>
-                            <strong>Note:</strong> It may take a few minutes for the index to be built. 
-                            Once created, your trips will load faster.
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <a href="https://console.firebase.google.com/v1/r/project/travel-mate-5729f/firestore/indexes?create_composite=Ck9wcm9qZWN0cy90cmF2ZWwtbWF0ZS01NzI5Zi9kYXRhYmFzZXMvKGRlZmF1bHQpL2NvbGxlY3Rpb25Hcm91cHMvdHJpcHMvaW5kZXhlcy9fEAEaCwoHbWVtYmVycxgBGg0KCWNyZWF0ZWRBdBACGgwKCF9fbmFtZV9fEAI" 
-                           target="_blank" class="btn btn-primary">
-                            <i class="fas fa-external-link-alt me-2"></i>Create Index Now
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    // Remove existing modal if any
-    const existingModal = document.getElementById('indexCreationModal');
-    if (existingModal) {
-        existingModal.remove();
-    }
-    
-    // Add modal to body
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    
-    // Show modal
-    const modal = new bootstrap.Modal(document.getElementById('indexCreationModal'));
-    modal.show();
 }
 
 function showLoadingState(show) {
@@ -356,7 +241,7 @@ async function calculateDistance() {
     const destination = document.getElementById('trip-destination').value;
     
     if (!startLocation || !destination) {
-        alert('Please enter both start location and destination');
+        showAlert('Please enter both start location and destination', 'warning');
         return;
     }
     
@@ -370,10 +255,7 @@ async function calculateDistance() {
         `;
         document.getElementById('distance-results').classList.remove('d-none');
         
-        // For real implementation, you would call OpenRouteService API here
-        // Since we don't have a real API key, we'll simulate the calculation
-        // based on common routes
-        
+        // Simulate API call
         await new Promise(resolve => setTimeout(resolve, 1500));
         
         // Simple distance calculation simulation
@@ -437,17 +319,17 @@ async function saveTrip() {
     
     // Validation
     if (!name || !startLocation || !destination || !startDate || !endDate || !budget) {
-        showAlert('Please fill in all fields', 'danger');
+        showAlert('Please fill in all fields', 'warning');
         return;
     }
     
     if (new Date(startDate) > new Date(endDate)) {
-        showAlert('End date must be after start date', 'danger');
+        showAlert('End date must be after start date', 'warning');
         return;
     }
     
     if (budget <= 0) {
-        showAlert('Budget must be greater than 0', 'danger');
+        showAlert('Budget must be greater than 0', 'warning');
         return;
     }
     
@@ -455,9 +337,9 @@ async function saveTrip() {
     const code = generateTripCode();
     
     const tripData = {
-        name,
-        startLocation,
-        destination,
+        name: name.trim(),
+        startLocation: startLocation.trim(),
+        destination: destination.trim(),
         startDate,
         endDate,
         budget,
@@ -506,12 +388,12 @@ async function joinTripWithCode() {
     const messageEl = document.getElementById('join-trip-message');
     
     if (!code) {
-        showMessage(messageEl, 'Please enter a trip code', 'danger');
+        showMessage(messageEl, 'Please enter a trip code', 'warning');
         return;
     }
     
     if (code.length < 6 || code.length > 8) {
-        showMessage(messageEl, 'Trip code must be 6-8 characters', 'danger');
+        showMessage(messageEl, 'Trip code must be 6-8 characters', 'warning');
         return;
     }
     
@@ -525,7 +407,7 @@ async function joinTripWithCode() {
             .get();
         
         if (tripsSnapshot.empty) {
-            showMessage(messageEl, 'Invalid trip code. Please check the code and try again.', 'danger');
+            showMessage(messageEl, 'Invalid trip code. Please check the code and try again.', 'warning');
             return;
         }
         
@@ -535,7 +417,7 @@ async function joinTripWithCode() {
         
         // Check if user is already a member
         if (trip.members.includes(currentUser.uid)) {
-            showMessage(messageEl, 'You are already a member of this trip.', 'warning');
+            showMessage(messageEl, 'You are already a member of this trip.', 'info');
             return;
         }
         
@@ -584,14 +466,18 @@ function showMessage(messageEl, message, type) {
 function showAlert(message, type) {
     // Create alert element
     const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
+    alertDiv.style.zIndex = '9999';
     alertDiv.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <div class="d-flex align-items-center">
+            <i class="fas fa-${getAlertIcon(type)} me-2"></i>
+            <div>${message}</div>
+            <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+        </div>
     `;
     
     // Add to page
-    document.querySelector('.container').insertBefore(alertDiv, document.querySelector('.container').firstChild);
+    document.body.appendChild(alertDiv);
     
     // Auto remove after 5 seconds
     setTimeout(() => {
@@ -599,6 +485,16 @@ function showAlert(message, type) {
             alertDiv.remove();
         }
     }, 5000);
+}
+
+function getAlertIcon(type) {
+    switch(type) {
+        case 'success': return 'check-circle';
+        case 'danger': return 'exclamation-triangle';
+        case 'warning': return 'exclamation-circle';
+        case 'info': return 'info-circle';
+        default: return 'info-circle';
+    }
 }
 
 function copyTripCode() {
@@ -611,7 +507,7 @@ function copyTripCode() {
         }, 3000);
     }).catch(err => {
         console.error('Failed to copy code: ', err);
-        alert('Failed to copy code. Please copy it manually.');
+        showAlert('Failed to copy code. Please copy it manually.', 'warning');
     });
 }
 
@@ -623,4 +519,9 @@ async function handleLogout() {
         console.error('Logout error:', error);
         showAlert('Error during logout. Please try again.', 'danger');
     }
+}
+
+// Utility function to get trip by ID
+function getTripById(tripId) {
+    return userTrips.find(trip => trip.id === tripId);
 }
