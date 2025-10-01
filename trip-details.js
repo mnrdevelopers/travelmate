@@ -528,7 +528,7 @@ function loadTripRoute(trip) {
 
 function showAddExpenseModal() {
     // Set today's date as default
-    document.getElementById('expense-date').valueAsDate = new Date());
+    document.getElementById('expense-date').valueAsDate = new Date();
     document.getElementById('add-expense-form').reset();
     
     const modal = new bootstrap.Modal(document.getElementById('addExpenseModal'));
