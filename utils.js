@@ -60,59 +60,106 @@ function validateDates(startDate, endDate) {
 }
 
 // Real OpenRouteService API integration
+async function geocodeLocation(location) {
+    try {
+        const response = await fetch(`https://api.openrouteservice.org/geocode/search?api_key=${OPENROUTESERVICE_API_KEY}&text=${encodeURIComponent(location)}`);
+        
+        if (!response.ok) {
+            throw new Error(`Geocoding failed: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.features && data.features.length > 0) {
+            const coordinates = data.features[0].geometry.coordinates;
+            return {
+                longitude: coordinates[0],
+                latitude: coordinates[1],
+                name: data.features[0].properties.name
+            };
+        } else {
+            throw new Error('No results found for location');
+        }
+    } catch (error) {
+        console.error('Geocoding error:', error);
+        throw new Error(`Could not find coordinates for "${location}". Please check the location name.`);
+    }
+}
+
 async function calculateRealDistance(startLocation, destination) {
     try {
-        // Note: This requires geocoding first to get coordinates
-        // For now, we'll use simulation but structure for real API
         console.log('Calculating route from:', startLocation, 'to:', destination);
         
-        // Simulated API call - replace with actual OpenRouteService API
+        // Geocode both locations to get coordinates
+        const [startCoords, destCoords] = await Promise.all([
+            geocodeLocation(startLocation),
+            geocodeLocation(destination)
+        ]);
+        
+        console.log('Start coordinates:', startCoords);
+        console.log('Destination coordinates:', destCoords);
+        
+        // Calculate route using OpenRouteService Directions API
         const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
             method: 'POST',
             headers: {
                 'Authorization': OPENROUTESERVICE_API_KEY,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Accept': 'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8'
             },
             body: JSON.stringify({
-                coordinates: [[8.681495,49.41461],[8.686507,49.41943]],
-                format: 'json'
+                coordinates: [
+                    [startCoords.longitude, startCoords.latitude],
+                    [destCoords.longitude, destCoords.latitude]
+                ],
+                instructions: false,
+                preference: 'recommended',
+                units: 'km'
             })
         });
         
-        if (response.ok) {
-            const data = await response.json();
-            const distance = (data.routes[0].summary.distance / 1000).toFixed(1);
-            const duration = formatDuration(data.routes[0].summary.duration);
-            return { distance: `${distance} km`, duration };
-        } else {
-            throw new Error('API request failed');
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('OpenRouteService API error:', errorText);
+            throw new Error(`Route calculation failed: ${response.status} ${response.statusText}`);
         }
+        
+        const data = await response.json();
+        
+        if (!data.routes || data.routes.length === 0) {
+            throw new Error('No route found between these locations');
+        }
+        
+        const route = data.routes[0];
+        const distance = (route.summary.distance / 1000).toFixed(1); // Convert to km
+        const duration = formatDuration(route.summary.duration);
+        
+        console.log('Route calculated successfully:', { distance: `${distance} km`, duration });
+        
+        return { 
+            distance: `${distance} km`, 
+            duration,
+            coordinates: {
+                start: [startCoords.longitude, startCoords.latitude],
+                destination: [destCoords.longitude, destCoords.latitude]
+            }
+        };
+        
     } catch (error) {
-        console.error('Route calculation failed, using simulation:', error);
-        // Fallback to simulation
-        return calculateSimulatedDistance(startLocation, destination);
+        console.error('Route calculation error:', error);
+        throw new Error(`Failed to calculate route: ${error.message}`);
     }
 }
 
-function calculateSimulatedDistance(start, destination) {
-    const baseDistance = 350;
-    const randomVariation = Math.random() * 200 - 100;
-    const distance = Math.max(50, baseDistance + randomVariation);
-    const hours = distance / 80;
-    const totalMinutes = Math.round(hours * 60);
+// Enhanced error handling for dashboard.js
+function handleRouteCalculationError(error) {
+    console.error('Route calculation failed:', error);
     
-    const hoursPart = Math.floor(totalMinutes / 60);
-    const minutesPart = totalMinutes % 60;
-    
-    let duration;
-    if (hoursPart > 0) {
-        duration = `${hoursPart} hour${hoursPart > 1 ? 's' : ''} ${minutesPart} minute${minutesPart > 1 ? 's' : ''}`;
+    if (error.message.includes('geocoding') || error.message.includes('coordinates')) {
+        return 'Please check that both locations are valid and try again.';
+    } else if (error.message.includes('API') || error.message.includes('network')) {
+        return 'Route service is temporarily unavailable. Please try again later.';
     } else {
-        duration = `${minutesPart} minute${minutesPart > 1 ? 's' : ''}`;
+        return 'Unable to calculate route. Please verify the locations and try again.';
     }
-    
-    return {
-        distance: `${distance.toFixed(1)} km`,
-        duration: duration
-    };
 }
