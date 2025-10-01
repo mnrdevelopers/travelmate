@@ -385,6 +385,34 @@ async function leaveAllTrips() {
     }
 }
 
+// Add this function to dashboard.js and trip-details.js
+async function calculateRealDistance(startLocation, destination) {
+    try {
+        const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
+            method: 'POST',
+            headers: {
+                'Authorization': OPENROUTESERVICE_API_KEY,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                coordinates: [
+                    [/* start coords */], 
+                    [/* end coords */]
+                ]
+            })
+        });
+        
+        const data = await response.json();
+        return {
+            distance: (data.routes[0].summary.distance / 1000).toFixed(1) + ' km',
+            duration: formatDuration(data.routes[0].summary.duration)
+        };
+    } catch (error) {
+        console.error('Route calculation failed:', error);
+        return null;
+    }
+}
+
 async function calculateDistance() {
     const startLocation = document.getElementById('start-location').value;
     const destination = document.getElementById('trip-destination').value;
