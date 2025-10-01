@@ -44,17 +44,28 @@
         </div>
     </nav>
 
-    <!-- Trip Details Content -->
-    <div class="container mt-4">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <a href="dashboard.html" class="btn btn-outline-secondary me-2">
-                    <i class="fas fa-arrow-left me-1"></i>Back to Dashboard
-                </a>
-                <h2 id="trip-details-name" class="d-inline-block ms-2">Trip Name</h2>
-            </div>
-            <span class="trip-code" id="trip-details-code">ABC123</span>
+   <!-- Trip Details Content -->
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <a href="dashboard.html" class="btn btn-outline-secondary me-2">
+                <i class="fas fa-arrow-left me-1"></i>Back to Dashboard
+            </a>
+            <h2 id="trip-details-name" class="d-inline-block ms-2">Trip Name</h2>
         </div>
+        <div class="d-flex align-items-center">
+            <span class="trip-code me-3" id="trip-details-code">ABC123</span>
+            <div class="dropdown">
+                <button class="btn btn-outline-primary dropdown-toggle" type="button" id="tripActionsDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fas fa-cog me-1"></i>Actions
+                </button>
+                <ul class="dropdown-menu" aria-labelledby="tripActionsDropdown">
+                    <li><a class="dropdown-item" href="#" id="edit-trip-btn"><i class="fas fa-edit me-2"></i>Edit Trip</a></li>
+                    <li><a class="dropdown-item text-danger" href="#" id="delete-trip-btn"><i class="fas fa-trash me-2"></i>Delete Trip</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
         
         <ul class="nav nav-tabs" id="trip-tabs">
             <li class="nav-item">
