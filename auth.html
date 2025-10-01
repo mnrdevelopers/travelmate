@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TravelMate - Sign In</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Authentication Screen -->
+    <div class="auth-container">
+        <div class="auth-card">
+            <div class="auth-header">
+                <h2><i class="fas fa-map-marked-alt me-2"></i>TravelMate</h2>
+                <p class="mb-0">Plan your trips together</p>
+            </div>
+            <div class="auth-body">
+                <div id="auth-animation" class="text-center mb-4">
+                    <lottie-player 
+                        src="https://assets1.lottiefiles.com/packages/lf20_sk5h1kfn.json" 
+                        background="transparent" 
+                        speed="1" 
+                        style="width: 200px; height: 200px; margin: 0 auto;" 
+                        loop 
+                        autoplay>
+                    </lottie-player>
+                </div>
+                
+                <div class="d-grid mb-3">
+                    <button class="btn btn-google" id="google-signin-btn">
+                        <i class="fab fa-google me-2"></i>Sign in with Google
+                    </button>
+                </div>
+                
+                <div class="text-center mb-3">
+                    <span class="text-muted">Or</span>
+                </div>
+                
+                <form id="login-form">
+                    <div class="mb-3">
+                        <label for="login-email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="login-email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="login-password" class="form-label">Password</label>
+                        <input type="password" class="form-control" id="login-password" required>
+                    </div>
+                    <div class="d-grid mb-3">
+                        <button type="submit" class="btn btn-primary">Login</button>
+                    </div>
+                    <div class="text-center">
+                        <a href="#" id="show-signup">Don't have an account? Sign up</a>
+                    </div>
+                    <div class="text-center mt-2">
+                        <a href="#" id="forgot-password">Forgot password?</a>
+                    </div>
+                </form>
+                
+                <form id="signup-form" class="d-none">
+                    <div class="mb-3">
+                        <label for="signup-name" class="form-label">Full Name</label>
+                        <input type="text" class="form-control" id="signup-name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="signup-email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="signup-email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="signup-password" class="form-label">Password</label>
+                        <input type="password" class="form-control" id="signup-password" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="signup-confirm-password" class="form-label">Confirm Password</label>
+                        <input type="password" class="form-control" id="signup-confirm-password" required>
+                    </div>
+                    <div class="d-grid mb-3">
+                        <button type="submit" class="btn btn-primary">Sign Up</button>
+                    </div>
+                    <div class="text-center">
+                        <a href="#" id="show-login">Already have an account? Login</a>
+                    </div>
+                </form>
+                
+                <form id="reset-password-form" class="d-none">
+                    <div class="mb-3">
+                        <label for="reset-email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="reset-email" required>
+                    </div>
+                    <div class="d-grid mb-3">
+                        <button type="submit" class="btn btn-primary">Reset Password</button>
+                    </div>
+                    <div class="text-center">
+                        <a href="#" id="back-to-login">Back to Login</a>
+                    </div>
+                </form>
+                
+                <div id="auth-message" class="alert d-none mt-3"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="js/firebase-config.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/auth.js"></script>
+</body>
+</html>
