@@ -1,14 +1,31 @@
 // Trip Details functionality
 let currentTrip = null;
 let expenseChart = null;
-let paymentChart = null;
 let customCategories = [];
 
 document.addEventListener('DOMContentLoaded', function() {
     checkAuthState();
     loadTripDetails();
     setupTripDetailsEventListeners();
+    fixScrollIssues();
 });
+
+function fixScrollIssues() {
+    document.body.style.height = '100vh';
+    document.body.style.overflow = 'auto';
+    
+    const appElement = document.getElementById('app');
+    if (appElement) {
+        appElement.style.minHeight = '100vh';
+        appElement.style.overflow = 'auto';
+    }
+    
+    const tripDetailsScreen = document.getElementById('trip-details-screen');
+    if (tripDetailsScreen) {
+        tripDetailsScreen.style.minHeight = 'calc(100vh - 76px)';
+        tripDetailsScreen.style.overflow = 'visible';
+    }
+}
 
 function setupTripDetailsEventListeners() {
     document.getElementById('logout-btn').addEventListener('click', handleLogout);
@@ -23,19 +40,27 @@ function setupTripDetailsEventListeners() {
 }
 
 function setupEnhancedCRUDEventListeners() {
-    // Expense category handling
+   // Expense CRUD
+    const addCustomCategoryBtn = document.getElementById('add-custom-category-btn');
+    const addCustomCategoryBtnModal = document.getElementById('add-custom-category-btn-modal');
+    const saveCategoryBtn = document.getElementById('save-category-btn');
+    
+    if (addCustomCategoryBtn) {
+        addCustomCategoryBtn.addEventListener('click', showCustomCategoryModal);
+    }
+    if (addCustomCategoryBtnModal) {
+        addCustomCategoryBtnModal.addEventListener('click', showCustomCategoryModal);
+    }
+    if (saveCategoryBtn) {
+        saveCategoryBtn.addEventListener('click', saveCustomCategory);
+    }
+    // Add event listener for category dropdown change
     const categorySelect = document.getElementById('expense-category');
     if (categorySelect) {
         categorySelect.addEventListener('change', handleCategoryChange);
     }
     
-    // Custom category modal
-    const saveCategoryBtn = document.getElementById('save-category-btn');
-    if (saveCategoryBtn) {
-        saveCategoryBtn.addEventListener('click', saveCustomCategory);
-    }
-    
-    // Dynamic event listeners for edit/delete buttons
+    // Add edit/delete buttons to expense items dynamically
     document.addEventListener('click', function(e) {
         if (e.target.classList.contains('edit-expense-btn') || e.target.closest('.edit-expense-btn')) {
             const expenseId = e.target.dataset.expenseId || e.target.closest('.edit-expense-btn').dataset.expenseId;
@@ -84,7 +109,7 @@ async function loadTripDetails() {
     }
     
     try {
-        // Refresh trip data from Firestore
+        // Refresh trip data from Firestore to get latest updates
         const tripDoc = await db.collection('trips').doc(currentTrip.id).get();
         if (tripDoc.exists) {
             currentTrip = {
@@ -98,7 +123,7 @@ async function loadTripDetails() {
         document.getElementById('trip-details-name').textContent = currentTrip.name;
         document.getElementById('trip-details-code').textContent = currentTrip.code;
         
-        // Load all trip data
+        // Load trip data
         await loadTripOverview(currentTrip);
         loadTripExpenses(currentTrip);
         loadTripItinerary(currentTrip);
@@ -151,18 +176,15 @@ async function loadTripOverview(trip) {
         progressBar.className = 'progress-bar bg-success';
     }
     
-    // Update distance if available - FIXED: Ensure route data is displayed
-    if (trip.route && trip.route.distance) {
+    // Update distance if available
+    if (trip.route) {
         document.getElementById('overview-distance').textContent = `${trip.route.distance} (${trip.route.duration})`;
     } else {
         document.getElementById('overview-distance').textContent = 'Not calculated';
     }
     
-    // Load members
+    // Load members with proper user data
     await loadTripMembers(trip);
-
-    // Add trip actions (edit/delete/leave buttons)
-    addTripActions(trip);
 }
 
 async function loadTripMembers(trip) {
@@ -170,12 +192,21 @@ async function loadTripMembers(trip) {
     membersList.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div><p class="mt-2 text-muted">Loading members...</p></div>';
     
     try {
+        // Get user details for each member with better error handling
         const memberPromises = trip.members.map(async (memberId) => {
             try {
+                console.log('Fetching user data for member:', memberId);
+
+                console.log('Trip creator ID:', trip.createdBy);
+                await debugUserData(trip.createdBy);
+                
+                // First try to get from Firestore users collection
                 const userDoc = await db.collection('users').doc(memberId).get();
                 
                 if (userDoc.exists) {
                     const userData = userDoc.data();
+                    console.log('User data found in Firestore:', userData);
+                    
                     return {
                         id: memberId,
                         name: userData.name || userData.displayName || userData.email || 'Traveler',
@@ -185,6 +216,9 @@ async function loadTripMembers(trip) {
                         isCreator: memberId === trip.createdBy
                     };
                 } else {
+                    console.log('User document not found in Firestore for:', memberId);
+                    
+                    // If user document doesn't exist in Firestore, try to get from auth (only works for current user)
                     if (memberId === auth.currentUser.uid) {
                         const currentUser = auth.currentUser;
                         return {
@@ -197,9 +231,11 @@ async function loadTripMembers(trip) {
                         };
                     }
                     
+                    // For other users where we don't have data in Firestore
+                    // This is likely the issue - creator's data might not be in Firestore
                     return {
                         id: memberId,
-                        name: 'Traveler',
+                        name: 'Traveler', // This gets shown for creator when data is missing
                         email: null,
                         photoURL: null,
                         isCurrentUser: memberId === auth.currentUser.uid,
@@ -209,6 +245,7 @@ async function loadTripMembers(trip) {
             } catch (error) {
                 console.error('Error fetching user data for', memberId, error);
                 
+                // Fallback for current user
                 if (memberId === auth.currentUser.uid) {
                     const currentUser = auth.currentUser;
                     return {
@@ -285,12 +322,13 @@ async function loadTripMembers(trip) {
     } catch (error) {
         console.error('Error loading members:', error);
         
-        // Fallback display
+        // Enhanced fallback with better member identification
         membersList.innerHTML = '';
         trip.members.forEach((memberId, index) => {
             const isCurrentUser = memberId === auth.currentUser.uid;
             const isCreator = memberId === trip.createdBy;
             
+            // Try to get better names for fallback
             let memberName = 'Travel Companion';
             if (isCurrentUser) memberName = 'You';
             if (isCreator && !isCurrentUser) memberName = 'Trip Creator';
@@ -318,6 +356,31 @@ async function loadTripMembers(trip) {
             
             membersList.appendChild(memberDiv);
         });
+    }
+}
+
+// Debug function to check user data in Firestore
+async function debugUserData(memberId) {
+    try {
+        console.log('=== DEBUG USER DATA ===');
+        console.log('Member ID:', memberId);
+        
+        const userDoc = await db.collection('users').doc(memberId).get();
+        console.log('User exists in Firestore:', userDoc.exists);
+        
+        if (userDoc.exists) {
+            const userData = userDoc.data();
+            console.log('User data:', userData);
+            console.log('Name field:', userData.name);
+            console.log('Display name:', userData.displayName);
+            console.log('Email:', userData.email);
+        } else {
+            console.log('No user document found in Firestore for:', memberId);
+        }
+        
+        console.log('=== END DEBUG ===');
+    } catch (error) {
+        console.error('Debug error:', error);
     }
 }
 
@@ -350,7 +413,7 @@ function loadTripExpenses(trip) {
 
 function createExpenseItem(expense, index) {
     const expenseItem = document.createElement('div');
-    expenseItem.className = 'expense-item card mb-3';
+    expenseItem.className = 'expense-item';
     expenseItem.dataset.expenseId = index;
     
     const categoryClass = `category-${expense.category}`;
@@ -360,50 +423,52 @@ function createExpenseItem(expense, index) {
     // Get payment mode display text and icon
     const paymentModeInfo = getPaymentModeInfo(expense.paymentMode);
     
+    // Create the expense item HTML
     expenseItem.innerHTML = `
-        <div class="card-body">
-            <div class="d-flex justify-content-between align-items-start">
-                <div class="flex-grow-1">
-                    <h6 class="mb-1">${expense.description}</h6>
-                    <div class="d-flex align-items-center mt-1 flex-wrap">
-                        <span class="category-badge ${categoryClass}">${categoryName}</span>
-                        <span class="badge bg-light text-dark ms-2">
-                            <i class="${paymentModeInfo.icon} me-1"></i>${paymentModeInfo.text}
-                        </span>
-                        <small class="text-muted ms-2">${expenseDate}</small>
-                    </div>
-                    <div class="mt-1">
-                        <small class="text-muted">
-                            <i class="fas fa-user me-1"></i>
-                            Added by: ${expense.addedBy === auth.currentUser.uid ? 'You' : 'Loading...'}
-                        </small>
-                    </div>
+        <div class="d-flex justify-content-between align-items-start">
+            <div class="flex-grow-1">
+                <h6 class="mb-1">${expense.description}</h6>
+                <div class="d-flex align-items-center mt-1 flex-wrap">
+                    <span class="category-badge ${categoryClass}">${categoryName}</span>
+                    <span class="badge bg-light text-dark ms-2">
+                        <i class="${paymentModeInfo.icon} me-1"></i>${paymentModeInfo.text}
+                    </span>
+                    <small class="text-muted ms-2">${expenseDate}</small>
                 </div>
-                <div class="text-end ms-3">
-                    <div class="fw-bold fs-5"><span class="rupee-symbol">₹</span>${expense.amount.toFixed(2)}</div>
-                    <div class="mt-2">
-                        ${expense.addedBy === auth.currentUser.uid ? `
-                            <button class="btn btn-sm btn-outline-primary edit-expense-btn me-1" data-expense-id="${index}">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button class="btn btn-sm btn-outline-danger delete-expense-btn" data-expense-id="${index}">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        ` : ''}
-                    </div>
+                <div class="mt-1">
+                    <small class="text-muted">
+                        <i class="fas fa-user me-1"></i>
+                        Added by: ${expense.addedBy === auth.currentUser.uid ? 'You' : 'Loading...'}
+                    </small>
+                </div>
+            </div>
+            <div class="text-end ms-3">
+                <div class="fw-bold fs-5"><span class="rupee-symbol">₹</span>${expense.amount.toFixed(2)}</div>
+                <div class="mt-2">
+                    ${expense.addedBy === auth.currentUser.uid ? `
+                        <button class="btn btn-sm btn-outline-primary edit-expense-btn me-1" data-expense-id="${index}">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger delete-expense-btn" data-expense-id="${index}">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    ` : ''}
                 </div>
             </div>
         </div>
     `;
     
-    // Load member name asynchronously
+    // Load member name asynchronously and update the display
     loadMemberNameForExpense(expenseItem, expense.addedBy);
     
     return expenseItem;
 }
 
+// Helper function to load and display member name for expense
 async function loadMemberNameForExpense(expenseItem, memberId) {
-    if (memberId === auth.currentUser.uid) return;
+    if (memberId === auth.currentUser.uid) {
+        return; // Already shows "You"
+    }
     
     try {
         const memberName = await getMemberName(memberId);
@@ -416,19 +481,28 @@ async function loadMemberNameForExpense(expenseItem, memberId) {
     }
 }
 
+// Add helper function to get payment mode information
 function getPaymentModeInfo(paymentMode) {
     switch(paymentMode) {
-        case 'cash': return { text: 'Cash', icon: 'fas fa-money-bill-wave' };
-        case 'upi': return { text: 'UPI', icon: 'fas fa-mobile-alt' };
-        case 'card': return { text: 'Card', icon: 'fas fa-credit-card' };
-        case 'other': return { text: 'Other', icon: 'fas fa-wallet' };
-        default: return { text: paymentMode, icon: 'fas fa-wallet' };
+        case 'cash':
+            return { text: 'Cash', icon: 'fas fa-money-bill-wave' };
+        case 'upi':
+            return { text: 'UPI', icon: 'fas fa-mobile-alt' };
+        case 'card':
+            return { text: 'Card', icon: 'fas fa-credit-card' };
+        case 'other':
+            return { text: 'Other', icon: 'fas fa-wallet' };
+        default:
+            return { text: paymentMode, icon: 'fas fa-wallet' };
     }
 }
 
+// Add helper function to get member name
 async function getMemberName(memberId) {
     try {
-        if (memberId === auth.currentUser.uid) return 'You';
+        if (memberId === auth.currentUser.uid) {
+            return 'You';
+        }
         
         const userDoc = await db.collection('users').doc(memberId).get();
         if (userDoc.exists) {
@@ -444,14 +518,22 @@ async function getMemberName(memberId) {
 
 function getCategoryName(categoryId) {
     const customCategory = customCategories.find(cat => cat.id === categoryId);
-    if (customCategory) return customCategory.name;
+    if (customCategory) {
+        return customCategory.name;
+    }
     return categoryId.charAt(0).toUpperCase() + categoryId.slice(1);
 }
 
+// Add this new function to handle category selection
 function handleCategoryChange(event) {
     if (event.target.value === 'other') {
+        // Open custom category modal
         showCustomCategoryModal();
-        setTimeout(() => event.target.value = 'fuel', 100);
+        
+        // Reset the dropdown to the previous value or first option
+        setTimeout(() => {
+            event.target.value = 'fuel'; // Reset to default
+        }, 100);
     }
 }
 
@@ -479,12 +561,16 @@ function updateBudgetSummary(trip) {
 }
 
 function renderExpenseChart(trip) {
-    if (!trip.expenses || trip.expenses.length === 0) return;
+    if (!trip.expenses || trip.expenses.length === 0) {
+        return;
+    }
     
     const ctx = document.getElementById('expense-chart').getContext('2d');
     
     // Destroy previous chart if it exists
-    if (expenseChart) expenseChart.destroy();
+    if (expenseChart) {
+        expenseChart.destroy();
+    }
     
     // Group expenses by category
     const categories = {
@@ -496,7 +582,9 @@ function renderExpenseChart(trip) {
     };
     
     // Add custom categories
-    customCategories.forEach(cat => categories[cat.id] = 0);
+    customCategories.forEach(cat => {
+        categories[cat.id] = 0;
+    });
     
     trip.expenses.forEach(expense => {
         if (categories[expense.category] !== undefined) {
@@ -568,12 +656,11 @@ function renderExpenseChart(trip) {
 }
 
 function renderPaymentChart(trip) {
-    if (!trip.expenses || trip.expenses.length === 0) return;
+    if (!trip.expenses || trip.expenses.length === 0) {
+        return;
+    }
     
     const ctx = document.getElementById('payment-chart').getContext('2d');
-    
-    // Destroy previous chart if it exists
-    if (paymentChart) paymentChart.destroy();
     
     // Group expenses by payment mode
     const paymentModes = {
@@ -603,7 +690,7 @@ function renderPaymentChart(trip) {
         }
     });
     
-    paymentChart = new Chart(ctx, {
+    new Chart(ctx, {
         type: 'pie',
         data: {
             labels: labels.map(mode => mode.charAt(0).toUpperCase() + mode.slice(1)),
@@ -645,7 +732,9 @@ function loadTripItinerary(trip) {
     // Group activities by day
     const activitiesByDay = {};
     trip.itinerary.forEach((activity, index) => {
-        if (!activitiesByDay[activity.day]) activitiesByDay[activity.day] = [];
+        if (!activitiesByDay[activity.day]) {
+            activitiesByDay[activity.day] = [];
+        }
         activitiesByDay[activity.day].push({...activity, index});
     });
     
@@ -730,9 +819,11 @@ function loadTripRoute(trip) {
 }
 
 function showAddExpenseModal() {
+    // Set today's date as default
     document.getElementById('expense-date').valueAsDate = new Date();
     document.getElementById('add-expense-form').reset();
     
+    // Reset button state
     document.getElementById('save-expense-btn').innerHTML = 'Add Expense';
     delete document.getElementById('save-expense-btn').dataset.editingIndex;
     
@@ -769,47 +860,59 @@ async function saveExpense() {
     };
     
     try {
+        // Show loading state
         document.getElementById('save-expense-btn').disabled = true;
         document.getElementById('save-expense-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Saving...';
         
+        // Get the current trip data first
         const tripDoc = await db.collection('trips').doc(currentTrip.id).get();
         const tripData = tripDoc.data();
         
         let updatedExpenses;
         if (isEditing !== undefined) {
+            // Update existing expense
             updatedExpenses = [...tripData.expenses];
             updatedExpenses[isEditing] = expense;
         } else {
+            // Add new expense
             updatedExpenses = [...(tripData.expenses || []), expense];
         }
         
+        // Update the trip document with the new expenses array
         await db.collection('trips').doc(currentTrip.id).update({
             expenses: updatedExpenses,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         
+        // Update local state
         currentTrip.expenses = updatedExpenses;
         
+        // Close modal
         const modal = bootstrap.Modal.getInstance(document.getElementById('addExpenseModal'));
         modal.hide();
         
+        // Reset form and button
         document.getElementById('add-expense-form').reset();
         document.getElementById('save-expense-btn').innerHTML = 'Add Expense';
         delete document.getElementById('save-expense-btn').dataset.editingIndex;
         
+        // Reload trip details
         loadTripDetails();
         
+        // Show success message
         showToast(isEditing !== undefined ? 'Expense updated successfully!' : 'Expense added successfully!', 'success');
         
     } catch (error) {
         console.error('Error saving expense:', error);
         showToast('Error saving expense. Please try again.', 'danger');
     } finally {
+        // Reset button state
         document.getElementById('save-expense-btn').disabled = false;
     }
 }
 
 function showAddActivityModal() {
+    // Populate days dropdown
     const daySelect = document.getElementById('activity-day');
     daySelect.innerHTML = '';
     
@@ -829,6 +932,7 @@ function showAddActivityModal() {
     
     document.getElementById('add-activity-form').reset();
     
+    // Reset button state
     document.getElementById('save-activity-btn').innerHTML = 'Add Activity';
     delete document.getElementById('save-activity-btn').dataset.editingIndex;
     
@@ -858,9 +962,11 @@ async function saveActivity() {
     };
     
     try {
+        // Show loading state
         document.getElementById('save-activity-btn').disabled = true;
         document.getElementById('save-activity-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Saving...';
         
+        // Get the current trip data first
         const tripDoc = await db.collection('trips').doc(currentTrip.id).get();
         const tripData = tripDoc.data();
         
@@ -872,133 +978,44 @@ async function saveActivity() {
             updatedItinerary = [...(tripData.itinerary || []), activity];
         }
         
+        // Update the trip document with the new itinerary array
         await db.collection('trips').doc(currentTrip.id).update({
             itinerary: updatedItinerary,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         
+        // Update local state
         currentTrip.itinerary = updatedItinerary;
         
+        // Close modal
         const modal = bootstrap.Modal.getInstance(document.getElementById('addActivityModal'));
         modal.hide();
         
+        // Reset form and button
         document.getElementById('add-activity-form').reset();
         document.getElementById('save-activity-btn').innerHTML = 'Add Activity';
         delete document.getElementById('save-activity-btn').dataset.editingIndex;
         
+        // Reload trip details
         loadTripDetails();
         
+        // Show success message
         showToast(isEditing !== undefined ? 'Activity updated successfully!' : 'Activity added successfully!', 'success');
         
     } catch (error) {
         console.error('Error saving activity:', error);
         showToast('Error saving activity. Please try again.', 'danger');
     } finally {
+        // Reset button state
         document.getElementById('save-activity-btn').disabled = false;
     }
-}
-
-// REAL OpenRouteService API Integration
-async function geocodeLocation(locationName) {
-    try {
-        const response = await fetch(`https://api.openrouteservice.org/geocode/search?api_key=${OPENROUTESERVICE_API_KEY}&text=${encodeURIComponent(locationName)}`);
-        const data = await response.json();
-        
-        if (data.features && data.features.length > 0) {
-            return data.features[0].geometry.coordinates; // [longitude, latitude]
-        }
-        throw new Error('Location not found');
-    } catch (error) {
-        console.error('Geocoding error:', error);
-        throw error;
-    }
-}
-
-async function calculateRealDistance(startLocation, destination) {
-    try {
-        console.log('Calculating real distance using OpenRouteService API...');
-        
-        // First, geocode both locations to get coordinates
-        const startCoords = await geocodeLocation(startLocation);
-        const destCoords = await geocodeLocation(destination);
-        
-        console.log('Start coordinates:', startCoords);
-        console.log('Destination coordinates:', destCoords);
-        
-        // Now calculate the route
-        const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
-            method: 'POST',
-            headers: {
-                'Authorization': OPENROUTESERVICE_API_KEY,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                coordinates: [startCoords, destCoords],
-                format: 'json'
-            })
-        });
-        
-        if (!response.ok) {
-            throw new Error(`API request failed: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data.routes && data.routes.length > 0) {
-            const route = data.routes[0];
-            const distance = (route.summary.distance / 1000).toFixed(1); // Convert to km
-            const duration = formatDuration(route.summary.duration); // Convert seconds to readable format
-            
-            return {
-                distance: `${distance} km`,
-                duration: duration,
-                coordinates: {
-                    start: startCoords,
-                    destination: destCoords
-                }
-            };
-        } else {
-            throw new Error('No route found');
-        }
-        
-    } catch (error) {
-        console.error('OpenRouteService API error:', error);
-        console.log('Falling back to simulated distance calculation...');
-        
-        // Fallback to simulation if API fails
-        return calculateSimulatedDistance(startLocation, destination);
-    }
-}
-
-function calculateSimulatedDistance(start, destination) {
-    // Fallback simulation when API fails
-    const baseDistance = 350;
-    const randomVariation = Math.random() * 200 - 100;
-    const distance = Math.max(50, baseDistance + randomVariation);
-    const hours = distance / 80;
-    const totalMinutes = Math.round(hours * 60);
-    
-    const hoursPart = Math.floor(totalMinutes / 60);
-    const minutesPart = totalMinutes % 60;
-    
-    let duration;
-    if (hoursPart > 0) {
-        duration = `${hoursPart} hour${hoursPart > 1 ? 's' : ''} ${minutesPart} minute${minutesPart > 1 ? 's' : ''}`;
-    } else {
-        duration = `${minutesPart} minute${minutesPart > 1 ? 's' : ''}`;
-    }
-    
-    return {
-        distance: `${distance.toFixed(1)} km`,
-        duration: duration,
-        simulated: true // Flag to indicate this is simulated data
-    };
 }
 
 async function calculateRoute() {
     if (!currentTrip) return;
     
     try {
+        // Show loading state
         document.getElementById('route-details').innerHTML = `
             <div class="text-center py-4">
                 <div class="spinner-border spinner-border-lg me-2" role="status"></div>
@@ -1010,45 +1027,66 @@ async function calculateRoute() {
         document.getElementById('calculate-route-btn').disabled = true;
         document.getElementById('calculate-route-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Calculating...';
         
-        // Use the utility function from utils.js
-        const routeData = await calculateRealDistance(currentTrip.startLocation, currentTrip.destination);
+        // Simulate route calculation
+        await new Promise(resolve => setTimeout(resolve, 2000));
         
-        console.log('Route calculated in trip details:', routeData);
+        // Calculate approximate distance and duration
+        const distance = calculateApproximateDistance(currentTrip.startLocation, currentTrip.destination);
+        const duration = calculateApproximateDuration(distance);
         
-        // Update Firestore
+        const routeData = {
+            distance: `${distance.toFixed(1)} km`,
+            duration: duration,
+            calculatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        
+        // Update the trip with route information
         await db.collection('trips').doc(currentTrip.id).update({
-            route: {
-                ...routeData,
-                calculatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            },
+            route: routeData,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         
-        // Update local trip data immediately
-        currentTrip.route = {
-            ...routeData,
-            calculatedAt: new Date()
-        };
+        // Update local state
+        currentTrip.route = routeData;
         
-        // Update the UI immediately without reloading
+        // Reload route information
         loadTripRoute(currentTrip);
-        loadTripOverview(currentTrip); // This updates the overview section
         
+        // Show success message
         showToast('Route calculated successfully!', 'success');
         
     } catch (error) {
         console.error('Error calculating route:', error);
-        const errorMessage = handleRouteCalculationError(error);
         document.getElementById('route-details').innerHTML = `
             <div class="alert alert-danger">
                 <i class="fas fa-exclamation-triangle me-2"></i>
-                ${errorMessage}
+                Error calculating route. Please try again.
             </div>
         `;
         showToast('Error calculating route', 'danger');
     } finally {
         document.getElementById('calculate-route-btn').disabled = false;
         document.getElementById('calculate-route-btn').innerHTML = '<i class="fas fa-route me-1"></i>Calculate Route';
+    }
+}
+
+function calculateApproximateDistance(start, destination) {
+    const baseDistance = 350;
+    const randomVariation = Math.random() * 200 - 100;
+    return Math.max(50, baseDistance + randomVariation);
+}
+
+function calculateApproximateDuration(distance) {
+    const hours = distance / 80;
+    const totalMinutes = Math.round(hours * 60);
+    
+    const hoursPart = Math.floor(totalMinutes / 60);
+    const minutesPart = totalMinutes % 60;
+    
+    if (hoursPart > 0) {
+        return `${hoursPart} hour${hoursPart > 1 ? 's' : ''} ${minutesPart} minute${minutesPart > 1 ? 's' : ''}`;
+    } else {
+        return `${minutesPart} minutes`;
     }
 }
 
@@ -1060,9 +1098,13 @@ function showCustomCategoryModal() {
     const modal = new bootstrap.Modal(document.getElementById('customCategoryModal'));
     modal.show();
     
-    setTimeout(() => document.getElementById('category-name').focus(), 500);
+    // Focus on the category name input when modal opens
+    setTimeout(() => {
+        document.getElementById('category-name').focus();
+    }, 500);
 }
 
+// Update the saveCustomCategory function to automatically select the new category
 async function saveCustomCategory() {
     const name = document.getElementById('category-name').value.trim();
     const color = document.getElementById('category-color').value;
@@ -1084,9 +1126,13 @@ async function saveCustomCategory() {
             createdAt: new Date().toISOString()
         };
 
+        // Store in user's custom categories
         customCategories.push(category);
+        
+        // Update category dropdown
         updateCategoryDropdown();
         
+        // Auto-select the newly created category
         const categorySelect = document.getElementById('expense-category');
         categorySelect.value = category.id;
         
@@ -1104,12 +1150,17 @@ async function saveCustomCategory() {
     }
 }
 
+// Update the updateCategoryDropdown function to include the "Other" option
 function updateCategoryDropdown() {
     const categorySelect = document.getElementById('expense-category');
+    
+    // Save current selection
     const currentSelection = categorySelect.value;
     
+    // Clear all options
     categorySelect.innerHTML = '';
     
+    // Add default categories
     const defaultCategories = [
         {value: 'fuel', text: 'Fuel'},
         {value: 'hotel', text: 'Hotel'},
@@ -1124,6 +1175,7 @@ function updateCategoryDropdown() {
         categorySelect.appendChild(option);
     });
     
+    // Add custom categories
     customCategories.forEach(category => {
         const option = document.createElement('option');
         option.value = category.id;
@@ -1132,12 +1184,14 @@ function updateCategoryDropdown() {
         categorySelect.appendChild(option);
     });
     
+    // Add "Other" option at the end
     const otherOption = document.createElement('option');
     otherOption.value = 'other';
     otherOption.textContent = 'Other (Add Custom Category)';
     otherOption.style.fontStyle = 'italic';
     categorySelect.appendChild(otherOption);
     
+    // Restore selection if possible, otherwise select first option
     if (currentSelection && categorySelect.querySelector(`[value="${currentSelection}"]`)) {
         categorySelect.value = currentSelection;
     } else if (categorySelect.options.length > 0) {
@@ -1148,21 +1202,26 @@ function updateCategoryDropdown() {
 async function editExpense(expenseIndex) {
     const expense = currentTrip.expenses[expenseIndex];
     
+    // Populate the add expense form with existing data
     document.getElementById('expense-description').value = expense.description;
     document.getElementById('expense-amount').value = expense.amount;
     document.getElementById('expense-category').value = expense.category;
     document.getElementById('expense-payment-mode').value = expense.paymentMode;
     document.getElementById('expense-date').value = expense.date;
     
+    // Change button text
     document.getElementById('save-expense-btn').innerHTML = 'Update Expense';
     document.getElementById('save-expense-btn').dataset.editingIndex = expenseIndex;
     
+    // Show modal
     const modal = new bootstrap.Modal(document.getElementById('addExpenseModal'));
     modal.show();
 }
 
 async function deleteExpense(expenseIndex) {
-    if (!confirm('Are you sure you want to delete this expense?')) return;
+    if (!confirm('Are you sure you want to delete this expense?')) {
+        return;
+    }
 
     try {
         const updatedExpenses = currentTrip.expenses.filter((_, index) => index !== parseInt(expenseIndex));
@@ -1198,7 +1257,9 @@ async function editActivity(activityIndex) {
 }
 
 async function deleteActivity(activityIndex) {
-    if (!confirm('Are you sure you want to delete this activity?')) return;
+    if (!confirm('Are you sure you want to delete this activity?')) {
+        return;
+    }
 
     try {
         const updatedItinerary = currentTrip.itinerary.filter((_, index) => index !== parseInt(activityIndex));
@@ -1219,7 +1280,9 @@ async function deleteActivity(activityIndex) {
 }
 
 async function leaveCurrentTrip() {
-    if (!confirm('Are you sure you want to leave this trip? You will need a new invitation to rejoin.')) return;
+    if (!confirm('Are you sure you want to leave this trip? You will need a new invitation to rejoin.')) {
+        return;
+    }
 
     try {
         await db.collection('trips').doc(currentTrip.id).update({
@@ -1228,7 +1291,9 @@ async function leaveCurrentTrip() {
         });
         
         showToast('You have left the trip', 'success');
-        setTimeout(() => navigateTo('dashboard.html'), 1500);
+        setTimeout(() => {
+            navigateTo('dashboard.html');
+        }, 1500);
         
     } catch (error) {
         console.error('Error leaving trip:', error);
@@ -1240,7 +1305,9 @@ function addLeaveTripButton() {
     const overviewTab = document.getElementById('overview');
     const existingLeaveBtn = overviewTab.querySelector('.leave-trip-btn');
     
-    if (existingLeaveBtn) existingLeaveBtn.remove();
+    if (existingLeaveBtn) {
+        existingLeaveBtn.remove();
+    }
     
     const leaveButton = document.createElement('button');
     leaveButton.className = 'btn btn-outline-danger btn-sm leave-trip-btn';
@@ -1250,8 +1317,20 @@ function addLeaveTripButton() {
     const tripInfoCard = overviewTab.querySelector('.card');
     if (tripInfoCard) {
         const cardBody = tripInfoCard.querySelector('.card-body');
-        if (cardBody) cardBody.appendChild(leaveButton);
+        if (cardBody) {
+            cardBody.appendChild(leaveButton);
+        }
     }
+}
+
+// Utility functions
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+    });
 }
 
 function handleLogout() {
@@ -1261,6 +1340,20 @@ function handleLogout() {
         console.error('Logout error:', error);
         showToast('Error logging out', 'danger');
     });
+}
+
+function navigateTo(page) {
+    window.location.href = page;
+}
+
+function getCurrentTrip() {
+    const tripData = localStorage.getItem('currentTrip');
+    return tripData ? JSON.parse(tripData) : null;
+}
+
+function setCurrentTrip(trip) {
+    localStorage.setItem('currentTrip', JSON.stringify(trip));
+    currentTrip = trip;
 }
 
 function showToast(message, type = 'info') {
@@ -1292,58 +1385,8 @@ function showToast(message, type = 'info') {
     
     bsToast.show();
     
-    toast.addEventListener('hidden.bs.toast', () => toast.remove());
-}
-
-function addTripActions(trip) {
-    const actionsSection = document.getElementById('trip-actions-section');
-    if (!actionsSection) return;
-    
-    const isCreator = trip.createdBy === auth.currentUser.uid;
-    
-    if (isCreator) {
-        actionsSection.innerHTML = `
-            <h6>Trip Management</h6>
-            <div class="d-flex gap-2">
-                <button class="btn btn-outline-warning btn-sm" onclick="editCurrentTrip()">
-                    <i class="fas fa-edit me-1"></i>Edit Trip
-                </button>
-                <button class="btn btn-outline-danger btn-sm" onclick="deleteCurrentTrip()">
-                    <i class="fas fa-trash me-1"></i>Delete Trip
-                </button>
-            </div>
-            <small class="text-muted">As the trip creator, you can edit or delete this trip.</small>
-        `;
-    } else {
-        actionsSection.innerHTML = `
-            <h6>Trip Actions</h6>
-            <button class="btn btn-outline-danger btn-sm" onclick="leaveCurrentTrip()">
-                <i class="fas fa-sign-out-alt me-1"></i>Leave Trip
-            </button>
-            <small class="text-muted d-block mt-1">You can leave this trip at any time.</small>
-        `;
-    }
-}
-
-function editCurrentTrip() {
-    setCurrentTrip(currentTrip);
-    navigateTo('dashboard.html');
-    // The dashboard will detect the currentTrip and open edit modal
-}
-
-async function deleteCurrentTrip() {
-    if (!confirm('Are you sure you want to delete this trip? This action cannot be undone and will delete all trip data including expenses and itinerary.')) {
-        return;
-    }
-
-    try {
-        await db.collection('trips').doc(currentTrip.id).delete();
-        
-        showToast('Trip deleted successfully!', 'success');
-        setTimeout(() => navigateTo('dashboard.html'), 1500);
-        
-    } catch (error) {
-        console.error('Error deleting trip:', error);
-        showToast('Error deleting trip', 'danger');
-    }
+    // Remove toast from DOM after it's hidden
+    toast.addEventListener('hidden.bs.toast', () => {
+        toast.remove();
+    });
 }
