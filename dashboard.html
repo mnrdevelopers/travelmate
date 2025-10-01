@@ -20,13 +20,18 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link active" href="dashboard.html">
-                            <i class="fas fa-home me-1"></i>Dashboard
-                        </a>
-                    </li>
-                </ul>
+               <ul class="navbar-nav me-auto">
+    <li class="nav-item">
+        <a class="nav-link active" href="dashboard.html">
+            <i class="fas fa-home me-1"></i>Dashboard
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="#" id="nav-profile">
+            <i class="fas fa-user me-1"></i>Profile
+        </a>
+    </li>
+</ul>
                 <div class="d-flex align-items-center">
                     <img id="user-avatar" class="user-avatar me-2" src="" alt="User Avatar">
                     <span class="me-3" id="user-name">User</span>
@@ -37,6 +42,52 @@
             </div>
         </div>
     </nav>
+
+    <!-- Profile Section -->
+<div class="modal fade" id="profileModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">My Profile</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="profile-form">
+                    <div class="text-center mb-4">
+                        <img id="profile-avatar" class="user-avatar mb-3" style="width: 100px; height: 100px;" src="" alt="Profile">
+                        <input type="file" id="avatar-upload" class="d-none" accept="image/*">
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="document.getElementById('avatar-upload').click()">
+                            <i class="fas fa-camera me-1"></i>Change Photo
+                        </button>
+                    </div>
+                    <div class="mb-3">
+                        <label for="profile-name" class="form-label">Display Name</label>
+                        <input type="text" class="form-control" id="profile-name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" id="profile-email" disabled>
+                        <small class="text-muted">Email cannot be changed</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">User ID</label>
+                        <input type="text" class="form-control" id="profile-userid" disabled>
+                    </div>
+                </form>
+                <div class="border-top pt-3 mt-3">
+                    <h6>Danger Zone</h6>
+                    <button class="btn btn-outline-danger btn-sm" id="leave-all-trips-btn">
+                        <i class="fas fa-sign-out-alt me-1"></i>Leave All Trips
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="save-profile-btn">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
     
     <!-- Dashboard Content -->
     <div class="container mt-4">
