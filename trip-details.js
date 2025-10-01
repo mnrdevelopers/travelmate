@@ -34,11 +34,6 @@ function setupTripDetailsEventListeners() {
     document.getElementById('add-activity-btn').addEventListener('click', showAddActivityModal);
     document.getElementById('save-activity-btn').addEventListener('click', saveActivity);
     document.getElementById('calculate-route-btn').addEventListener('click', calculateRoute);
-
-     // New trip management event listeners
-    document.getElementById('edit-trip-btn').addEventListener('click', showEditTripModal);
-    document.getElementById('delete-trip-btn').addEventListener('click', confirmDeleteTrip);
-    document.getElementById('save-trip-edit-btn').addEventListener('click', saveTripEdit);
     
     // Enhanced CRUD event listeners
     setupEnhancedCRUDEventListeners();
@@ -105,161 +100,6 @@ function loadUserData() {
     document.getElementById('user-avatar').src = user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'Traveler')}&background=4361ee&color=fff`;
 }
 
-// Show Edit Trip Modal
-function showEditTripModal() {
-    if (!currentTrip) return;
-    
-    // Check if current user is the trip creator
-    if (currentTrip.createdBy !== auth.currentUser.uid) {
-        showToast('Only the trip creator can edit trip details', 'warning');
-        return;
-    }
-    
-    // Populate form with current trip data
-    document.getElementById('edit-trip-name').value = currentTrip.name;
-    document.getElementById('edit-start-location').value = currentTrip.startLocation;
-    document.getElementById('edit-destination').value = currentTrip.destination;
-    document.getElementById('edit-start-date').value = currentTrip.startDate.split('T')[0];
-    document.getElementById('edit-end-date').value = currentTrip.endDate.split('T')[0];
-    document.getElementById('edit-budget').value = currentTrip.budget;
-    document.getElementById('edit-description').value = currentTrip.description || '';
-    
-    const modal = new bootstrap.Modal(document.getElementById('editTripModal'));
-    modal.show();
-}
-
-// Save Trip Edit
-async function saveTripEdit() {
-    if (!currentTrip) return;
-    
-    const name = document.getElementById('edit-trip-name').value.trim();
-    const startLocation = document.getElementById('edit-start-location').value.trim();
-    const destination = document.getElementById('edit-destination').value.trim();
-    const startDate = document.getElementById('edit-start-date').value;
-    const endDate = document.getElementById('edit-end-date').value;
-    const budget = parseFloat(document.getElementById('edit-budget').value);
-    const description = document.getElementById('edit-description').value.trim();
-    
-    // Validation
-    if (!name || !startLocation || !destination || !startDate || !endDate || !budget) {
-        showToast('Please fill in all required fields', 'warning');
-        return;
-    }
-    
-    if (new Date(startDate) >= new Date(endDate)) {
-        showToast('End date must be after start date', 'warning');
-        return;
-    }
-    
-    if (budget <= 0) {
-        showToast('Budget must be greater than 0', 'warning');
-        return;
-    }
-    
-    try {
-        // Show loading state
-        document.getElementById('save-trip-edit-btn').disabled = true;
-        document.getElementById('save-trip-edit-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Saving...';
-        
-        // Update trip in Firestore
-        await db.collection('trips').doc(currentTrip.id).update({
-            name: name,
-            startLocation: startLocation,
-            destination: destination,
-            startDate: startDate,
-            endDate: endDate,
-            budget: budget,
-            description: description,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        
-        // Update local state
-        currentTrip.name = name;
-        currentTrip.startLocation = startLocation;
-        currentTrip.destination = destination;
-        currentTrip.startDate = startDate;
-        currentTrip.endDate = endDate;
-        currentTrip.budget = budget;
-        currentTrip.description = description;
-        
-        // Update UI
-        document.getElementById('trip-details-name').textContent = name;
-        
-        // Close modal
-        const modal = bootstrap.Modal.getInstance(document.getElementById('editTripModal'));
-        modal.hide();
-        
-        // Reload trip details to reflect changes
-        loadTripDetails();
-        
-        showToast('Trip updated successfully!', 'success');
-        
-    } catch (error) {
-        console.error('Error updating trip:', error);
-        showToast('Error updating trip. Please try again.', 'danger');
-    } finally {
-        // Reset button state
-        document.getElementById('save-trip-edit-btn').disabled = false;
-        document.getElementById('save-trip-edit-btn').innerHTML = 'Save Changes';
-    }
-}
-
-// Confirm Trip Deletion
-function confirmDeleteTrip() {
-    if (!currentTrip) return;
-    
-    // Check if current user is the trip creator
-    if (currentTrip.createdBy !== auth.currentUser.uid) {
-        showToast('Only the trip creator can delete the trip', 'warning');
-        return;
-    }
-    
-    const confirmation = confirm(`Are you sure you want to delete the trip "${currentTrip.name}"? This action cannot be undone and all trip data (expenses, itinerary, etc.) will be permanently lost.`);
-    
-    if (confirmation) {
-        deleteTrip();
-    }
-}
-
-// Delete Trip
-// Delete Trip
-async function deleteTrip() {
-    if (!currentTrip) return;
-    
-    try {
-        // Store references before async operations
-        const deleteBtn = document.getElementById('delete-trip-btn');
-        const originalContent = deleteBtn.innerHTML;
-        
-        // Show loading state
-        deleteBtn.disabled = true;
-        deleteBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Deleting...';
-        
-        // Delete trip from Firestore
-        await db.collection('trips').doc(currentTrip.id).delete();
-        
-        showToast('Trip deleted successfully!', 'success');
-        
-        // Navigate back to dashboard after a short delay
-        setTimeout(() => {
-            navigateTo('dashboard.html');
-        }, 1500);
-        
-    } catch (error) {
-        console.error('Error deleting trip:', error);
-        
-        // Reset button state safely
-        const deleteBtn = document.getElementById('delete-trip-btn');
-        if (deleteBtn) {
-            deleteBtn.disabled = false;
-            deleteBtn.innerHTML = '<i class="fas fa-trash me-2"></i>Delete Trip';
-        }
-        
-        // Show error message
-        showToast('Error deleting trip. Please try again.', 'danger');
-    }
-}
-
 async function loadTripDetails() {
     currentTrip = getCurrentTrip();
     
@@ -283,21 +123,6 @@ async function loadTripDetails() {
         document.getElementById('trip-details-name').textContent = currentTrip.name;
         document.getElementById('trip-details-code').textContent = currentTrip.code;
         
-        // Show/hide action buttons based on ownership
-        const isCreator = currentTrip.createdBy === auth.currentUser.uid;
-        const actionsDropdown = document.getElementById('tripActionsDropdown');
-        const editBtn = document.getElementById('edit-trip-btn');
-        const deleteBtn = document.getElementById('delete-trip-btn');
-        
-        if (!isCreator) {
-            // Hide edit and delete options for non-creators
-            editBtn.style.display = 'none';
-            deleteBtn.style.display = 'none';
-            
-            // Update dropdown text
-            actionsDropdown.innerHTML = '<i class="fas fa-users me-1"></i>Members';
-        }
-        
         // Load trip data
         await loadTripOverview(currentTrip);
         loadTripExpenses(currentTrip);
@@ -305,7 +130,7 @@ async function loadTripDetails() {
         loadTripRoute(currentTrip);
         
         // Add leave trip button if user is not the creator
-        if (!isCreator) {
+        if (currentTrip.createdBy !== auth.currentUser.uid) {
             addLeaveTripButton();
         }
         
@@ -1522,26 +1347,17 @@ function navigateTo(page) {
 }
 
 function getCurrentTrip() {
-    const trip = sessionStorage.getItem('currentTrip');
-    return trip ? JSON.parse(trip) : null;
+    const tripData = localStorage.getItem('currentTrip');
+    return tripData ? JSON.parse(tripData) : null;
 }
 
 function setCurrentTrip(trip) {
-    sessionStorage.setItem('currentTrip', JSON.stringify(trip));
+    localStorage.setItem('currentTrip', JSON.stringify(trip));
     currentTrip = trip;
 }
 
 function showToast(message, type = 'info') {
-    // Create toast container if it doesn't exist
-    let toastContainer = document.getElementById('toast-container');
-    if (!toastContainer) {
-        toastContainer = document.createElement('div');
-        toastContainer.id = 'toast-container';
-        toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
-        toastContainer.style.zIndex = '1100';
-        document.body.appendChild(toastContainer);
-    }
-    
+    const toastContainer = document.getElementById('toast-container');
     const toastId = 'toast-' + Date.now();
     
     const toast = document.createElement('div');
@@ -1554,7 +1370,6 @@ function showToast(message, type = 'info') {
     toast.innerHTML = `
         <div class="d-flex">
             <div class="toast-body">
-                <i class="fas ${getToastIcon(type)} me-2"></i>
                 ${message}
             </div>
             <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
@@ -1572,21 +1387,6 @@ function showToast(message, type = 'info') {
     
     // Remove toast from DOM after it's hidden
     toast.addEventListener('hidden.bs.toast', () => {
-        if (toast.parentNode) {
-            toast.remove();
-        }
+        toast.remove();
     });
-    
-    return bsToast;
-}
-
-// Helper function to get appropriate icon for toast type
-function getToastIcon(type) {
-    switch(type) {
-        case 'success': return 'fa-check-circle';
-        case 'danger': return 'fa-exclamation-circle';
-        case 'warning': return 'fa-exclamation-triangle';
-        case 'info': 
-        default: return 'fa-info-circle';
-    }
 }
