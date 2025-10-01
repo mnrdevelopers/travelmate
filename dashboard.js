@@ -401,10 +401,11 @@ async function calculateDistance() {
         
     } catch (error) {
         console.error('Error calculating distance:', error);
+        const errorMessage = handleRouteCalculationError(error);
         document.getElementById('distance-details').innerHTML = `
             <div class="alert alert-danger">
                 <i class="fas fa-exclamation-triangle me-2"></i>
-                Error calculating distance. Please try again.
+                ${errorMessage}
             </div>
         `;
     }
@@ -416,8 +417,8 @@ function displayDistanceResults(distance, duration) {
     distanceDetails.innerHTML = `
         <p><strong>Distance:</strong> ${distance}</p>
         <p><strong>Estimated Travel Time:</strong> ${duration}</p>
-        <div class="alert alert-info mt-2">
-            <small><i class="fas fa-info-circle me-1"></i>Distance calculated using OpenRouteService API</small>
+        <div class="alert alert-success mt-2">
+            <small><i class="fas fa-check-circle me-1"></i>Distance calculated using OpenRouteService API</small>
         </div>
     `;
 }
