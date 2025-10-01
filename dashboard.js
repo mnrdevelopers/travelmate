@@ -856,7 +856,50 @@ async function debugRoute() {
     }
 }
 
-// Call this immediately to test
+// Test with specific coordinates to verify API works
+async function testWithKnownCoordinates() {
+    console.log('=== 🧪 TEST WITH KNOWN COORDINATES ===');
+    
+    // Known coordinates for Hyderabad to Bangalore (should work)
+    const testRequest = {
+        coordinates: [
+            [78.4867, 17.3850], // Hyderabad
+            [77.5946, 12.9716]  // Bangalore
+        ],
+        instructions: false,
+        preference: 'recommended', 
+        units: 'km'
+    };
+    
+    try {
+        const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
+            method: 'POST',
+            headers: {
+                'Authorization': OPENROUTESERVICE_API_KEY,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(testRequest)
+        });
+        
+        console.log('🧪 Test response status:', response.status);
+        
+        if (response.ok) {
+            const data = await response.json();
+            const distance = (data.routes[0].summary.distance / 1000).toFixed(1);
+            console.log('🧪 Test SUCCESS: Distance:', distance + ' km');
+            showAlert(`🧪 API Test: Hyderabad to Bangalore = ${distance} km`, 'success');
+        } else {
+            const error = await response.text();
+            console.error('🧪 Test FAILED:', error);
+            showAlert('🧪 API Test Failed', 'danger');
+        }
+    } catch (error) {
+        console.error('🧪 Test ERROR:', error);
+    }
+}
+
+// Call both tests
 setTimeout(() => {
     debugRoute();
+    testWithKnownCoordinates();
 }, 1000);
