@@ -230,3 +230,59 @@
             color: #06d6a0;
             font-weight: bold;
         }
+
+/* Fix scroll issues */
+html, body {
+    height: 100%;
+    overflow: auto;
+}
+
+#app {
+    min-height: 100vh;
+    overflow: visible;
+}
+
+#trip-details-screen {
+    min-height: calc(100vh - 76px);
+    overflow: visible;
+}
+
+.tab-content {
+    overflow: visible;
+    min-height: 400px;
+}
+
+/* Ensure modals don't break scroll */
+.modal {
+    overflow-y: auto;
+}
+
+.modal-content {
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+/* Fix navbar positioning */
+.navbar {
+    position: sticky;
+    top: 0;
+    z-index: 1020;
+}
+
+/* Better scroll for members list */
+#members-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+/* Better scroll for expenses list */
+#expenses-list {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+/* Better scroll for itinerary */
+#itinerary-days {
+    max-height: 600px;
+    overflow-y: auto;
+}
