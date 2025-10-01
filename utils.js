@@ -73,7 +73,7 @@ async function geocodeLocation(location) {
         console.log('🎯 Searching for:', searchLocation);
         
         const searchQuery = encodeURIComponent(searchLocation);
-        const url = `https://api.openrouteservice.org/geocode/search?api_key=${OPENROUTESERVICE_API_KEY}&text=${searchQuery}&boundary.country=IN&size=5`;
+        const url = `https://api.openrouteservice.org/geocode/search?api_key=${OPENROUTESERVICE_API_KEY}&text=${searchQuery}&boundary.country=IND&size=5`;
         
         console.log('🌐 Geocoding URL:', url);
         
@@ -139,9 +139,9 @@ async function geocodeLocation(location) {
             const lon = coordinates[0];
             const lat = coordinates[1];
             
-            // India roughly spans from 68°E to 97°E and 8°N to 37°N
-            if (lon < 68 || lon > 97 || lat < 8 || lat > 37) {
-                console.warn('⚠️ Coordinates outside India bounds:', lon, lat);
+           // India roughly spans 68–98E and 6–37N
+if (lon < 68 || lon > 98 || lat < 6 || lat > 37) {
+    console.warn('⚠️ Coordinates outside India bounds:', lon, lat);
                 // Try to find a better feature within India bounds
                 for (const feature of data.features) {
                     const coords = feature.geometry.coordinates;
