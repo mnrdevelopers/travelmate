@@ -17,7 +17,12 @@ function setupTripDetailsEventListeners() {
     document.getElementById('add-activity-btn').addEventListener('click', showAddActivityModal);
     document.getElementById('save-activity-btn').addEventListener('click', saveActivity);
     document.getElementById('calculate-route-btn').addEventListener('click', calculateRoute);
-    document.getElementById('nav-profile').addEventListener('click', showProfileModal);
+    
+    // Profile navigation - check if element exists first
+    const navProfile = document.getElementById('nav-profile');
+    if (navProfile) {
+        navProfile.addEventListener('click', showProfileModal);
+    }
     
     // Enhanced CRUD event listeners
     setupEnhancedCRUDEventListeners();
@@ -358,7 +363,6 @@ function createExpenseItem(expense, index) {
     const categoryName = getCategoryName(expense.category);
     const expenseDate = new Date(expense.date).toLocaleDateString();
     
-    // Get payment mode display text and icon
     const paymentModeInfo = getPaymentModeInfo(expense.paymentMode);
     
     expenseItem.innerHTML = `
@@ -376,7 +380,7 @@ function createExpenseItem(expense, index) {
                     <div class="mt-1">
                         <small class="text-muted">
                             <i class="fas fa-user me-1"></i>
-                            Added by: ${expense.addedBy === auth.currentUser.uid ? 'You' : 'Loading...'}
+                            <span class="added-by-text">Added by: Loading...</span>
                         </small>
                     </div>
                 </div>
@@ -404,21 +408,23 @@ function createExpenseItem(expense, index) {
 }
 
 async function loadMemberNameForExpense(expenseItem, memberId) {
+    const addedByElement = expenseItem.querySelector('.text-muted small');
+    if (!addedByElement) {
+        console.warn('Added by element not found in expense item');
+        return;
+    }
+    
     if (memberId === auth.currentUser.uid) {
-        expenseItem.querySelector('.text-muted small').innerHTML = '<i class="fas fa-user me-1"></i>Added by: You';
+        addedByElement.innerHTML = '<i class="fas fa-user me-1"></i>Added by: You';
         return;
     }
     
     try {
         const memberName = await getMemberName(memberId);
-        const addedByElement = expenseItem.querySelector('.text-muted small');
-        if (addedByElement) {
-            addedByElement.innerHTML = `<i class="fas fa-user me-1"></i>Added by: ${memberName}`;
-        }
+        addedByElement.innerHTML = `<i class="fas fa-user me-1"></i>Added by: ${memberName}`;
     } catch (error) {
         console.error('Error loading member name for expense:', error);
-        // Set a default value
-        expenseItem.querySelector('.text-muted small').innerHTML = '<i class="fas fa-user me-1"></i>Added by: Traveler';
+        addedByElement.innerHTML = '<i class="fas fa-user me-1"></i>Added by: Traveler';
     }
 }
 
@@ -1362,5 +1368,100 @@ function handleRouteCalculationError(error) {
         return 'One or both locations could not be found. Please check the location names.';
     } else {
         return 'Failed to calculate route. Please check your locations and try again.';
+    }
+}
+
+// Add this function to trip-details.js
+function showProfileModal() {
+    const user = auth.currentUser;
+    if (!user) return;
+    
+    // Create profile modal HTML dynamically since it doesn't exist in trip-details.html
+    const modalHtml = `
+        <div class="modal fade" id="profileModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">My Profile</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="profile-form">
+                            <div class="text-center mb-4">
+                                <img id="profile-avatar" class="user-avatar mb-3" style="width: 100px; height: 100px;" src="${user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}&background=4361ee&color=fff`}" alt="Profile">
+                            </div>
+                            <div class="mb-3">
+                                <label for="profile-name" class="form-label">Display Name</label>
+                                <input type="text" class="form-control" id="profile-name" value="${user.displayName || ''}" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Email</label>
+                                <input type="email" class="form-control" value="${user.email || ''}" disabled>
+                                <small class="text-muted">Email cannot be changed</small>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">User ID</label>
+                                <input type="text" class="form-control" value="${user.uid}" disabled>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-primary" onclick="updateProfile()">Save Changes</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remove existing modal if any
+    const existingModal = document.getElementById('profileModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Add modal to DOM
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Show the modal
+    const modal = new bootstrap.Modal(document.getElementById('profileModal'));
+    modal.show();
+}
+
+// Add profile update function
+async function updateProfile() {
+    const name = document.getElementById('profile-name').value.trim();
+    
+    if (!name) {
+        showToast('Please enter a display name', 'warning');
+        return;
+    }
+    
+    try {
+        const saveBtn = document.querySelector('#profileModal .btn-primary');
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+        
+        await auth.currentUser.updateProfile({
+            displayName: name
+        });
+        
+        // Update user document in Firestore
+        await db.collection('users').doc(auth.currentUser.uid).update({
+            name: name,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        // Update UI
+        loadUserData();
+        
+        const modal = bootstrap.Modal.getInstance(document.getElementById('profileModal'));
+        modal.hide();
+        
+        showToast('Profile updated successfully!', 'success');
+        
+    } catch (error) {
+        console.error('Error updating profile:', error);
+        showToast('Error updating profile', 'danger');
     }
 }
