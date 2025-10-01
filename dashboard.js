@@ -526,6 +526,7 @@ async function saveTrip() {
     const startDate = document.getElementById('start-date').value;
     const endDate = document.getElementById('end-date').value;
     const budget = parseFloat(document.getElementById('trip-budget').value);
+    const calculateDistance = document.getElementById('calculate-distance').checked;
     
     if (!name || !validateLocation(startLocation) || !validateLocation(destination) || !startDate || !endDate || !budget) {
         showAlert('Please fill in all fields with valid data', 'warning');
@@ -559,6 +560,27 @@ async function saveTrip() {
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
+    
+    // Calculate route if requested
+    if (calculateDistance) {
+        try {
+            document.getElementById('save-trip-btn').disabled = true;
+            document.getElementById('save-trip-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Calculating Route...';
+            
+            const routeData = await calculateRealDistance(startLocation, destination);
+            tripData.route = {
+                ...routeData,
+                calculatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            
+            console.log('Route calculated during trip creation:', routeData);
+            
+        } catch (error) {
+            console.error('Error calculating route during trip creation:', error);
+            // Continue without route data if calculation fails
+            showAlert('Trip created but route calculation failed. You can calculate it later.', 'warning');
+        }
+    }
     
     try {
         document.getElementById('save-trip-btn').disabled = true;
