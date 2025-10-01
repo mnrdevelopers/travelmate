@@ -26,6 +26,29 @@ function setupDashboardEventListeners() {
             document.getElementById('distance-results').classList.add('d-none');
         }
     });
+    
+    // Profile CRUD operations
+    setupProfileEventListeners();
+}
+
+function setupProfileEventListeners() {
+    const navProfile = document.getElementById('nav-profile');
+    const saveProfileBtn = document.getElementById('save-profile-btn');
+    const avatarUpload = document.getElementById('avatar-upload');
+    const leaveAllTripsBtn = document.getElementById('leave-all-trips-btn');
+    
+    if (navProfile) {
+        navProfile.addEventListener('click', showProfileModal);
+    }
+    if (saveProfileBtn) {
+        saveProfileBtn.addEventListener('click', saveProfile);
+    }
+    if (avatarUpload) {
+        avatarUpload.addEventListener('change', handleAvatarUpload);
+    }
+    if (leaveAllTripsBtn) {
+        leaveAllTripsBtn.addEventListener('click', leaveAllTrips);
+    }
 }
 
 function initializeApp() {
@@ -234,6 +257,132 @@ function showJoinTripModal() {
     
     const modal = new bootstrap.Modal(document.getElementById('joinTripModal'));
     modal.show();
+}
+
+// Profile CRUD Operations
+function showProfileModal(e) {
+    e.preventDefault();
+    loadProfileData();
+    const modal = new bootstrap.Modal(document.getElementById('profileModal'));
+    modal.show();
+}
+
+async function loadProfileData() {
+    try {
+        const userDoc = await db.collection('users').doc(currentUser.uid).get();
+        if (userDoc.exists) {
+            const userData = userDoc.data();
+            document.getElementById('profile-name').value = userData.name || '';
+            document.getElementById('profile-email').value = currentUser.email;
+            document.getElementById('profile-userid').value = currentUser.uid;
+            document.getElementById('profile-avatar').src = userData.photoURL || currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name || 'User')}&background=4361ee&color=fff`;
+        } else {
+            // If user document doesn't exist, use auth data
+            document.getElementById('profile-name').value = currentUser.displayName || '';
+            document.getElementById('profile-email').value = currentUser.email;
+            document.getElementById('profile-userid').value = currentUser.uid;
+            document.getElementById('profile-avatar').src = currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || 'User')}&background=4361ee&color=fff`;
+        }
+    } catch (error) {
+        console.error('Error loading profile:', error);
+        showAlert('Error loading profile data', 'danger');
+    }
+}
+
+async function saveProfile() {
+    const name = document.getElementById('profile-name').value.trim();
+    
+    if (!name) {
+        showAlert('Please enter a display name', 'warning');
+        return;
+    }
+
+    try {
+        document.getElementById('save-profile-btn').disabled = true;
+        document.getElementById('save-profile-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+
+        // Update user document in Firestore
+        await db.collection('users').doc(currentUser.uid).set({
+            name: name,
+            email: currentUser.email,
+            uid: currentUser.uid,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        // Update current user display name in Firebase Auth
+        await currentUser.updateProfile({
+            displayName: name
+        });
+
+        // Update UI
+        document.getElementById('user-name').textContent = name;
+        
+        const modal = bootstrap.Modal.getInstance(document.getElementById('profileModal'));
+        modal.hide();
+        
+        showAlert('Profile updated successfully!', 'success');
+        
+    } catch (error) {
+        console.error('Error saving profile:', error);
+        showAlert('Error updating profile', 'danger');
+    } finally {
+        document.getElementById('save-profile-btn').disabled = false;
+        document.getElementById('save-profile-btn').innerHTML = 'Save Changes';
+    }
+}
+
+async function handleAvatarUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Note: For full avatar upload, you'd need Firebase Storage
+    // This is a simplified version that just shows a message
+    showAlert('Avatar upload requires Firebase Storage setup. For now, you can update your display name.', 'info');
+    
+    // Reset the file input
+    event.target.value = '';
+}
+
+async function leaveAllTrips() {
+    if (!confirm('Are you sure you want to leave all trips? This action cannot be undone.')) {
+        return;
+    }
+
+    try {
+        document.getElementById('leave-all-trips-btn').disabled = true;
+        document.getElementById('leave-all-trips-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Leaving...';
+
+        // Remove user from all trips
+        const batch = db.batch();
+        
+        for (const trip of userTrips) {
+            if (trip.members.includes(currentUser.uid)) {
+                const tripRef = db.collection('trips').doc(trip.id);
+                batch.update(tripRef, {
+                    members: firebase.firestore.FieldValue.arrayRemove(currentUser.uid),
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            }
+        }
+        
+        await batch.commit();
+        
+        // Clear local state
+        userTrips = [];
+        displayTrips();
+        
+        const modal = bootstrap.Modal.getInstance(document.getElementById('profileModal'));
+        modal.hide();
+        
+        showAlert('Successfully left all trips!', 'success');
+        
+    } catch (error) {
+        console.error('Error leaving trips:', error);
+        showAlert('Error leaving trips', 'danger');
+    } finally {
+        document.getElementById('leave-all-trips-btn').disabled = false;
+        document.getElementById('leave-all-trips-btn').innerHTML = '<i class="fas fa-sign-out-alt me-1"></i>Leave All Trips';
+    }
 }
 
 async function calculateDistance() {
@@ -524,4 +673,24 @@ async function handleLogout() {
 // Utility function to get trip by ID
 function getTripById(tripId) {
     return userTrips.find(trip => trip.id === tripId);
+}
+
+// Utility function to generate trip code
+function generateTripCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 6; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+}
+
+// Utility function to set current trip
+function setCurrentTrip(trip) {
+    localStorage.setItem('currentTrip', JSON.stringify(trip));
+}
+
+// Utility function to navigate to page
+function navigateTo(page) {
+    window.location.href = page;
 }
