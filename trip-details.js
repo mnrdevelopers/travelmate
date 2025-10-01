@@ -222,13 +222,18 @@ function confirmDeleteTrip() {
 }
 
 // Delete Trip
+// Delete Trip
 async function deleteTrip() {
     if (!currentTrip) return;
     
     try {
+        // Store references before async operations
+        const deleteBtn = document.getElementById('delete-trip-btn');
+        const originalContent = deleteBtn.innerHTML;
+        
         // Show loading state
-        document.getElementById('delete-trip-btn').disabled = true;
-        document.getElementById('delete-trip-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Deleting...';
+        deleteBtn.disabled = true;
+        deleteBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Deleting...';
         
         // Delete trip from Firestore
         await db.collection('trips').doc(currentTrip.id).delete();
@@ -242,11 +247,16 @@ async function deleteTrip() {
         
     } catch (error) {
         console.error('Error deleting trip:', error);
-        showToast('Error deleting trip. Please try again.', 'danger');
         
-        // Reset button state
-        document.getElementById('delete-trip-btn').disabled = false;
-        document.getElementById('delete-trip-btn').innerHTML = '<i class="fas fa-trash me-2"></i>Delete Trip';
+        // Reset button state safely
+        const deleteBtn = document.getElementById('delete-trip-btn');
+        if (deleteBtn) {
+            deleteBtn.disabled = false;
+            deleteBtn.innerHTML = '<i class="fas fa-trash me-2"></i>Delete Trip';
+        }
+        
+        // Show error message
+        showToast('Error deleting trip. Please try again.', 'danger');
     }
 }
 
@@ -1522,7 +1532,16 @@ function setCurrentTrip(trip) {
 }
 
 function showToast(message, type = 'info') {
-    const toastContainer = document.getElementById('toast-container');
+    // Create toast container if it doesn't exist
+    let toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toast-container';
+        toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+        toastContainer.style.zIndex = '1100';
+        document.body.appendChild(toastContainer);
+    }
+    
     const toastId = 'toast-' + Date.now();
     
     const toast = document.createElement('div');
@@ -1535,6 +1554,7 @@ function showToast(message, type = 'info') {
     toast.innerHTML = `
         <div class="d-flex">
             <div class="toast-body">
+                <i class="fas ${getToastIcon(type)} me-2"></i>
                 ${message}
             </div>
             <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
@@ -1552,6 +1572,21 @@ function showToast(message, type = 'info') {
     
     // Remove toast from DOM after it's hidden
     toast.addEventListener('hidden.bs.toast', () => {
-        toast.remove();
+        if (toast.parentNode) {
+            toast.remove();
+        }
     });
+    
+    return bsToast;
+}
+
+// Helper function to get appropriate icon for toast type
+function getToastIcon(type) {
+    switch(type) {
+        case 'success': return 'fa-check-circle';
+        case 'danger': return 'fa-exclamation-circle';
+        case 'warning': return 'fa-exclamation-triangle';
+        case 'info': 
+        default: return 'fa-info-circle';
+    }
 }
