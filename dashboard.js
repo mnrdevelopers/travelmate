@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', function() {
     checkAuthState();
     setupDashboardEventListeners();
     initializeApp();
+    setupAsyncErrorHandling();
 });
 
 function setupDashboardEventListeners() {
@@ -85,9 +86,32 @@ async function loadUserTrips() {
             });
         });
         
+        // Fix: Sort without assuming createdAt is a Firestore timestamp
         userTrips.sort((a, b) => {
-            const dateA = a.createdAt ? a.createdAt.toDate() : new Date(0);
-            const dateB = b.createdAt ? b.createdAt.toDate() : new Date(0);
+            let dateA, dateB;
+            
+            // Handle createdAt field for trip A
+            if (a.createdAt && typeof a.createdAt.toDate === 'function') {
+                dateA = a.createdAt.toDate();
+            } else if (a.createdAt instanceof Date) {
+                dateA = a.createdAt;
+            } else if (a.createdAt) {
+                dateA = new Date(a.createdAt);
+            } else {
+                dateA = new Date(0);
+            }
+            
+            // Handle createdAt field for trip B
+            if (b.createdAt && typeof b.createdAt.toDate === 'function') {
+                dateB = b.createdAt.toDate();
+            } else if (b.createdAt instanceof Date) {
+                dateB = b.createdAt;
+            } else if (b.createdAt) {
+                dateB = new Date(b.createdAt);
+            } else {
+                dateB = new Date(0);
+            }
+            
             return dateB - dateA;
         });
         
@@ -169,9 +193,20 @@ function createTripCard(trip) {
     if (remaining < 0) progressBarClass = 'bg-danger';
     else if (remaining < trip.budget * 0.2) progressBarClass = 'bg-warning';
     
-    const createdDate = trip.createdAt ? 
-        new Date(trip.createdAt.toDate()).toLocaleDateString() : 
-        'Recently';
+    // Fix: Handle createdAt field properly
+    let createdDate = 'Recently';
+    if (trip.createdAt) {
+        if (typeof trip.createdAt.toDate === 'function') {
+            // It's a Firestore Timestamp
+            createdDate = trip.createdAt.toDate().toLocaleDateString();
+        } else if (trip.createdAt instanceof Date) {
+            // It's already a Date object
+            createdDate = trip.createdAt.toLocaleDateString();
+        } else if (typeof trip.createdAt === 'string') {
+            // It's a string
+            createdDate = new Date(trip.createdAt).toLocaleDateString();
+        }
+    }
     
     col.innerHTML = `
         <div class="card trip-card" data-trip-id="${trip.id}">
@@ -472,8 +507,8 @@ async function saveTrip() {
         const docRef = await db.collection('trips').add(tripData);
         tripData.id = docRef.id;
         
-        userTrips.unshift(tripData);
-        displayTrips();
+        // Fix: Use a fresh reload instead of adding to array
+        await loadUserTrips();
         
         const modal = bootstrap.Modal.getInstance(document.getElementById('createTripModal'));
         modal.hide();
@@ -604,4 +639,13 @@ async function handleLogout() {
         console.error('Logout error:', error);
         showAlert('Error during logout. Please try again.', 'danger');
     }
+}
+
+function setupAsyncErrorHandling() {
+    // Handle unhandled promise rejections
+    window.addEventListener('unhandledrejection', function(event) {
+        console.warn('Unhandled promise rejection:', event.reason);
+        // Prevent the default browser error logging
+        event.preventDefault();
+    });
 }
