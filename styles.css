@@ -435,3 +435,13 @@ html, body {
         transform: scale(1);
     }
 }
+
+/* Add missing utility classes */
+.flex-shrink-0 { flex-shrink: 0; }
+.flex-grow-1 { flex-grow: 1; }
+.gap-2 { gap: 0.5rem; }
+
+/* Fix progress bar colors */
+.progress-bar.bg-success { background-color: #28a745 !important; }
+.progress-bar.bg-warning { background-color: #ffc107 !important; }
+.progress-bar.bg-danger { background-color: #dc3545 !important; }
