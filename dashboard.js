@@ -853,3 +853,20 @@ function testRouteCalculation() {
             showAlert('Test failed: ' + error.message, 'danger');
         });
 }
+
+function validateDates(startDate, endDate) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (start < today) {
+        showAlert('Start date cannot be in the past', 'warning');
+        return false;
+    }
+    if (end <= start) {
+        showAlert('End date must be after start date', 'warning');
+        return false;
+    }
+    return true;
+}
