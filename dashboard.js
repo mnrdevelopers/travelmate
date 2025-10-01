@@ -56,21 +56,59 @@ async function loadUserTrips() {
     try {
         showLoadingState(true);
         
-        const tripsSnapshot = await db.collection('trips')
-            .where('members', 'array-contains', currentUser.uid)
-            .orderBy('createdAt', 'desc')
-            .get();
-        
-        userTrips = [];
-        tripsSnapshot.forEach(doc => {
-            const tripData = doc.data();
-            userTrips.push({
-                id: doc.id,
-                ...tripData
+        // Method 1: First try the optimized query with index
+        try {
+            const tripsSnapshot = await db.collection('trips')
+                .where('members', 'array-contains', currentUser.uid)
+                .orderBy('createdAt', 'desc')
+                .get();
+            
+            userTrips = [];
+            tripsSnapshot.forEach(doc => {
+                const tripData = doc.data();
+                userTrips.push({
+                    id: doc.id,
+                    ...tripData
+                });
             });
-        });
-        
-        displayTrips();
+            
+            displayTrips();
+            return;
+            
+        } catch (indexError) {
+            if (indexError.code === 'failed-precondition') {
+                console.log('Index not ready, falling back to client-side sorting');
+                
+                // Method 2: Fallback - get all trips and sort client-side
+                const allTripsSnapshot = await db.collection('trips')
+                    .where('members', 'array-contains', currentUser.uid)
+                    .get();
+                
+                userTrips = [];
+                allTripsSnapshot.forEach(doc => {
+                    const tripData = doc.data();
+                    userTrips.push({
+                        id: doc.id,
+                        ...tripData
+                    });
+                });
+                
+                // Sort by createdAt on client side
+                userTrips.sort((a, b) => {
+                    const dateA = a.createdAt ? a.createdAt.toDate() : new Date(0);
+                    const dateB = b.createdAt ? b.createdAt.toDate() : new Date(0);
+                    return dateB - dateA; // Descending order
+                });
+                
+                displayTrips();
+                
+                // Show info about creating index for better performance
+                showIndexCreationInfo();
+                
+            } else {
+                throw indexError; // Re-throw other errors
+            }
+        }
         
     } catch (error) {
         console.error('Error loading trips:', error);
@@ -78,6 +116,92 @@ async function loadUserTrips() {
     } finally {
         showLoadingState(false);
     }
+}
+
+function showIndexCreationInfo() {
+    // Only show this once per session
+    if (!sessionStorage.getItem('indexInfoShown')) {
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'alert alert-info alert-dismissible fade show mt-3';
+        infoDiv.innerHTML = `
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>Performance Tip:</strong> For faster loading, create a Firestore index. 
+            <a href="#" id="create-index-link" class="alert-link">Click here for instructions</a>.
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        document.querySelector('.container').insertBefore(infoDiv, document.querySelector('.container').firstChild);
+        
+        // Add click handler for the link
+        document.getElementById('create-index-link').addEventListener('click', function(e) {
+            e.preventDefault();
+            showIndexCreationModal();
+        });
+        
+        sessionStorage.setItem('indexInfoShown', 'true');
+    }
+}
+
+function showIndexCreationModal() {
+    const modalHtml = `
+        <div class="modal fade" id="indexCreationModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Create Firestore Index</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <h6>Follow these steps to create the required index:</h6>
+                        <ol class="mt-3">
+                            <li>Go to the <a href="https://console.firebase.google.com" target="_blank">Firebase Console</a></li>
+                            <li>Select your project "travel-mate-5729f"</li>
+                            <li>Go to Firestore Database → Indexes</li>
+                            <li>Click "Create Index"</li>
+                            <li>Fill in the following details:
+                                <ul class="mt-2">
+                                    <li><strong>Collection ID:</strong> trips</li>
+                                    <li><strong>Fields to index:</strong>
+                                        <ul>
+                                            <li>Field 1: <code>members</code> (Array) → Ascending</li>
+                                            <li>Field 2: <code>createdAt</code> (Date) → Descending</li>
+                                        </ul>
+                                    </li>
+                                    <li><strong>Query scope:</strong> Collection</li>
+                                </ul>
+                            </li>
+                            <li>Click "Create"</li>
+                        </ol>
+                        <div class="alert alert-warning mt-3">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Note:</strong> It may take a few minutes for the index to be built. 
+                            Once created, your trips will load faster.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <a href="https://console.firebase.google.com/v1/r/project/travel-mate-5729f/firestore/indexes?create_composite=Ck9wcm9qZWN0cy90cmF2ZWwtbWF0ZS01NzI5Zi9kYXRhYmFzZXMvKGRlZmF1bHQpL2NvbGxlY3Rpb25Hcm91cHMvdHJpcHMvaW5kZXhlcy9fEAEaCwoHbWVtYmVycxgBGg0KCWNyZWF0ZWRBdBACGgwKCF9fbmFtZV9fEAI" 
+                           target="_blank" class="btn btn-primary">
+                            <i class="fas fa-external-link-alt me-2"></i>Create Index Now
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remove existing modal if any
+    const existingModal = document.getElementById('indexCreationModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Add modal to body
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('indexCreationModal'));
+    modal.show();
 }
 
 function showLoadingState(show) {
@@ -104,6 +228,11 @@ function showError(message) {
             <div class="alert alert-danger d-flex align-items-center" role="alert">
                 <i class="fas fa-exclamation-triangle me-2"></i>
                 <div>${message}</div>
+            </div>
+            <div class="text-center mt-3">
+                <button class="btn btn-primary" onclick="loadUserTrips()">
+                    <i class="fas fa-redo me-2"></i>Try Again
+                </button>
             </div>
         </div>
     `;
@@ -147,6 +276,11 @@ function createTripCard(trip) {
         progressBarClass = 'bg-warning';
     }
     
+    // Format creation date
+    const createdDate = trip.createdAt ? 
+        new Date(trip.createdAt.toDate()).toLocaleDateString() : 
+        'Recently';
+    
     col.innerHTML = `
         <div class="card trip-card" data-trip-id="${trip.id}">
             <div class="trip-card-header">
@@ -169,11 +303,15 @@ function createTripCard(trip) {
                         <i class="fas fa-eye me-1"></i>View Details
                     </button>
                     <div class="d-flex align-items-center">
-                        <div class="member-avatar me-2">
+                        <div class="member-avatar me-2" title="${trip.members.length} members">
                             <i class="fas fa-users"></i>
+                            <small class="ms-1">${trip.members.length}</small>
                         </div>
                         <span class="trip-code">${trip.code}</span>
                     </div>
+                </div>
+                <div class="mt-2">
+                    <small class="text-muted">Created: ${createdDate}</small>
                 </div>
             </div>
         </div>
