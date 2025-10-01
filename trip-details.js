@@ -40,12 +40,16 @@ function setupTripDetailsEventListeners() {
 }
 
 function setupEnhancedCRUDEventListeners() {
-    // Expense CRUD
+   // Expense CRUD
     const addCustomCategoryBtn = document.getElementById('add-custom-category-btn');
+    const addCustomCategoryBtnModal = document.getElementById('add-custom-category-btn-modal');
     const saveCategoryBtn = document.getElementById('save-category-btn');
     
     if (addCustomCategoryBtn) {
         addCustomCategoryBtn.addEventListener('click', showCustomCategoryModal);
+    }
+    if (addCustomCategoryBtnModal) {
+        addCustomCategoryBtnModal.addEventListener('click', showCustomCategoryModal);
     }
     if (saveCategoryBtn) {
         saveCategoryBtn.addEventListener('click', saveCustomCategory);
