@@ -129,6 +129,14 @@ function showLoadingState(show) {
     }
 }
 
+function validateLocation(location) {
+    return location && location.trim().length > 0;
+}
+
+function validateDates(startDate, endDate) {
+    return new Date(startDate) <= new Date(endDate);
+}
+
 function showError(message) {
     const tripsContainer = document.getElementById('trips-container');
     tripsContainer.innerHTML = `
