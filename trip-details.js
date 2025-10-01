@@ -1522,12 +1522,12 @@ function navigateTo(page) {
 }
 
 function getCurrentTrip() {
-    const tripData = localStorage.getItem('currentTrip');
-    return tripData ? JSON.parse(tripData) : null;
+    const trip = sessionStorage.getItem('currentTrip');
+    return trip ? JSON.parse(trip) : null;
 }
 
 function setCurrentTrip(trip) {
-    localStorage.setItem('currentTrip', JSON.stringify(trip));
+    sessionStorage.setItem('currentTrip', JSON.stringify(trip));
     currentTrip = trip;
 }
 
