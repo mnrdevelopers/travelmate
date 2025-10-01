@@ -286,3 +286,44 @@ html, body {
     max-height: 600px;
     overflow-y: auto;
 }
+
+/* Custom category badges */
+.category-badge {
+    display: inline-block;
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-right: 5px;
+    color: white;
+}
+
+/* Action buttons */
+.edit-expense-btn, .delete-expense-btn,
+.edit-activity-btn, .delete-activity-btn {
+    margin-left: 5px;
+    padding: 2px 8px;
+}
+
+/* Leave trip button */
+.leave-trip-btn {
+    width: 100%;
+    margin-top: 10px;
+}
+
+/* Custom category colors */
+.category-custom_1 { background-color: #8B5CF6; }
+.category-custom_2 { background-color: #F59E0B; }
+.category-custom_3 { background-color: #10B981; }
+.category-custom_4 { background-color: #EF4444; }
+.category-custom_5 { background-color: #3B82F6; }
+
+/* Profile modal styles */
+#profile-avatar {
+    border: 3px solid #4361ee;
+}
+
+/* Danger zone */
+.border-top {
+    border-top: 2px solid #dee2e6 !important;
+}
