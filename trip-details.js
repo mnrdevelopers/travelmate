@@ -34,6 +34,45 @@ function setupTripDetailsEventListeners() {
     document.getElementById('add-activity-btn').addEventListener('click', showAddActivityModal);
     document.getElementById('save-activity-btn').addEventListener('click', saveActivity);
     document.getElementById('calculate-route-btn').addEventListener('click', calculateRoute);
+    
+    // Enhanced CRUD event listeners
+    setupEnhancedCRUDEventListeners();
+}
+
+function setupEnhancedCRUDEventListeners() {
+    // Expense CRUD
+    const addCustomCategoryBtn = document.getElementById('add-custom-category-btn');
+    const saveCategoryBtn = document.getElementById('save-category-btn');
+    
+    if (addCustomCategoryBtn) {
+        addCustomCategoryBtn.addEventListener('click', showCustomCategoryModal);
+    }
+    if (saveCategoryBtn) {
+        saveCategoryBtn.addEventListener('click', saveCustomCategory);
+    }
+    
+    // Add edit/delete buttons to expense items dynamically
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('edit-expense-btn') || e.target.closest('.edit-expense-btn')) {
+            const expenseId = e.target.dataset.expenseId || e.target.closest('.edit-expense-btn').dataset.expenseId;
+            editExpense(expenseId);
+        }
+        if (e.target.classList.contains('delete-expense-btn') || e.target.closest('.delete-expense-btn')) {
+            const expenseId = e.target.dataset.expenseId || e.target.closest('.delete-expense-btn').dataset.expenseId;
+            deleteExpense(expenseId);
+        }
+        if (e.target.classList.contains('edit-activity-btn') || e.target.closest('.edit-activity-btn')) {
+            const activityId = e.target.dataset.activityId || e.target.closest('.edit-activity-btn').dataset.activityId;
+            editActivity(activityId);
+        }
+        if (e.target.classList.contains('delete-activity-btn') || e.target.closest('.delete-activity-btn')) {
+            const activityId = e.target.dataset.activityId || e.target.closest('.delete-activity-btn').dataset.activityId;
+            deleteActivity(activityId);
+        }
+        if (e.target.classList.contains('leave-trip-btn') || e.target.closest('.leave-trip-btn')) {
+            leaveCurrentTrip();
+        }
+    });
 }
 
 function checkAuthState() {
@@ -80,6 +119,11 @@ async function loadTripDetails() {
         loadTripExpenses(currentTrip);
         loadTripItinerary(currentTrip);
         loadTripRoute(currentTrip);
+        
+        // Add leave trip button if user is not the creator
+        if (currentTrip.createdBy !== auth.currentUser.uid) {
+            addLeaveTripButton();
+        }
         
     } catch (error) {
         console.error('Error loading trip details:', error);
@@ -301,35 +345,59 @@ function loadTripExpenses(trip) {
     const sortedExpenses = [...trip.expenses].sort((a, b) => new Date(b.date) - new Date(a.date));
     
     expensesList.innerHTML = '';
-    sortedExpenses.forEach((expense) => {
-        const expenseItem = document.createElement('div');
-        expenseItem.className = 'expense-item';
-        
-        const categoryClass = `category-${expense.category}`;
-        const categoryName = expense.category.charAt(0).toUpperCase() + expense.category.slice(1);
-        const expenseDate = new Date(expense.date).toLocaleDateString();
-        
-        expenseItem.innerHTML = `
-            <div class="d-flex justify-content-between align-items-start">
-                <div class="flex-grow-1">
-                    <h6 class="mb-1">${expense.description}</h6>
-                    <div class="d-flex align-items-center mt-1">
-                        <span class="category-badge ${categoryClass}">${categoryName}</span>
-                        <small class="text-muted ms-2">${expenseDate}</small>
-                    </div>
-                </div>
-                <div class="text-end ms-3">
-                    <div class="fw-bold fs-5"><span class="rupee-symbol">₹</span>${expense.amount.toFixed(2)}</div>
-                    <small class="text-muted">Added by ${expense.addedBy === auth.currentUser.uid ? 'You' : 'Member'}</small>
-                </div>
-            </div>
-        `;
-        
+    sortedExpenses.forEach((expense, index) => {
+        const expenseItem = createExpenseItem(expense, index);
         expensesList.appendChild(expenseItem);
     });
     
     updateBudgetSummary(trip);
     renderExpenseChart(trip);
+}
+
+function createExpenseItem(expense, index) {
+    const expenseItem = document.createElement('div');
+    expenseItem.className = 'expense-item';
+    expenseItem.dataset.expenseId = index;
+    
+    const categoryClass = `category-${expense.category}`;
+    const categoryName = getCategoryName(expense.category);
+    const expenseDate = new Date(expense.date).toLocaleDateString();
+    
+    expenseItem.innerHTML = `
+        <div class="d-flex justify-content-between align-items-start">
+            <div class="flex-grow-1">
+                <h6 class="mb-1">${expense.description}</h6>
+                <div class="d-flex align-items-center mt-1">
+                    <span class="category-badge ${categoryClass}">${categoryName}</span>
+                    <small class="text-muted ms-2">${expenseDate}</small>
+                </div>
+            </div>
+            <div class="text-end ms-3">
+                <div class="fw-bold fs-5"><span class="rupee-symbol">₹</span>${expense.amount.toFixed(2)}</div>
+                <small class="text-muted">by ${expense.addedBy === auth.currentUser.uid ? 'You' : 'Member'}</small>
+                <div class="mt-2">
+                    ${expense.addedBy === auth.currentUser.uid ? `
+                        <button class="btn btn-sm btn-outline-primary edit-expense-btn me-1" data-expense-id="${index}">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger delete-expense-btn" data-expense-id="${index}">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    return expenseItem;
+}
+
+function getCategoryName(categoryId) {
+    const customCategory = customCategories.find(cat => cat.id === categoryId);
+    if (customCategory) {
+        return customCategory.name;
+    }
+    return categoryId.charAt(0).toUpperCase() + categoryId.slice(1);
 }
 
 function updateBudgetSummary(trip) {
@@ -376,8 +444,17 @@ function renderExpenseChart(trip) {
         other: 0
     };
     
+    // Add custom categories
+    customCategories.forEach(cat => {
+        categories[cat.id] = 0;
+    });
+    
     trip.expenses.forEach(expense => {
-        categories[expense.category] += expense.amount;
+        if (categories[expense.category] !== undefined) {
+            categories[expense.category] += expense.amount;
+        } else {
+            categories.other += expense.amount;
+        }
     });
     
     // Filter out categories with no expenses
@@ -391,9 +468,14 @@ function renderExpenseChart(trip) {
         '#073b4c'  // other
     ];
     
+    // Add colors for custom categories
+    customCategories.forEach((cat, index) => {
+        backgroundColors.push(cat.color || `#${Math.floor(Math.random()*16777215).toString(16)}`);
+    });
+    
     Object.keys(categories).forEach((category, index) => {
         if (categories[category] > 0) {
-            labels.push(category.charAt(0).toUpperCase() + category.slice(1));
+            labels.push(getCategoryName(category));
             data.push(categories[category]);
         }
     });
@@ -450,11 +532,11 @@ function loadTripItinerary(trip) {
     
     // Group activities by day
     const activitiesByDay = {};
-    trip.itinerary.forEach(activity => {
+    trip.itinerary.forEach((activity, index) => {
         if (!activitiesByDay[activity.day]) {
             activitiesByDay[activity.day] = [];
         }
-        activitiesByDay[activity.day].push(activity);
+        activitiesByDay[activity.day].push({...activity, index});
     });
     
     // Sort activities by time within each day
@@ -482,6 +564,16 @@ function loadTripItinerary(trip) {
                         <div class="flex-grow-1">
                             <h6 class="mb-1 text-primary">${activity.place}</h6>
                             ${activity.notes ? `<p class="mb-0 text-muted">${activity.notes}</p>` : ''}
+                            ${activity.addedBy === auth.currentUser.uid ? `
+                                <div class="mt-2">
+                                    <button class="btn btn-sm btn-outline-primary edit-activity-btn me-1" data-activity-id="${activity.index}">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger delete-activity-btn" data-activity-id="${activity.index}">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            ` : ''}
                         </div>
                     </div>
                 `).join('')}
@@ -532,6 +624,10 @@ function showAddExpenseModal() {
     document.getElementById('expense-date').valueAsDate = new Date();
     document.getElementById('add-expense-form').reset();
     
+    // Reset button state
+    document.getElementById('save-expense-btn').innerHTML = 'Add Expense';
+    delete document.getElementById('save-expense-btn').dataset.editingIndex;
+    
     const modal = new bootstrap.Modal(document.getElementById('addExpenseModal'));
     modal.show();
 }
@@ -541,6 +637,7 @@ async function saveExpense() {
     const amount = parseFloat(document.getElementById('expense-amount').value);
     const category = document.getElementById('expense-category').value;
     const date = document.getElementById('expense-date').value;
+    const isEditing = document.getElementById('save-expense-btn').dataset.editingIndex;
     
     if (!description || !amount || !category || !date) {
         showToast('Please fill in all fields', 'warning');
@@ -564,14 +661,21 @@ async function saveExpense() {
     try {
         // Show loading state
         document.getElementById('save-expense-btn').disabled = true;
-        document.getElementById('save-expense-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Adding...';
+        document.getElementById('save-expense-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Saving...';
         
         // Get the current trip data first
         const tripDoc = await db.collection('trips').doc(currentTrip.id).get();
         const tripData = tripDoc.data();
         
-        // Update the expenses array
-        const updatedExpenses = [...(tripData.expenses || []), expense];
+        let updatedExpenses;
+        if (isEditing !== undefined) {
+            // Update existing expense
+            updatedExpenses = [...tripData.expenses];
+            updatedExpenses[isEditing] = expense;
+        } else {
+            // Add new expense
+            updatedExpenses = [...(tripData.expenses || []), expense];
+        }
         
         // Update the trip document with the new expenses array
         await db.collection('trips').doc(currentTrip.id).update({
@@ -586,19 +690,23 @@ async function saveExpense() {
         const modal = bootstrap.Modal.getInstance(document.getElementById('addExpenseModal'));
         modal.hide();
         
+        // Reset form and button
+        document.getElementById('add-expense-form').reset();
+        document.getElementById('save-expense-btn').innerHTML = 'Add Expense';
+        delete document.getElementById('save-expense-btn').dataset.editingIndex;
+        
         // Reload trip details
         loadTripDetails();
         
         // Show success message
-        showToast('Expense added successfully!', 'success');
+        showToast(isEditing !== undefined ? 'Expense updated successfully!' : 'Expense added successfully!', 'success');
         
     } catch (error) {
-        console.error('Error adding expense:', error);
-        showToast('Error adding expense. Please try again.', 'danger');
+        console.error('Error saving expense:', error);
+        showToast('Error saving expense. Please try again.', 'danger');
     } finally {
         // Reset button state
         document.getElementById('save-expense-btn').disabled = false;
-        document.getElementById('save-expense-btn').innerHTML = 'Add Expense';
     }
 }
 
@@ -623,6 +731,10 @@ function showAddActivityModal() {
     
     document.getElementById('add-activity-form').reset();
     
+    // Reset button state
+    document.getElementById('save-activity-btn').innerHTML = 'Add Activity';
+    delete document.getElementById('save-activity-btn').dataset.editingIndex;
+    
     const modal = new bootstrap.Modal(document.getElementById('addActivityModal'));
     modal.show();
 }
@@ -632,6 +744,7 @@ async function saveActivity() {
     const time = document.getElementById('activity-time').value;
     const place = document.getElementById('activity-place').value;
     const notes = document.getElementById('activity-notes').value;
+    const isEditing = document.getElementById('save-activity-btn').dataset.editingIndex;
     
     if (!day || !time || !place) {
         showToast('Please fill in all required fields', 'warning');
@@ -650,14 +763,19 @@ async function saveActivity() {
     try {
         // Show loading state
         document.getElementById('save-activity-btn').disabled = true;
-        document.getElementById('save-activity-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Adding...';
+        document.getElementById('save-activity-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Saving...';
         
         // Get the current trip data first
         const tripDoc = await db.collection('trips').doc(currentTrip.id).get();
         const tripData = tripDoc.data();
         
-        // Update the itinerary array
-        const updatedItinerary = [...(tripData.itinerary || []), activity];
+        let updatedItinerary;
+        if (isEditing !== undefined) {
+            updatedItinerary = [...tripData.itinerary];
+            updatedItinerary[isEditing] = activity;
+        } else {
+            updatedItinerary = [...(tripData.itinerary || []), activity];
+        }
         
         // Update the trip document with the new itinerary array
         await db.collection('trips').doc(currentTrip.id).update({
@@ -672,19 +790,23 @@ async function saveActivity() {
         const modal = bootstrap.Modal.getInstance(document.getElementById('addActivityModal'));
         modal.hide();
         
+        // Reset form and button
+        document.getElementById('add-activity-form').reset();
+        document.getElementById('save-activity-btn').innerHTML = 'Add Activity';
+        delete document.getElementById('save-activity-btn').dataset.editingIndex;
+        
         // Reload trip details
         loadTripDetails();
         
         // Show success message
-        showToast('Activity added successfully!', 'success');
+        showToast(isEditing !== undefined ? 'Activity updated successfully!' : 'Activity added successfully!', 'success');
         
     } catch (error) {
-        console.error('Error adding activity:', error);
-        showToast('Error adding activity. Please try again.', 'danger');
+        console.error('Error saving activity:', error);
+        showToast('Error saving activity. Please try again.', 'danger');
     } finally {
         // Reset button state
         document.getElementById('save-activity-btn').disabled = false;
-        document.getElementById('save-activity-btn').innerHTML = 'Add Activity';
     }
 }
 
@@ -767,56 +889,275 @@ function calculateApproximateDuration(distance) {
     }
 }
 
-async function handleLogout() {
+// Enhanced CRUD Operations
+function showCustomCategoryModal() {
+    document.getElementById('custom-category-form').reset();
+    document.getElementById('category-color').value = '#6c757d';
+    const modal = new bootstrap.Modal(document.getElementById('customCategoryModal'));
+    modal.show();
+}
+
+async function saveCustomCategory() {
+    const name = document.getElementById('category-name').value.trim();
+    const color = document.getElementById('category-color').value;
+    
+    if (!name) {
+        showToast('Please enter category name', 'warning');
+        return;
+    }
+
     try {
-        await auth.signOut();
-        clearCurrentTrip();
-        navigateTo('auth.html');
+        document.getElementById('save-category-btn').disabled = true;
+        document.getElementById('save-category-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Adding...';
+
+        const category = {
+            id: 'custom_' + Date.now(),
+            name: name,
+            color: color,
+            createdBy: auth.currentUser.uid,
+            createdAt: new Date().toISOString()
+        };
+
+        // Store in user's custom categories
+        customCategories.push(category);
+        
+        // Update category dropdown
+        updateCategoryDropdown();
+        
+        const modal = bootstrap.Modal.getInstance(document.getElementById('customCategoryModal'));
+        modal.hide();
+        
+        showToast('Custom category added!', 'success');
+        
     } catch (error) {
-        console.error('Logout error:', error);
-        showToast('Error during logout', 'danger');
+        console.error('Error saving category:', error);
+        showToast('Error adding category', 'danger');
+    } finally {
+        document.getElementById('save-category-btn').disabled = false;
+        document.getElementById('save-category-btn').innerHTML = 'Add Category';
     }
 }
 
-function showToast(message, type = 'info') {
-    let toastContainer = document.getElementById('toast-container');
-    if (!toastContainer) {
-        toastContainer = document.createElement('div');
-        toastContainer.id = 'toast-container';
-        toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
-        toastContainer.style.zIndex = '9999';
-        document.body.appendChild(toastContainer);
+function updateCategoryDropdown() {
+    const categorySelect = document.getElementById('expense-category');
+    
+    // Save current selection
+    const currentSelection = categorySelect.value;
+    
+    // Clear custom options (keep default ones)
+    const defaultCategories = ['fuel', 'hotel', 'food', 'activities', 'other'];
+    categorySelect.innerHTML = '';
+    
+    // Add default categories
+    defaultCategories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category.charAt(0).toUpperCase() + category.slice(1);
+        categorySelect.appendChild(option);
+    });
+    
+    // Add custom categories
+    customCategories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category.id;
+        option.textContent = category.name;
+        option.style.color = category.color;
+        categorySelect.appendChild(option);
+    });
+    
+    // Restore selection if possible
+    if (currentSelection && categorySelect.querySelector(`[value="${currentSelection}"]`)) {
+        categorySelect.value = currentSelection;
+    }
+}
+
+async function editExpense(expenseIndex) {
+    const expense = currentTrip.expenses[expenseIndex];
+    
+    // Populate the add expense form with existing data
+    document.getElementById('expense-description').value = expense.description;
+    document.getElementById('expense-amount').value = expense.amount;
+    document.getElementById('expense-category').value = expense.category;
+    document.getElementById('expense-date').value = expense.date;
+    
+    // Change button text
+    document.getElementById('save-expense-btn').innerHTML = 'Update Expense';
+    document.getElementById('save-expense-btn').dataset.editingIndex = expenseIndex;
+    
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('addExpenseModal'));
+    modal.show();
+}
+
+async function deleteExpense(expenseIndex) {
+    if (!confirm('Are you sure you want to delete this expense?')) {
+        return;
+    }
+
+    try {
+        const updatedExpenses = currentTrip.expenses.filter((_, index) => index !== parseInt(expenseIndex));
+        
+        await db.collection('trips').doc(currentTrip.id).update({
+            expenses: updatedExpenses,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        currentTrip.expenses = updatedExpenses;
+        loadTripDetails();
+        showToast('Expense deleted successfully!', 'success');
+        
+    } catch (error) {
+        console.error('Error deleting expense:', error);
+        showToast('Error deleting expense', 'danger');
+    }
+}
+
+async function editActivity(activityIndex) {
+    const activity = currentTrip.itinerary[activityIndex];
+    
+    document.getElementById('activity-day').value = activity.day;
+    document.getElementById('activity-time').value = activity.time;
+    document.getElementById('activity-place').value = activity.place;
+    document.getElementById('activity-notes').value = activity.notes || '';
+    
+    document.getElementById('save-activity-btn').innerHTML = 'Update Activity';
+    document.getElementById('save-activity-btn').dataset.editingIndex = activityIndex;
+    
+    const modal = new bootstrap.Modal(document.getElementById('addActivityModal'));
+    modal.show();
+}
+
+async function deleteActivity(activityIndex) {
+    if (!confirm('Are you sure you want to delete this activity?')) {
+        return;
+    }
+
+    try {
+        const updatedItinerary = currentTrip.itinerary.filter((_, index) => index !== parseInt(activityIndex));
+        
+        await db.collection('trips').doc(currentTrip.id).update({
+            itinerary: updatedItinerary,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        currentTrip.itinerary = updatedItinerary;
+        loadTripDetails();
+        showToast('Activity deleted successfully!', 'success');
+        
+    } catch (error) {
+        console.error('Error deleting activity:', error);
+        showToast('Error deleting activity', 'danger');
+    }
+}
+
+async function leaveCurrentTrip() {
+    if (!confirm('Are you sure you want to leave this trip? You will need a new invitation to rejoin.')) {
+        return;
+    }
+
+    try {
+        await db.collection('trips').doc(currentTrip.id).update({
+            members: firebase.firestore.FieldValue.arrayRemove(auth.currentUser.uid),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        showToast('You have left the trip', 'success');
+        setTimeout(() => {
+            navigateTo('dashboard.html');
+        }, 1500);
+        
+    } catch (error) {
+        console.error('Error leaving trip:', error);
+        showToast('Error leaving trip', 'danger');
+    }
+}
+
+function addLeaveTripButton() {
+    const overviewTab = document.getElementById('overview');
+    const existingLeaveBtn = overviewTab.querySelector('.leave-trip-btn');
+    
+    if (existingLeaveBtn) {
+        existingLeaveBtn.remove();
     }
     
-    const toastId = 'toast-' + Date.now();
-    const toastHtml = `
-        <div id="${toastId}" class="toast align-items-center text-bg-${type} border-0" role="alert">
-            <div class="d-flex">
-                <div class="toast-body">
-                    <i class="fas fa-${getToastIcon(type)} me-2"></i>
-                    ${message}
-                </div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-            </div>
-        </div>
-    `;
+    const leaveButton = document.createElement('button');
+    leaveButton.className = 'btn btn-outline-danger btn-sm leave-trip-btn';
+    leaveButton.innerHTML = '<i class="fas fa-sign-out-alt me-1"></i>Leave Trip';
+    leaveButton.style.marginTop = '10px';
     
-    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
-    
-    const toastElement = document.getElementById(toastId);
-    const toast = new bootstrap.Toast(toastElement);
-    toast.show();
-    
-    toastElement.addEventListener('hidden.bs.toast', () => {
-        toastElement.remove();
+    const tripInfoCard = overviewTab.querySelector('.card');
+    if (tripInfoCard) {
+        const cardBody = tripInfoCard.querySelector('.card-body');
+        if (cardBody) {
+            cardBody.appendChild(leaveButton);
+        }
+    }
+}
+
+// Utility functions
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
     });
 }
 
-function getToastIcon(type) {
-    switch(type) {
-        case 'success': return 'check-circle';
-        case 'danger': return 'exclamation-triangle';
-        case 'warning': return 'exclamation-circle';
-        default: return 'info-circle';
-    }
+function handleLogout() {
+    auth.signOut().then(() => {
+        navigateTo('auth.html');
+    }).catch((error) => {
+        console.error('Logout error:', error);
+        showToast('Error logging out', 'danger');
+    });
+}
+
+function navigateTo(page) {
+    window.location.href = page;
+}
+
+function getCurrentTrip() {
+    const tripData = localStorage.getItem('currentTrip');
+    return tripData ? JSON.parse(tripData) : null;
+}
+
+function setCurrentTrip(trip) {
+    localStorage.setItem('currentTrip', JSON.stringify(trip));
+    currentTrip = trip;
+}
+
+function showToast(message, type = 'info') {
+    const toastContainer = document.getElementById('toast-container');
+    const toastId = 'toast-' + Date.now();
+    
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-bg-${type} border-0`;
+    toast.id = toastId;
+    toast.setAttribute('role', 'alert');
+    toast.setAttribute('aria-live', 'assertive');
+    toast.setAttribute('aria-atomic', 'true');
+    
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">
+                ${message}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+    `;
+    
+    toastContainer.appendChild(toast);
+    
+    const bsToast = new bootstrap.Toast(toast, {
+        autohide: true,
+        delay: 3000
+    });
+    
+    bsToast.show();
+    
+    // Remove toast from DOM after it's hidden
+    toast.addEventListener('hidden.bs.toast', () => {
+        toast.remove();
+    });
 }
