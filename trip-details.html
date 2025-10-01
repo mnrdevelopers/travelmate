@@ -6,7 +6,6 @@
     <title>TravelMate - Trip Details</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -157,17 +156,12 @@
             </div>
             
             <div id="empty-expenses" class="empty-state">
-                <lottie-player 
-                    src="https://assets10.lottiefiles.com/packages/lf20_6wutsrox.json" 
-                    background="transparent" 
-                    speed="1" 
-                    style="width: 200px; height: 200px; margin: 0 auto;" 
-                    loop 
-                    autoplay>
-                </lottie-player>
-                <h4>No expenses yet</h4>
-                <p>Start adding expenses to track your spending!</p>
-            </div>
+    <div class="empty-icon mb-4">
+        <i class="fas fa-receipt"></i>
+    </div>
+    <h4>No expenses yet</h4>
+    <p>Start adding expenses to track your spending!</p>
+</div>
         </div>
         <div class="col-md-4">
             <h4>Budget Summary</h4>
@@ -222,17 +216,12 @@
                     </div>
                     
                     <div id="empty-itinerary" class="empty-state">
-                        <lottie-player 
-                            src="https://assets7.lottiefiles.com/packages/lf20_0skurerf.json" 
-                            background="transparent" 
-                            speed="1" 
-                            style="width: 250px; height: 250px; margin: 0 auto;" 
-                            loop 
-                            autoplay>
-                        </lottie-player>
-                        <h4>No activities planned yet</h4>
-                        <p>Start adding activities to your itinerary!</p>
-                    </div>
+    <div class="empty-icon mb-4">
+        <i class="fas fa-route"></i>
+    </div>
+    <h4>No activities planned yet</h4>
+    <p>Start adding activities to your itinerary!</p>
+</div>
                 </div>
                 
                 <!-- Route Tab -->
@@ -243,21 +232,16 @@
                             <div id="route-details">
                                 <!-- Route details will be loaded here -->
                             </div>
-                            <div id="empty-route" class="empty-state">
-                                <lottie-player 
-                                    src="https://assets1.lottiefiles.com/packages/lf20_ki7nbraa.json" 
-                                    background="transparent" 
-                                    speed="1" 
-                                    style="width: 200px; height: 200px; margin: 0 auto;" 
-                                    loop 
-                                    autoplay>
-                                </lottie-player>
-                                <h4>No route information</h4>
-                                <p>Calculate distance to see route details</p>
-                                <button class="btn btn-primary mt-2" id="calculate-route-btn">
-                                    <i class="fas fa-route me-1"></i>Calculate Route
-                                </button>
-                            </div>
+                          <div id="empty-route" class="empty-state">
+    <div class="empty-icon mb-4">
+        <i class="fas fa-map-marked-alt"></i>
+    </div>
+    <h4>No route information</h4>
+    <p>Calculate distance to see route details</p>
+    <button class="btn btn-primary mt-2" id="calculate-route-btn">
+        <i class="fas fa-route me-1"></i>Calculate Route
+    </button>
+</div>
                         </div>
                     </div>
                 </div>
