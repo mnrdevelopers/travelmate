@@ -1338,9 +1338,35 @@ function addTripActions(trip) {
 }
 
 function editCurrentTrip() {
-    setCurrentTrip(currentTrip);
-    navigateTo('dashboard.html');
-    // The dashboard will detect the currentTrip and open edit modal
+    if (!currentTrip) return;
+    
+    // Populate the edit modal with current trip data
+    document.getElementById('edit-trip-id').value = currentTrip.id;
+    document.getElementById('edit-trip-name').value = currentTrip.name;
+    document.getElementById('edit-start-location').value = currentTrip.startLocation;
+    document.getElementById('edit-trip-destination').value = currentTrip.destination;
+    document.getElementById('edit-start-date').value = currentTrip.startDate;
+    document.getElementById('edit-end-date').value = currentTrip.endDate;
+    document.getElementById('edit-trip-budget').value = currentTrip.budget;
+    
+    document.getElementById('edit-distance-results').classList.add('d-none');
+    document.getElementById('edit-calculate-distance').checked = false;
+    
+    // If route already exists, show it
+    if (currentTrip.route) {
+        document.getElementById('edit-distance-results').classList.remove('d-none');
+        document.getElementById('edit-distance-details').innerHTML = `
+            <p><strong>Current Distance:</strong> ${currentTrip.route.distance}</p>
+            <p><strong>Current Travel Time:</strong> ${currentTrip.route.duration}</p>
+            <div class="alert alert-info mt-2">
+                <small><i class="fas fa-info-circle me-1"></i>Check the box above to recalculate with updated locations</small>
+            </div>
+        `;
+    }
+    
+    // Show the edit modal
+    const modal = new bootstrap.Modal(document.getElementById('editTripModal'));
+    modal.show();
 }
 
 async function deleteCurrentTrip() {
