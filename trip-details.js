@@ -356,6 +356,7 @@ function loadTripExpenses(trip) {
     
     updateBudgetSummary(trip);
     renderExpenseChart(trip);
+    renderPaymentChart(trip);
 }
 
 function createExpenseItem(expense, index) {
@@ -561,6 +562,68 @@ function renderExpenseChart(trip) {
                             const percentage = Math.round((value / total) * 100);
                             return `${label}: ₹${value.toFixed(2)} (${percentage}%)`;
                         }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderPaymentChart(trip) {
+    if (!trip.expenses || trip.expenses.length === 0) {
+        return;
+    }
+    
+    const ctx = document.getElementById('payment-chart').getContext('2d');
+    
+    // Group expenses by payment mode
+    const paymentModes = {
+        cash: 0,
+        upi: 0,
+        card: 0,
+        other: 0
+    };
+    
+    trip.expenses.forEach(expense => {
+        if (paymentModes[expense.paymentMode] !== undefined) {
+            paymentModes[expense.paymentMode] += expense.amount;
+        } else {
+            paymentModes.other += expense.amount;
+        }
+    });
+    
+    const labels = Object.keys(paymentModes).filter(mode => paymentModes[mode] > 0);
+    const data = labels.map(mode => paymentModes[mode]);
+    const backgroundColors = labels.map(mode => {
+        switch(mode) {
+            case 'cash': return '#28a745';
+            case 'upi': return '#7248b9';
+            case 'card': return '#17a2b8';
+            case 'other': return '#6c757d';
+            default: return '#6c757d';
+        }
+    });
+    
+    new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: labels.map(mode => mode.charAt(0).toUpperCase() + mode.slice(1)),
+            datasets: [{
+                data: data,
+                backgroundColor: backgroundColors,
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 15,
+                        usePointStyle: true
                     }
                 }
             }
