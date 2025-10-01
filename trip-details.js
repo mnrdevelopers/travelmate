@@ -17,6 +17,9 @@ function setupTripDetailsEventListeners() {
     document.getElementById('add-activity-btn').addEventListener('click', showAddActivityModal);
     document.getElementById('save-activity-btn').addEventListener('click', saveActivity);
     document.getElementById('calculate-route-btn').addEventListener('click', calculateRoute);
+
+    // Add event listener for update trip button in trip details page
+    document.getElementById('update-trip-btn-trip-details').addEventListener('click', updateTripFromDetails);
     
     // Profile navigation - check if element exists first
     const navProfile = document.getElementById('nav-profile');
