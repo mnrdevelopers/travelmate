@@ -395,6 +395,7 @@ async function calculateDistance() {
         `;
         document.getElementById('distance-results').classList.remove('d-none');
         
+        // Use the utility function from utils.js
         const routeData = await calculateRealDistance(startLocation, destination);
         
         displayDistanceResults(routeData.distance, routeData.duration);
