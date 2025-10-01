@@ -93,10 +93,14 @@ async function calculateRealDistance(startLocation, destination) {
     try {
         console.log('Calculating route from:', startLocation, 'to:', destination);
         
+        // Add country specificity for better results
+        const startLocationWithCountry = startLocation.includes('India') ? startLocation : `${startLocation}, India`;
+        const destinationWithCountry = destination.includes('India') ? destination : `${destination}, India`;
+        
         // Geocode both locations to get coordinates
         const [startCoords, destCoords] = await Promise.all([
-            geocodeLocation(startLocation),
-            geocodeLocation(destination)
+            geocodeLocation(startLocationWithCountry),
+            geocodeLocation(destinationWithCountry)
         ]);
         
         console.log('Start coordinates:', startCoords);
@@ -157,21 +161,12 @@ async function calculateRealDistance(startLocation, destination) {
             rawDuration: route.summary.duration
         });
         
-        // Validate the calculated distance makes sense
-        if (parseFloat(distanceInKm) < 0.1) {
-            console.warn('Very short distance calculated, this might indicate an issue');
-        }
-        
         return { 
             distance: `${distanceInKm} km`, 
             duration,
             coordinates: {
                 start: [startCoords.longitude, startCoords.latitude],
                 destination: [destCoords.longitude, destCoords.latitude]
-            },
-            rawData: {
-                distance: route.summary.distance,
-                duration: route.summary.duration
             }
         };
         
