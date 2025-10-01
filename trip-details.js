@@ -10,7 +10,6 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function fixScrollIssues() {
-    // Fix scroll issues by ensuring proper height and overflow
     document.body.style.height = '100vh';
     document.body.style.overflow = 'auto';
     
@@ -142,31 +141,50 @@ async function loadTripMembers(trip) {
         // Get user details for each member
         const memberPromises = trip.members.map(async (memberId) => {
             try {
+                console.log('Fetching user data for member:', memberId);
                 const userDoc = await db.collection('users').doc(memberId).get();
                 
                 if (userDoc.exists) {
                     const userData = userDoc.data();
+                    console.log('User data found:', userData);
+                    
+                    // Use the actual user name from Firestore
+                    const userName = userData.name || userData.displayName || userData.email || 'Traveler';
+                    
                     return {
                         id: memberId,
-                        name: userData.name || userData.email || 'Traveler',
+                        name: userName,
                         email: userData.email,
                         photoURL: userData.photoURL,
                         isCurrentUser: memberId === auth.currentUser.uid,
                         isCreator: memberId === trip.createdBy
                     };
                 } else {
-                    // If user document doesn't exist, use basic info
+                    console.log('User document not found in Firestore for:', memberId);
+                    // If user document doesn't exist, try to get from auth (for current user)
+                    if (memberId === auth.currentUser.uid) {
+                        return {
+                            id: memberId,
+                            name: auth.currentUser.displayName || 'You',
+                            email: auth.currentUser.email,
+                            photoURL: auth.currentUser.photoURL,
+                            isCurrentUser: true,
+                            isCreator: memberId === trip.createdBy
+                        };
+                    }
+                    
+                    // For other users where we don't have data, show a generic name
                     return {
                         id: memberId,
                         name: 'Traveler',
                         email: null,
                         photoURL: null,
-                        isCurrentUser: memberId === auth.currentUser.uid,
+                        isCurrentUser: false,
                         isCreator: memberId === trip.createdBy
                     };
                 }
             } catch (error) {
-                console.error('Error fetching user:', memberId, error);
+                console.error('Error fetching user data for', memberId, error);
                 return {
                     id: memberId,
                     name: 'Traveler',
@@ -180,7 +198,7 @@ async function loadTripMembers(trip) {
         
         const members = await Promise.all(memberPromises);
         
-        // Sort members: creator first, then current user, then others
+        // Sort members: creator first, then current user, then others alphabetically
         members.sort((a, b) => {
             if (a.isCreator && !b.isCreator) return -1;
             if (!a.isCreator && b.isCreator) return 1;
@@ -191,17 +209,22 @@ async function loadTripMembers(trip) {
         
         membersList.innerHTML = '';
         
+        if (members.length === 0) {
+            membersList.innerHTML = '<div class="text-center text-muted py-3">No members in this trip</div>';
+            return;
+        }
+        
         members.forEach((member) => {
             const memberDiv = document.createElement('div');
             memberDiv.className = 'd-flex align-items-center mb-3 p-3 border rounded bg-light';
             
             const avatarSrc = member.photoURL || 
-                `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}&background=4361ee&color=fff&size=128`;
+                `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}&background=4361ee&color=fff&size=128&bold=true`;
             
             // Create badges
             const badges = [];
             if (member.isCreator) {
-                badges.push('<span class="badge bg-primary me-1"><i class="fas fa-crown me-1"></i>Creator</span>');
+                badges.push('<span class="badge bg-primary me-1"><i class="fas fa-crown me-1"></i>Trip Creator</span>');
             }
             if (member.isCurrentUser) {
                 badges.push('<span class="badge bg-success me-1"><i class="fas fa-user me-1"></i>You</span>');
@@ -212,10 +235,11 @@ async function loadTripMembers(trip) {
                      style="width: 50px; height: 50px; object-fit: cover; border: 2px solid ${member.isCreator ? '#4361ee' : member.isCurrentUser ? '#28a745' : '#dee2e6'};">
                 <div class="flex-grow-1">
                     <div class="d-flex align-items-center mb-1">
-                        <strong class="mb-0 me-2">${member.name}</strong>
+                        <strong class="mb-0 me-2" style="font-size: 1.1rem;">${member.name}</strong>
                         ${badges.join('')}
                     </div>
-                    ${member.email ? `<small class="text-muted">${member.email}</small>` : ''}
+                    ${member.email ? `<small class="text-muted d-block">${member.email}</small>` : ''}
+                    <small class="text-muted">Joined trip</small>
                 </div>
             `;
             
@@ -224,7 +248,38 @@ async function loadTripMembers(trip) {
         
     } catch (error) {
         console.error('Error loading members:', error);
-        membersList.innerHTML = '<div class="alert alert-warning">Error loading members</div>';
+        
+        // Fallback: show basic member info with better styling
+        membersList.innerHTML = '';
+        trip.members.forEach((memberId, index) => {
+            const isCurrentUser = memberId === auth.currentUser.uid;
+            const isCreator = memberId === trip.createdBy;
+            
+            const memberDiv = document.createElement('div');
+            memberDiv.className = 'd-flex align-items-center mb-3 p-3 border rounded bg-light';
+            
+            const badges = [];
+            if (isCreator) badges.push('<span class="badge bg-primary me-1"><i class="fas fa-crown me-1"></i>Creator</span>');
+            if (isCurrentUser) badges.push('<span class="badge bg-success me-1"><i class="fas fa-user me-1"></i>You</span>');
+            
+            const avatarSrc = `https://ui-avatars.com/api/?name=${encodeURIComponent(isCurrentUser ? 'You' : 'User ' + (index + 1))}&background=4361ee&color=fff&size=128`;
+            
+            memberDiv.innerHTML = `
+                <img src="${avatarSrc}" class="user-avatar me-3 flex-shrink-0" alt="Member" 
+                     style="width: 50px; height: 50px; object-fit: cover;">
+                <div class="flex-grow-1">
+                    <div class="d-flex align-items-center mb-1">
+                        <strong class="mb-0 me-2" style="font-size: 1.1rem;">
+                            ${isCurrentUser ? 'You' : 'Travel Companion'}
+                        </strong>
+                        ${badges.join('')}
+                    </div>
+                    <small class="text-muted">Trip Member</small>
+                </div>
+            `;
+            
+            membersList.appendChild(memberDiv);
+        });
     }
 }
 
@@ -473,7 +528,7 @@ function loadTripRoute(trip) {
 
 function showAddExpenseModal() {
     // Set today's date as default
-    document.getElementById('expense-date').valueAsDate = new Date();
+    document.getElementById('expense-date').valueAsDate = new Date());
     document.getElementById('add-expense-form').reset();
     
     const modal = new bootstrap.Modal(document.getElementById('addExpenseModal'));
@@ -648,7 +703,7 @@ async function calculateRoute() {
         document.getElementById('calculate-route-btn').disabled = true;
         document.getElementById('calculate-route-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Calculating...';
         
-        // Simulate route calculation (replace with actual OpenRouteService API call)
+        // Simulate route calculation
         await new Promise(resolve => setTimeout(resolve, 2000));
         
         // Calculate approximate distance and duration
@@ -692,14 +747,12 @@ async function calculateRoute() {
 }
 
 function calculateApproximateDistance(start, destination) {
-    // Simple simulation - in real app, this would be API call to OpenRouteService
-    const baseDistance = 350; // km
-    const randomVariation = Math.random() * 200 - 100; // ±100 km
-    return Math.max(50, baseDistance + randomVariation); // Minimum 50km
+    const baseDistance = 350;
+    const randomVariation = Math.random() * 200 - 100;
+    return Math.max(50, baseDistance + randomVariation);
 }
 
 function calculateApproximateDuration(distance) {
-    // Assume average speed of 80 km/h for calculation
     const hours = distance / 80;
     const totalMinutes = Math.round(hours * 60);
     
@@ -724,9 +777,7 @@ async function handleLogout() {
     }
 }
 
-// Utility function to show toast messages
 function showToast(message, type = 'info') {
-    // Create toast container if it doesn't exist
     let toastContainer = document.getElementById('toast-container');
     if (!toastContainer) {
         toastContainer = document.createElement('div');
@@ -755,7 +806,6 @@ function showToast(message, type = 'info') {
     const toast = new bootstrap.Toast(toastElement);
     toast.show();
     
-    // Remove toast from DOM after it's hidden
     toastElement.addEventListener('hidden.bs.toast', () => {
         toastElement.remove();
     });
