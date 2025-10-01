@@ -151,7 +151,7 @@ async function calculateRealDistance(startLocation, destination) {
     }
 }
 
-// Enhanced error handling for dashboard.js
+// Enhanced error handling
 function handleRouteCalculationError(error) {
     console.error('Route calculation failed:', error);
     
