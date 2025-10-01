@@ -17,6 +17,7 @@ function setupTripDetailsEventListeners() {
     document.getElementById('add-activity-btn').addEventListener('click', showAddActivityModal);
     document.getElementById('save-activity-btn').addEventListener('click', saveActivity);
     document.getElementById('calculate-route-btn').addEventListener('click', calculateRoute);
+    document.getElementById('nav-profile').addEventListener('click', showProfileModal);
     
     // Enhanced CRUD event listeners
     setupEnhancedCRUDEventListeners();
