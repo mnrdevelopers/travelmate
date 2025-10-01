@@ -192,22 +192,24 @@ async function loadTripMembers(trip) {
     membersList.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div><p class="mt-2 text-muted">Loading members...</p></div>';
     
     try {
-        // Get user details for each member
+        // Get user details for each member with better error handling
         const memberPromises = trip.members.map(async (memberId) => {
             try {
                 console.log('Fetching user data for member:', memberId);
+
+                console.log('Trip creator ID:', trip.createdBy);
+                await debugUserData(trip.createdBy);
+                
+                // First try to get from Firestore users collection
                 const userDoc = await db.collection('users').doc(memberId).get();
                 
                 if (userDoc.exists) {
                     const userData = userDoc.data();
-                    console.log('User data found:', userData);
-                    
-                    // Use the actual user name from Firestore
-                    const userName = userData.name || userData.displayName || userData.email || 'Traveler';
+                    console.log('User data found in Firestore:', userData);
                     
                     return {
                         id: memberId,
-                        name: userName,
+                        name: userData.name || userData.displayName || userData.email || 'Traveler',
                         email: userData.email,
                         photoURL: userData.photoURL,
                         isCurrentUser: memberId === auth.currentUser.uid,
@@ -215,30 +217,47 @@ async function loadTripMembers(trip) {
                     };
                 } else {
                     console.log('User document not found in Firestore for:', memberId);
-                    // If user document doesn't exist, try to get from auth (for current user)
+                    
+                    // If user document doesn't exist in Firestore, try to get from auth (only works for current user)
                     if (memberId === auth.currentUser.uid) {
+                        const currentUser = auth.currentUser;
                         return {
                             id: memberId,
-                            name: auth.currentUser.displayName || 'You',
-                            email: auth.currentUser.email,
-                            photoURL: auth.currentUser.photoURL,
+                            name: currentUser.displayName || currentUser.email || 'You',
+                            email: currentUser.email,
+                            photoURL: currentUser.photoURL,
                             isCurrentUser: true,
                             isCreator: memberId === trip.createdBy
                         };
                     }
                     
-                    // For other users where we don't have data, show a generic name
+                    // For other users where we don't have data in Firestore
+                    // This is likely the issue - creator's data might not be in Firestore
                     return {
                         id: memberId,
-                        name: 'Traveler',
+                        name: 'Traveler', // This gets shown for creator when data is missing
                         email: null,
                         photoURL: null,
-                        isCurrentUser: false,
+                        isCurrentUser: memberId === auth.currentUser.uid,
                         isCreator: memberId === trip.createdBy
                     };
                 }
             } catch (error) {
                 console.error('Error fetching user data for', memberId, error);
+                
+                // Fallback for current user
+                if (memberId === auth.currentUser.uid) {
+                    const currentUser = auth.currentUser;
+                    return {
+                        id: memberId,
+                        name: currentUser.displayName || currentUser.email || 'You',
+                        email: currentUser.email,
+                        photoURL: currentUser.photoURL,
+                        isCurrentUser: true,
+                        isCreator: memberId === trip.createdBy
+                    };
+                }
+                
                 return {
                     id: memberId,
                     name: 'Traveler',
@@ -293,7 +312,7 @@ async function loadTripMembers(trip) {
                         ${badges.join('')}
                     </div>
                     ${member.email ? `<small class="text-muted d-block">${member.email}</small>` : ''}
-                    <small class="text-muted">Joined trip</small>
+                    <small class="text-muted">Trip Member</small>
                 </div>
             `;
             
@@ -303,11 +322,16 @@ async function loadTripMembers(trip) {
     } catch (error) {
         console.error('Error loading members:', error);
         
-        // Fallback: show basic member info with better styling
+        // Enhanced fallback with better member identification
         membersList.innerHTML = '';
         trip.members.forEach((memberId, index) => {
             const isCurrentUser = memberId === auth.currentUser.uid;
             const isCreator = memberId === trip.createdBy;
+            
+            // Try to get better names for fallback
+            let memberName = 'Travel Companion';
+            if (isCurrentUser) memberName = 'You';
+            if (isCreator && !isCurrentUser) memberName = 'Trip Creator';
             
             const memberDiv = document.createElement('div');
             memberDiv.className = 'd-flex align-items-center mb-3 p-3 border rounded bg-light';
@@ -316,24 +340,47 @@ async function loadTripMembers(trip) {
             if (isCreator) badges.push('<span class="badge bg-primary me-1"><i class="fas fa-crown me-1"></i>Creator</span>');
             if (isCurrentUser) badges.push('<span class="badge bg-success me-1"><i class="fas fa-user me-1"></i>You</span>');
             
-            const avatarSrc = `https://ui-avatars.com/api/?name=${encodeURIComponent(isCurrentUser ? 'You' : 'User ' + (index + 1))}&background=4361ee&color=fff&size=128`;
+            const avatarSrc = `https://ui-avatars.com/api/?name=${encodeURIComponent(memberName)}&background=4361ee&color=fff&size=128`;
             
             memberDiv.innerHTML = `
-                <img src="${avatarSrc}" class="user-avatar me-3 flex-shrink-0" alt="Member" 
+                <img src="${avatarSrc}" class="user-avatar me-3 flex-shrink-0" alt="${memberName}" 
                      style="width: 50px; height: 50px; object-fit: cover;">
                 <div class="flex-grow-1">
                     <div class="d-flex align-items-center mb-1">
-                        <strong class="mb-0 me-2" style="font-size: 1.1rem;">
-                            ${isCurrentUser ? 'You' : 'Travel Companion'}
-                        </strong>
+                        <strong class="mb-0 me-2" style="font-size: 1.1rem;">${memberName}</strong>
                         ${badges.join('')}
                     </div>
-                    <small class="text-muted">Trip Member</small>
+                    <small class="text-muted">${isCreator ? 'Trip Creator' : 'Trip Member'}</small>
                 </div>
             `;
             
             membersList.appendChild(memberDiv);
         });
+    }
+}
+
+// Debug function to check user data in Firestore
+async function debugUserData(memberId) {
+    try {
+        console.log('=== DEBUG USER DATA ===');
+        console.log('Member ID:', memberId);
+        
+        const userDoc = await db.collection('users').doc(memberId).get();
+        console.log('User exists in Firestore:', userDoc.exists);
+        
+        if (userDoc.exists) {
+            const userData = userDoc.data();
+            console.log('User data:', userData);
+            console.log('Name field:', userData.name);
+            console.log('Display name:', userData.displayName);
+            console.log('Email:', userData.email);
+        } else {
+            console.log('No user document found in Firestore for:', memberId);
+        }
+        
+        console.log('=== END DEBUG ===');
+    } catch (error) {
+        console.error('Debug error:', error);
     }
 }
 
