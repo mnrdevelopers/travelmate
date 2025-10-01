@@ -6,7 +6,33 @@ document.addEventListener('DOMContentLoaded', function() {
     checkAuthState();
     loadTripDetails();
     setupTripDetailsEventListeners();
+    fixScrollIssues();
 });
+
+function fixScrollIssues() {
+    // Fix scroll issues by ensuring proper height and overflow
+    document.body.style.height = '100vh';
+    document.body.style.overflow = 'auto';
+    
+    const appElement = document.getElementById('app');
+    if (appElement) {
+        appElement.style.minHeight = '100vh';
+        appElement.style.overflow = 'auto';
+    }
+    
+    const tripDetailsScreen = document.getElementById('trip-details-screen');
+    if (tripDetailsScreen) {
+        tripDetailsScreen.style.minHeight = 'calc(100vh - 76px)'; // Subtract navbar height
+        tripDetailsScreen.style.overflow = 'visible';
+    }
+    
+    // Fix tab content scrolling
+    const tabContent = document.getElementById('trip-tab-content');
+    if (tabContent) {
+        tabContent.style.overflow = 'visible';
+        tabContent.style.minHeight = '400px';
+    }
+}
 
 function setupTripDetailsEventListeners() {
     document.getElementById('logout-btn').addEventListener('click', handleLogout);
@@ -15,6 +41,14 @@ function setupTripDetailsEventListeners() {
     document.getElementById('add-activity-btn').addEventListener('click', showAddActivityModal);
     document.getElementById('save-activity-btn').addEventListener('click', saveActivity);
     document.getElementById('calculate-route-btn').addEventListener('click', calculateRoute);
+    
+    // Fix tab change issues
+    const tabLinks = document.querySelectorAll('#trip-tabs .nav-link');
+    tabLinks.forEach(link => {
+        link.addEventListener('click', function() {
+            setTimeout(fixScrollIssues, 100);
+        });
+    });
 }
 
 function checkAuthState() {
@@ -57,10 +91,13 @@ async function loadTripDetails() {
         document.getElementById('trip-details-code').textContent = currentTrip.code;
         
         // Load trip data
-        loadTripOverview(currentTrip);
+        await loadTripOverview(currentTrip);
         loadTripExpenses(currentTrip);
         loadTripItinerary(currentTrip);
         loadTripRoute(currentTrip);
+        
+        // Fix scroll after content loads
+        setTimeout(fixScrollIssues, 200);
         
     } catch (error) {
         console.error('Error loading trip details:', error);
@@ -68,7 +105,7 @@ async function loadTripDetails() {
     }
 }
 
-function loadTripOverview(trip) {
+async function loadTripOverview(trip) {
     // Update overview information
     document.getElementById('overview-start-location').textContent = trip.startLocation;
     document.getElementById('overview-destination').textContent = trip.destination;
@@ -112,7 +149,7 @@ function loadTripOverview(trip) {
     }
     
     // Load members with proper user data
-    loadTripMembers(trip);
+    await loadTripMembers(trip);
 }
 
 async function loadTripMembers(trip) {
@@ -123,33 +160,49 @@ async function loadTripMembers(trip) {
         // Get user details for each member
         const memberPromises = trip.members.map(async (memberId) => {
             try {
+                console.log('Fetching user data for:', memberId);
                 const userDoc = await db.collection('users').doc(memberId).get();
+                
                 if (userDoc.exists) {
                     const userData = userDoc.data();
+                    console.log('User data found:', userData);
                     return {
                         id: memberId,
-                        name: userData.name || userData.email || 'Unknown User',
+                        name: userData.name || userData.email || 'User',
                         email: userData.email,
                         photoURL: userData.photoURL,
                         isCurrentUser: memberId === auth.currentUser.uid,
                         isCreator: memberId === trip.createdBy
                     };
                 } else {
-                    // If user document doesn't exist, create basic info
-                    return {
-                        id: memberId,
-                        name: 'Unknown User',
-                        email: null,
-                        photoURL: null,
-                        isCurrentUser: memberId === auth.currentUser.uid,
-                        isCreator: memberId === trip.createdBy
-                    };
+                    console.log('User document not found for:', memberId);
+                    // If user document doesn't exist, try to get basic info from auth
+                    try {
+                        // This is a fallback - in a real app, we should ensure user profiles exist
+                        return {
+                            id: memberId,
+                            name: 'User', // Default name
+                            email: null,
+                            photoURL: null,
+                            isCurrentUser: memberId === auth.currentUser.uid,
+                            isCreator: memberId === trip.createdBy
+                        };
+                    } catch (authError) {
+                        return {
+                            id: memberId,
+                            name: 'User',
+                            email: null,
+                            photoURL: null,
+                            isCurrentUser: memberId === auth.currentUser.uid,
+                            isCreator: memberId === trip.createdBy
+                        };
+                    }
                 }
             } catch (error) {
                 console.error('Error fetching user:', memberId, error);
                 return {
                     id: memberId,
-                    name: 'Unknown User',
+                    name: 'User',
                     email: null,
                     photoURL: null,
                     isCurrentUser: memberId === auth.currentUser.uid,
@@ -178,7 +231,7 @@ async function loadTripMembers(trip) {
         
         members.forEach((member) => {
             const memberDiv = document.createElement('div');
-            memberDiv.className = 'd-flex align-items-center mb-3 p-3 border rounded';
+            memberDiv.className = 'd-flex align-items-center mb-3 p-3 border rounded bg-light';
             
             const avatarSrc = member.photoURL || 
                 `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}&background=4361ee&color=fff&size=128`;
@@ -189,18 +242,21 @@ async function loadTripMembers(trip) {
                 badges.push('<span class="badge bg-primary me-1"><i class="fas fa-crown me-1"></i>Creator</span>');
             }
             if (member.isCurrentUser) {
-                badges.push('<span class="badge bg-secondary me-1"><i class="fas fa-user me-1"></i>You</span>');
+                badges.push('<span class="badge bg-success me-1"><i class="fas fa-user me-1"></i>You</span>');
             }
             
             memberDiv.innerHTML = `
                 <img src="${avatarSrc}" class="user-avatar me-3 flex-shrink-0" alt="${member.name}" 
-                     style="width: 50px; height: 50px; object-fit: cover; border: 2px solid ${member.isCreator ? '#4361ee' : member.isCurrentUser ? '#6c757d' : '#dee2e6'};">
+                     style="width: 50px; height: 50px; object-fit: cover; border: 2px solid ${member.isCreator ? '#4361ee' : member.isCurrentUser ? '#28a745' : '#dee2e6'};">
                 <div class="flex-grow-1">
                     <div class="d-flex align-items-center mb-1">
-                        <h6 class="mb-0 me-2">${member.name}</h6>
+                        <strong class="mb-0 me-2">${member.name}</strong>
                         ${badges.join('')}
                     </div>
                     ${member.email ? `<small class="text-muted">${member.email}</small>` : ''}
+                    <div class="mt-1">
+                        <small class="text-muted">User ID: ${member.id.substring(0, 8)}...</small>
+                    </div>
                 </div>
             `;
             
@@ -210,11 +266,39 @@ async function loadTripMembers(trip) {
     } catch (error) {
         console.error('Error loading members:', error);
         membersList.innerHTML = `
-            <div class="alert alert-danger">
+            <div class="alert alert-warning">
                 <i class="fas fa-exclamation-triangle me-2"></i>
-                Error loading members. Please try refreshing the page.
+                Error loading members. Showing basic member info.
             </div>
         `;
+        
+        // Fallback: show basic member info
+        trip.members.forEach((memberId, index) => {
+            const memberDiv = document.createElement('div');
+            memberDiv.className = 'd-flex align-items-center mb-2 p-2 border rounded';
+            
+            const isCurrentUser = memberId === auth.currentUser.uid;
+            const isCreator = memberId === trip.createdBy;
+            
+            const badges = [];
+            if (isCreator) badges.push('<span class="badge bg-primary me-1">Creator</span>');
+            if (isCurrentUser) badges.push('<span class="badge bg-success me-1">You</span>');
+            
+            memberDiv.innerHTML = `
+                <div class="member-avatar me-2" style="width: 40px; height: 40px;">
+                    ${isCurrentUser ? 'You' : 'U' + (index + 1)}
+                </div>
+                <div class="flex-grow-1">
+                    <div>
+                        ${isCurrentUser ? 'You' : 'User ' + (index + 1)}
+                        ${badges.join('')}
+                    </div>
+                    <small class="text-muted">ID: ${memberId.substring(0, 6)}...</small>
+                </div>
+            `;
+            
+            membersList.appendChild(memberDiv);
+        });
     }
 }
 
