@@ -15,6 +15,10 @@ function checkAuthState() {
             // User is signed in, ensure user profile exists and redirect to dashboard
             ensureUserProfile(user);
         }
+        // Add else case if needed
+    }, error => {
+        console.error('Auth state error:', error);
+        showAuthMessage('Authentication error. Please refresh the page.', 'danger');
     });
 }
 
