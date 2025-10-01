@@ -62,57 +62,14 @@ function validateDates(startDate, endDate) {
 // Real OpenRouteService API integration
 async function calculateRealDistance(startLocation, destination) {
     try {
-        // Note: This requires geocoding first to get coordinates
-        // For now, we'll use simulation but structure for real API
-        console.log('Calculating route from:', startLocation, 'to:', destination);
+        // First, you need to geocode the locations to get coordinates
+        // This requires additional geocoding API calls
+        console.log('Route calculation requires geocoding implementation');
         
-        // Simulated API call - replace with actual OpenRouteService API
-        const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
-            method: 'POST',
-            headers: {
-                'Authorization': OPENROUTESERVICE_API_KEY,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                coordinates: [[8.681495,49.41461],[8.686507,49.41943]],
-                format: 'json'
-            })
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            const distance = (data.routes[0].summary.distance / 1000).toFixed(1);
-            const duration = formatDuration(data.routes[0].summary.duration);
-            return { distance: `${distance} km`, duration };
-        } else {
-            throw new Error('API request failed');
-        }
+        // For now, fallback to simulation
+        return calculateSimulatedDistance(startLocation, destination);
     } catch (error) {
-        console.error('Route calculation failed, using simulation:', error);
-        // Fallback to simulation
+        console.error('Route calculation failed:', error);
         return calculateSimulatedDistance(startLocation, destination);
     }
-}
-
-function calculateSimulatedDistance(start, destination) {
-    const baseDistance = 350;
-    const randomVariation = Math.random() * 200 - 100;
-    const distance = Math.max(50, baseDistance + randomVariation);
-    const hours = distance / 80;
-    const totalMinutes = Math.round(hours * 60);
-    
-    const hoursPart = Math.floor(totalMinutes / 60);
-    const minutesPart = totalMinutes % 60;
-    
-    let duration;
-    if (hoursPart > 0) {
-        duration = `${hoursPart} hour${hoursPart > 1 ? 's' : ''} ${minutesPart} minute${minutesPart > 1 ? 's' : ''}`;
-    } else {
-        duration = `${minutesPart} minute${minutesPart > 1 ? 's' : ''}`;
-    }
-    
-    return {
-        distance: `${distance.toFixed(1)} km`,
-        duration: duration
-    };
 }
