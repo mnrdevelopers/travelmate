@@ -54,6 +54,11 @@ function setupEnhancedCRUDEventListeners() {
     if (saveCategoryBtn) {
         saveCategoryBtn.addEventListener('click', saveCustomCategory);
     }
+    // Add event listener for category dropdown change
+    const categorySelect = document.getElementById('expense-category');
+    if (categorySelect) {
+        categorySelect.addEventListener('change', handleCategoryChange);
+    }
     
     // Add edit/delete buttons to expense items dynamically
     document.addEventListener('click', function(e) {
@@ -470,6 +475,19 @@ function getCategoryName(categoryId) {
         return customCategory.name;
     }
     return categoryId.charAt(0).toUpperCase() + categoryId.slice(1);
+}
+
+// Add this new function to handle category selection
+function handleCategoryChange(event) {
+    if (event.target.value === 'other') {
+        // Open custom category modal
+        showCustomCategoryModal();
+        
+        // Reset the dropdown to the previous value or first option
+        setTimeout(() => {
+            event.target.value = 'fuel'; // Reset to default
+        }, 100);
+    }
 }
 
 function updateBudgetSummary(trip) {
@@ -1029,10 +1047,17 @@ function calculateApproximateDuration(distance) {
 function showCustomCategoryModal() {
     document.getElementById('custom-category-form').reset();
     document.getElementById('category-color').value = '#6c757d';
+    
     const modal = new bootstrap.Modal(document.getElementById('customCategoryModal'));
     modal.show();
+    
+    // Focus on the category name input when modal opens
+    setTimeout(() => {
+        document.getElementById('category-name').focus();
+    }, 500);
 }
 
+// Update the saveCustomCategory function to automatically select the new category
 async function saveCustomCategory() {
     const name = document.getElementById('category-name').value.trim();
     const color = document.getElementById('category-color').value;
@@ -1060,10 +1085,14 @@ async function saveCustomCategory() {
         // Update category dropdown
         updateCategoryDropdown();
         
+        // Auto-select the newly created category
+        const categorySelect = document.getElementById('expense-category');
+        categorySelect.value = category.id;
+        
         const modal = bootstrap.Modal.getInstance(document.getElementById('customCategoryModal'));
         modal.hide();
         
-        showToast('Custom category added!', 'success');
+        showToast('Custom category added and selected!', 'success');
         
     } catch (error) {
         console.error('Error saving category:', error);
@@ -1074,21 +1103,28 @@ async function saveCustomCategory() {
     }
 }
 
+// Update the updateCategoryDropdown function to include the "Other" option
 function updateCategoryDropdown() {
     const categorySelect = document.getElementById('expense-category');
     
     // Save current selection
     const currentSelection = categorySelect.value;
     
-    // Clear custom options (keep default ones)
-    const defaultCategories = ['fuel', 'hotel', 'food', 'activities', 'other'];
+    // Clear all options
     categorySelect.innerHTML = '';
     
     // Add default categories
+    const defaultCategories = [
+        {value: 'fuel', text: 'Fuel'},
+        {value: 'hotel', text: 'Hotel'},
+        {value: 'food', text: 'Food'},
+        {value: 'activities', text: 'Activities'}
+    ];
+    
     defaultCategories.forEach(category => {
         const option = document.createElement('option');
-        option.value = category;
-        option.textContent = category.charAt(0).toUpperCase() + category.slice(1);
+        option.value = category.value;
+        option.textContent = category.text;
         categorySelect.appendChild(option);
     });
     
@@ -1101,9 +1137,18 @@ function updateCategoryDropdown() {
         categorySelect.appendChild(option);
     });
     
-    // Restore selection if possible
+    // Add "Other" option at the end
+    const otherOption = document.createElement('option');
+    otherOption.value = 'other';
+    otherOption.textContent = 'Other (Add Custom Category)';
+    otherOption.style.fontStyle = 'italic';
+    categorySelect.appendChild(otherOption);
+    
+    // Restore selection if possible, otherwise select first option
     if (currentSelection && categorySelect.querySelector(`[value="${currentSelection}"]`)) {
         categorySelect.value = currentSelection;
+    } else if (categorySelect.options.length > 0) {
+        categorySelect.selectedIndex = 0;
     }
 }
 
