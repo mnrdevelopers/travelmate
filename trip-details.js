@@ -22,15 +22,8 @@ function fixScrollIssues() {
     
     const tripDetailsScreen = document.getElementById('trip-details-screen');
     if (tripDetailsScreen) {
-        tripDetailsScreen.style.minHeight = 'calc(100vh - 76px)'; // Subtract navbar height
+        tripDetailsScreen.style.minHeight = 'calc(100vh - 76px)';
         tripDetailsScreen.style.overflow = 'visible';
-    }
-    
-    // Fix tab content scrolling
-    const tabContent = document.getElementById('trip-tab-content');
-    if (tabContent) {
-        tabContent.style.overflow = 'visible';
-        tabContent.style.minHeight = '400px';
     }
 }
 
@@ -41,14 +34,6 @@ function setupTripDetailsEventListeners() {
     document.getElementById('add-activity-btn').addEventListener('click', showAddActivityModal);
     document.getElementById('save-activity-btn').addEventListener('click', saveActivity);
     document.getElementById('calculate-route-btn').addEventListener('click', calculateRoute);
-    
-    // Fix tab change issues
-    const tabLinks = document.querySelectorAll('#trip-tabs .nav-link');
-    tabLinks.forEach(link => {
-        link.addEventListener('click', function() {
-            setTimeout(fixScrollIssues, 100);
-        });
-    });
 }
 
 function checkAuthState() {
@@ -63,8 +48,8 @@ function checkAuthState() {
 
 function loadUserData() {
     const user = auth.currentUser;
-    document.getElementById('user-name').textContent = user.displayName || user.email;
-    document.getElementById('user-avatar').src = user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || user.email)}&background=4361ee&color=fff`;
+    document.getElementById('user-name').textContent = user.displayName || 'Traveler';
+    document.getElementById('user-avatar').src = user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'Traveler')}&background=4361ee&color=fff`;
 }
 
 async function loadTripDetails() {
@@ -83,7 +68,7 @@ async function loadTripDetails() {
                 id: tripDoc.id,
                 ...tripDoc.data()
             };
-            setCurrentTrip(currentTrip); // Update session storage
+            setCurrentTrip(currentTrip);
         }
         
         // Update trip details in UI
@@ -95,9 +80,6 @@ async function loadTripDetails() {
         loadTripExpenses(currentTrip);
         loadTripItinerary(currentTrip);
         loadTripRoute(currentTrip);
-        
-        // Fix scroll after content loads
-        setTimeout(fixScrollIssues, 200);
         
     } catch (error) {
         console.error('Error loading trip details:', error);
@@ -160,49 +142,34 @@ async function loadTripMembers(trip) {
         // Get user details for each member
         const memberPromises = trip.members.map(async (memberId) => {
             try {
-                console.log('Fetching user data for:', memberId);
                 const userDoc = await db.collection('users').doc(memberId).get();
                 
                 if (userDoc.exists) {
                     const userData = userDoc.data();
-                    console.log('User data found:', userData);
                     return {
                         id: memberId,
-                        name: userData.name || userData.email || 'User',
+                        name: userData.name || userData.email || 'Traveler',
                         email: userData.email,
                         photoURL: userData.photoURL,
                         isCurrentUser: memberId === auth.currentUser.uid,
                         isCreator: memberId === trip.createdBy
                     };
                 } else {
-                    console.log('User document not found for:', memberId);
-                    // If user document doesn't exist, try to get basic info from auth
-                    try {
-                        // This is a fallback - in a real app, we should ensure user profiles exist
-                        return {
-                            id: memberId,
-                            name: 'User', // Default name
-                            email: null,
-                            photoURL: null,
-                            isCurrentUser: memberId === auth.currentUser.uid,
-                            isCreator: memberId === trip.createdBy
-                        };
-                    } catch (authError) {
-                        return {
-                            id: memberId,
-                            name: 'User',
-                            email: null,
-                            photoURL: null,
-                            isCurrentUser: memberId === auth.currentUser.uid,
-                            isCreator: memberId === trip.createdBy
-                        };
-                    }
+                    // If user document doesn't exist, use basic info
+                    return {
+                        id: memberId,
+                        name: 'Traveler',
+                        email: null,
+                        photoURL: null,
+                        isCurrentUser: memberId === auth.currentUser.uid,
+                        isCreator: memberId === trip.createdBy
+                    };
                 }
             } catch (error) {
                 console.error('Error fetching user:', memberId, error);
                 return {
                     id: memberId,
-                    name: 'User',
+                    name: 'Traveler',
                     email: null,
                     photoURL: null,
                     isCurrentUser: memberId === auth.currentUser.uid,
@@ -223,11 +190,6 @@ async function loadTripMembers(trip) {
         });
         
         membersList.innerHTML = '';
-        
-        if (members.length === 0) {
-            membersList.innerHTML = '<div class="text-center text-muted py-3">No members found</div>';
-            return;
-        }
         
         members.forEach((member) => {
             const memberDiv = document.createElement('div');
@@ -254,9 +216,6 @@ async function loadTripMembers(trip) {
                         ${badges.join('')}
                     </div>
                     ${member.email ? `<small class="text-muted">${member.email}</small>` : ''}
-                    <div class="mt-1">
-                        <small class="text-muted">User ID: ${member.id.substring(0, 8)}...</small>
-                    </div>
                 </div>
             `;
             
@@ -265,40 +224,7 @@ async function loadTripMembers(trip) {
         
     } catch (error) {
         console.error('Error loading members:', error);
-        membersList.innerHTML = `
-            <div class="alert alert-warning">
-                <i class="fas fa-exclamation-triangle me-2"></i>
-                Error loading members. Showing basic member info.
-            </div>
-        `;
-        
-        // Fallback: show basic member info
-        trip.members.forEach((memberId, index) => {
-            const memberDiv = document.createElement('div');
-            memberDiv.className = 'd-flex align-items-center mb-2 p-2 border rounded';
-            
-            const isCurrentUser = memberId === auth.currentUser.uid;
-            const isCreator = memberId === trip.createdBy;
-            
-            const badges = [];
-            if (isCreator) badges.push('<span class="badge bg-primary me-1">Creator</span>');
-            if (isCurrentUser) badges.push('<span class="badge bg-success me-1">You</span>');
-            
-            memberDiv.innerHTML = `
-                <div class="member-avatar me-2" style="width: 40px; height: 40px;">
-                    ${isCurrentUser ? 'You' : 'U' + (index + 1)}
-                </div>
-                <div class="flex-grow-1">
-                    <div>
-                        ${isCurrentUser ? 'You' : 'User ' + (index + 1)}
-                        ${badges.join('')}
-                    </div>
-                    <small class="text-muted">ID: ${memberId.substring(0, 6)}...</small>
-                </div>
-            `;
-            
-            membersList.appendChild(memberDiv);
-        });
+        membersList.innerHTML = '<div class="alert alert-warning">Error loading members</div>';
     }
 }
 
