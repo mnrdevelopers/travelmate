@@ -371,6 +371,7 @@ function createExpenseItem(expense, index) {
     // Get payment mode display text and icon
     const paymentModeInfo = getPaymentModeInfo(expense.paymentMode);
     
+    // Create the expense item HTML
     expenseItem.innerHTML = `
         <div class="d-flex justify-content-between align-items-start">
             <div class="flex-grow-1">
@@ -385,7 +386,7 @@ function createExpenseItem(expense, index) {
                 <div class="mt-1">
                     <small class="text-muted">
                         <i class="fas fa-user me-1"></i>
-                        Added by: ${expense.addedBy === auth.currentUser.uid ? 'You' : await getMemberName(expense.addedBy)}
+                        Added by: ${expense.addedBy === auth.currentUser.uid ? 'You' : 'Loading...'}
                     </small>
                 </div>
             </div>
@@ -405,7 +406,27 @@ function createExpenseItem(expense, index) {
         </div>
     `;
     
+    // Load member name asynchronously and update the display
+    loadMemberNameForExpense(expenseItem, expense.addedBy);
+    
     return expenseItem;
+}
+
+// Helper function to load and display member name for expense
+async function loadMemberNameForExpense(expenseItem, memberId) {
+    if (memberId === auth.currentUser.uid) {
+        return; // Already shows "You"
+    }
+    
+    try {
+        const memberName = await getMemberName(memberId);
+        const addedByElement = expenseItem.querySelector('.text-muted small');
+        if (addedByElement) {
+            addedByElement.innerHTML = `<i class="fas fa-user me-1"></i>Added by: ${memberName}`;
+        }
+    } catch (error) {
+        console.error('Error loading member name for expense:', error);
+    }
 }
 
 // Add helper function to get payment mode information
