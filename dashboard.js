@@ -562,17 +562,21 @@ async function joinTripWithCode() {
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         
-        const joinedTrip = { id: tripId, ...trip };
-        userTrips.unshift(joinedTrip);
-        displayTrips();
+        // Fix: Use fresh reload instead of adding to array
+        await loadUserTrips();
         
         showMessage(messageEl, 'Successfully joined the trip! Redirecting...', 'success');
         
         setTimeout(() => {
             const modal = bootstrap.Modal.getInstance(document.getElementById('joinTripModal'));
             modal.hide();
-            setCurrentTrip(joinedTrip);
-            navigateTo('trip-details.html');
+            
+            // Find the joined trip and navigate to it
+            const joinedTrip = userTrips.find(t => t.id === tripId);
+            if (joinedTrip) {
+                setCurrentTrip(joinedTrip);
+                navigateTo('trip-details.html');
+            }
         }, 2000);
         
     } catch (error) {
