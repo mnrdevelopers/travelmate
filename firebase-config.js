@@ -1,4 +1,4 @@
-// firebase-config.js - Remove OpenRouteService API key from here
+// Firebase configuration
 const firebaseConfig = {
     apiKey: "AIzaSyBovkc7ohfvTlZUiqDQrQLW2B6aXAE000k",
     authDomain: "travel-mate-5729f.firebaseapp.com",
@@ -13,3 +13,6 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
+
+// OpenRouteService API key
+const OPENROUTESERVICE_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImU4ZjhiMTllYmM5NjRhZDc5ZmZlZDA5NTdiM2NiYTRkIiwiaCI6Im11cm11cjY0In0=";
