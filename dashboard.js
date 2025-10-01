@@ -236,7 +236,10 @@ function showError(message) {
         <div class="col-12">
             <div class="alert alert-danger d-flex align-items-center" role="alert">
                 <i class="fas fa-exclamation-triangle me-2"></i>
-                <div>${message}</div>
+                <div>
+                    <strong>Error loading trips</strong>
+                    <div class="small">${message}</div>
+                </div>
             </div>
             <div class="text-center mt-3">
                 <button class="btn btn-primary" onclick="loadUserTrips()">
