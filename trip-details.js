@@ -151,8 +151,8 @@ async function loadTripOverview(trip) {
         progressBar.className = 'progress-bar bg-success';
     }
     
-    // Update distance if available
-    if (trip.route) {
+    // Update distance if available - FIXED: Ensure route data is displayed
+    if (trip.route && trip.route.distance) {
         document.getElementById('overview-distance').textContent = `${trip.route.distance} (${trip.route.duration})`;
     } else {
         document.getElementById('overview-distance').textContent = 'Not calculated';
@@ -160,6 +160,9 @@ async function loadTripOverview(trip) {
     
     // Load members
     await loadTripMembers(trip);
+
+    // Add trip actions (edit/delete/leave buttons)
+    addTripActions(trip);
 }
 
 async function loadTripMembers(trip) {
@@ -1010,6 +1013,9 @@ async function calculateRoute() {
         // Use the utility function from utils.js
         const routeData = await calculateRealDistance(currentTrip.startLocation, currentTrip.destination);
         
+        console.log('Route calculated in trip details:', routeData);
+        
+        // Update Firestore
         await db.collection('trips').doc(currentTrip.id).update({
             route: {
                 ...routeData,
@@ -1018,8 +1024,15 @@ async function calculateRoute() {
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         
-        currentTrip.route = routeData;
+        // Update local trip data immediately
+        currentTrip.route = {
+            ...routeData,
+            calculatedAt: new Date()
+        };
+        
+        // Update the UI immediately without reloading
         loadTripRoute(currentTrip);
+        loadTripOverview(currentTrip); // This updates the overview section
         
         showToast('Route calculated successfully!', 'success');
         
@@ -1280,4 +1293,57 @@ function showToast(message, type = 'info') {
     bsToast.show();
     
     toast.addEventListener('hidden.bs.toast', () => toast.remove());
+}
+
+function addTripActions(trip) {
+    const actionsSection = document.getElementById('trip-actions-section');
+    if (!actionsSection) return;
+    
+    const isCreator = trip.createdBy === auth.currentUser.uid;
+    
+    if (isCreator) {
+        actionsSection.innerHTML = `
+            <h6>Trip Management</h6>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-warning btn-sm" onclick="editCurrentTrip()">
+                    <i class="fas fa-edit me-1"></i>Edit Trip
+                </button>
+                <button class="btn btn-outline-danger btn-sm" onclick="deleteCurrentTrip()">
+                    <i class="fas fa-trash me-1"></i>Delete Trip
+                </button>
+            </div>
+            <small class="text-muted">As the trip creator, you can edit or delete this trip.</small>
+        `;
+    } else {
+        actionsSection.innerHTML = `
+            <h6>Trip Actions</h6>
+            <button class="btn btn-outline-danger btn-sm" onclick="leaveCurrentTrip()">
+                <i class="fas fa-sign-out-alt me-1"></i>Leave Trip
+            </button>
+            <small class="text-muted d-block mt-1">You can leave this trip at any time.</small>
+        `;
+    }
+}
+
+function editCurrentTrip() {
+    setCurrentTrip(currentTrip);
+    navigateTo('dashboard.html');
+    // The dashboard will detect the currentTrip and open edit modal
+}
+
+async function deleteCurrentTrip() {
+    if (!confirm('Are you sure you want to delete this trip? This action cannot be undone and will delete all trip data including expenses and itinerary.')) {
+        return;
+    }
+
+    try {
+        await db.collection('trips').doc(currentTrip.id).delete();
+        
+        showToast('Trip deleted successfully!', 'success');
+        setTimeout(() => navigateTo('dashboard.html'), 1500);
+        
+    } catch (error) {
+        console.error('Error deleting trip:', error);
+        showToast('Error deleting trip', 'danger');
+    }
 }
