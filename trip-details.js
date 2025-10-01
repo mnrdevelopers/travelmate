@@ -1007,6 +1007,7 @@ async function calculateRoute() {
         document.getElementById('calculate-route-btn').disabled = true;
         document.getElementById('calculate-route-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Calculating...';
         
+        // Use the utility function from utils.js
         const routeData = await calculateRealDistance(currentTrip.startLocation, currentTrip.destination);
         
         await db.collection('trips').doc(currentTrip.id).update({
