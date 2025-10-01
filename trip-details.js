@@ -367,18 +367,29 @@ function createExpenseItem(expense, index) {
     const categoryName = getCategoryName(expense.category);
     const expenseDate = new Date(expense.date).toLocaleDateString();
     
+    // Get payment mode display text and icon
+    const paymentModeInfo = getPaymentModeInfo(expense.paymentMode);
+    
     expenseItem.innerHTML = `
         <div class="d-flex justify-content-between align-items-start">
             <div class="flex-grow-1">
                 <h6 class="mb-1">${expense.description}</h6>
-                <div class="d-flex align-items-center mt-1">
+                <div class="d-flex align-items-center mt-1 flex-wrap">
                     <span class="category-badge ${categoryClass}">${categoryName}</span>
+                    <span class="badge bg-light text-dark ms-2">
+                        <i class="${paymentModeInfo.icon} me-1"></i>${paymentModeInfo.text}
+                    </span>
                     <small class="text-muted ms-2">${expenseDate}</small>
+                </div>
+                <div class="mt-1">
+                    <small class="text-muted">
+                        <i class="fas fa-user me-1"></i>
+                        Added by: ${expense.addedBy === auth.currentUser.uid ? 'You' : await getMemberName(expense.addedBy)}
+                    </small>
                 </div>
             </div>
             <div class="text-end ms-3">
                 <div class="fw-bold fs-5"><span class="rupee-symbol">₹</span>${expense.amount.toFixed(2)}</div>
-                <small class="text-muted">by ${expense.addedBy === auth.currentUser.uid ? 'You' : 'Member'}</small>
                 <div class="mt-2">
                     ${expense.addedBy === auth.currentUser.uid ? `
                         <button class="btn btn-sm btn-outline-primary edit-expense-btn me-1" data-expense-id="${index}">
@@ -394,6 +405,41 @@ function createExpenseItem(expense, index) {
     `;
     
     return expenseItem;
+}
+
+// Add helper function to get payment mode information
+function getPaymentModeInfo(paymentMode) {
+    switch(paymentMode) {
+        case 'cash':
+            return { text: 'Cash', icon: 'fas fa-money-bill-wave' };
+        case 'upi':
+            return { text: 'UPI', icon: 'fas fa-mobile-alt' };
+        case 'card':
+            return { text: 'Card', icon: 'fas fa-credit-card' };
+        case 'other':
+            return { text: 'Other', icon: 'fas fa-wallet' };
+        default:
+            return { text: paymentMode, icon: 'fas fa-wallet' };
+    }
+}
+
+// Add helper function to get member name
+async function getMemberName(memberId) {
+    try {
+        if (memberId === auth.currentUser.uid) {
+            return 'You';
+        }
+        
+        const userDoc = await db.collection('users').doc(memberId).get();
+        if (userDoc.exists) {
+            const userData = userDoc.data();
+            return userData.name || userData.displayName || 'Traveler';
+        }
+        return 'Traveler';
+    } catch (error) {
+        console.error('Error getting member name:', error);
+        return 'Traveler';
+    }
 }
 
 function getCategoryName(categoryId) {
@@ -640,6 +686,7 @@ async function saveExpense() {
     const description = document.getElementById('expense-description').value;
     const amount = parseFloat(document.getElementById('expense-amount').value);
     const category = document.getElementById('expense-category').value;
+    const paymentMode = document.getElementById('expense-payment-mode').value;
     const date = document.getElementById('expense-date').value;
     const isEditing = document.getElementById('save-expense-btn').dataset.editingIndex;
     
@@ -658,6 +705,7 @@ async function saveExpense() {
         amount,
         category,
         date,
+        paymentMode,
         addedBy: auth.currentUser.uid,
         addedAt: new Date().toISOString()
     };
@@ -982,6 +1030,7 @@ async function editExpense(expenseIndex) {
     document.getElementById('expense-description').value = expense.description;
     document.getElementById('expense-amount').value = expense.amount;
     document.getElementById('expense-category').value = expense.category;
+    document.getElementById('expense-payment-mode').value = expense.paymentMode;
     document.getElementById('expense-date').value = expense.date;
     
     // Change button text
