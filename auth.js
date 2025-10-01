@@ -21,10 +21,36 @@ function setupAuthEventListeners() {
 function checkAuthState() {
     auth.onAuthStateChanged(user => {
         if (user) {
-            // User is signed in, redirect to dashboard
+            // User is signed in, ensure user profile exists
+            ensureUserProfile(user);
+            // Redirect to dashboard
             navigateTo('dashboard.html');
         }
     });
+}
+
+async function ensureUserProfile(user) {
+    try {
+        const userDoc = await db.collection('users').doc(user.uid).get();
+        
+        if (!userDoc.exists) {
+            // Create user profile if it doesn't exist
+            await db.collection('users').doc(user.uid).set({
+                name: user.displayName || 'User',
+                email: user.email,
+                photoURL: user.photoURL,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        } else {
+            // Update last login time
+            await db.collection('users').doc(user.uid).update({
+                lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+    } catch (error) {
+        console.error('Error ensuring user profile:', error);
+    }
 }
 
 async function handleLogin(e) {
@@ -33,7 +59,9 @@ async function handleLogin(e) {
     const password = document.getElementById('login-password').value;
     
     try {
-        await auth.signInWithEmailAndPassword(email, password);
+        showAuthMessage('Logging in...', 'info');
+        const userCredential = await auth.signInWithEmailAndPassword(email, password);
+        await ensureUserProfile(userCredential.user);
         // Redirect will happen in auth state listener
     } catch (error) {
         showAuthMessage(error.message, 'danger');
@@ -52,18 +80,30 @@ async function handleSignup(e) {
         return;
     }
     
+    if (password.length < 6) {
+        showAuthMessage("Password must be at least 6 characters", 'danger');
+        return;
+    }
+    
     try {
-        const result = await auth.createUserWithEmailAndPassword(email, password);
-        await result.user.updateProfile({
+        showAuthMessage('Creating account...', 'info');
+        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+        const user = userCredential.user;
+        
+        // Update profile with name
+        await user.updateProfile({
             displayName: name
         });
         
         // Create user document in Firestore
-        await db.collection('users').doc(result.user.uid).set({
+        await db.collection('users').doc(user.uid).set({
             name: name,
             email: email,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            lastLogin: firebase.firestore.FieldValue.serverTimestamp()
         });
+        
+        showAuthMessage('Account created successfully!', 'success');
         
     } catch (error) {
         showAuthMessage(error.message, 'danger');
@@ -76,7 +116,7 @@ async function handleResetPassword(e) {
     
     try {
         await auth.sendPasswordResetEmail(email);
-        showAuthMessage('Password reset email sent!', 'success');
+        showAuthMessage('Password reset email sent! Check your inbox.', 'success');
     } catch (error) {
         showAuthMessage(error.message, 'danger');
     }
@@ -89,12 +129,13 @@ async function handleGoogleSignIn() {
         const result = await auth.signInWithPopup(provider);
         const user = result.user;
         
-        // Check if user exists in Firestore, if not create a new document
+        // Ensure user profile exists with Google data
         await db.collection('users').doc(user.uid).set({
             name: user.displayName,
             email: user.email,
             photoURL: user.photoURL,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            lastLogin: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
         
     } catch (error) {
