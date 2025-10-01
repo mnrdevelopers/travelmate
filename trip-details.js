@@ -111,13 +111,13 @@ function loadTripOverview(trip) {
         document.getElementById('overview-distance').textContent = 'Not calculated';
     }
     
-    // Load members
+    // Load members with proper user data
     loadTripMembers(trip);
 }
 
 async function loadTripMembers(trip) {
     const membersList = document.getElementById('members-list');
-    membersList.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm"></div></div>';
+    membersList.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div><p class="mt-2 text-muted">Loading members...</p></div>';
     
     try {
         // Get user details for each member
@@ -125,42 +125,83 @@ async function loadTripMembers(trip) {
             try {
                 const userDoc = await db.collection('users').doc(memberId).get();
                 if (userDoc.exists) {
+                    const userData = userDoc.data();
                     return {
                         id: memberId,
-                        ...userDoc.data()
+                        name: userData.name || userData.email || 'Unknown User',
+                        email: userData.email,
+                        photoURL: userData.photoURL,
+                        isCurrentUser: memberId === auth.currentUser.uid,
+                        isCreator: memberId === trip.createdBy
+                    };
+                } else {
+                    // If user document doesn't exist, create basic info
+                    return {
+                        id: memberId,
+                        name: 'Unknown User',
+                        email: null,
+                        photoURL: null,
+                        isCurrentUser: memberId === auth.currentUser.uid,
+                        isCreator: memberId === trip.createdBy
                     };
                 }
             } catch (error) {
-                console.error('Error fetching user:', error);
+                console.error('Error fetching user:', memberId, error);
+                return {
+                    id: memberId,
+                    name: 'Unknown User',
+                    email: null,
+                    photoURL: null,
+                    isCurrentUser: memberId === auth.currentUser.uid,
+                    isCreator: memberId === trip.createdBy
+                };
             }
-            return { 
-                id: memberId,
-                name: 'Unknown User', 
-                photoURL: null 
-            };
         });
         
         const members = await Promise.all(memberPromises);
         
+        // Sort members: creator first, then current user, then others
+        members.sort((a, b) => {
+            if (a.isCreator && !b.isCreator) return -1;
+            if (!a.isCreator && b.isCreator) return 1;
+            if (a.isCurrentUser && !b.isCurrentUser) return -1;
+            if (!a.isCurrentUser && b.isCurrentUser) return 1;
+            return a.name.localeCompare(b.name);
+        });
+        
         membersList.innerHTML = '';
+        
+        if (members.length === 0) {
+            membersList.innerHTML = '<div class="text-center text-muted py-3">No members found</div>';
+            return;
+        }
+        
         members.forEach((member) => {
             const memberDiv = document.createElement('div');
-            memberDiv.className = 'd-flex align-items-center mb-3';
+            memberDiv.className = 'd-flex align-items-center mb-3 p-3 border rounded';
             
             const avatarSrc = member.photoURL || 
-                `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}&background=4361ee&color=fff`;
+                `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}&background=4361ee&color=fff&size=128`;
+            
+            // Create badges
+            const badges = [];
+            if (member.isCreator) {
+                badges.push('<span class="badge bg-primary me-1"><i class="fas fa-crown me-1"></i>Creator</span>');
+            }
+            if (member.isCurrentUser) {
+                badges.push('<span class="badge bg-secondary me-1"><i class="fas fa-user me-1"></i>You</span>');
+            }
             
             memberDiv.innerHTML = `
-                <img src="${avatarSrc}" class="user-avatar me-3" alt="${member.name}" 
-                     style="width: 45px; height: 45px; object-fit: cover;">
+                <img src="${avatarSrc}" class="user-avatar me-3 flex-shrink-0" alt="${member.name}" 
+                     style="width: 50px; height: 50px; object-fit: cover; border: 2px solid ${member.isCreator ? '#4361ee' : member.isCurrentUser ? '#6c757d' : '#dee2e6'};">
                 <div class="flex-grow-1">
-                    <div class="fw-medium">${member.name}</div>
-                    <small class="text-muted">${member.id === trip.createdBy ? 'Trip Creator' : 'Member'}</small>
+                    <div class="d-flex align-items-center mb-1">
+                        <h6 class="mb-0 me-2">${member.name}</h6>
+                        ${badges.join('')}
+                    </div>
+                    ${member.email ? `<small class="text-muted">${member.email}</small>` : ''}
                 </div>
-                ${member.id === trip.createdBy ? 
-                    '<span class="badge bg-primary"><i class="fas fa-crown me-1"></i>Creator</span>' : ''}
-                ${member.id === auth.currentUser.uid ? 
-                    '<span class="badge bg-secondary ms-1"><i class="fas fa-user me-1"></i>You</span>' : ''}
             `;
             
             membersList.appendChild(memberDiv);
@@ -168,7 +209,12 @@ async function loadTripMembers(trip) {
         
     } catch (error) {
         console.error('Error loading members:', error);
-        membersList.innerHTML = '<div class="text-danger">Error loading members</div>';
+        membersList.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                Error loading members. Please try refreshing the page.
+            </div>
+        `;
     }
 }
 
