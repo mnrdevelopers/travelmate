@@ -23,8 +23,6 @@ function checkAuthState() {
         if (user) {
             // User is signed in, ensure user profile exists
             ensureUserProfile(user);
-            // Redirect to dashboard
-            navigateTo('dashboard.html');
         }
     });
 }
@@ -33,23 +31,37 @@ async function ensureUserProfile(user) {
     try {
         const userDoc = await db.collection('users').doc(user.uid).get();
         
-        if (!userDoc.exists) {
-            // Create user profile if it doesn't exist
-            await db.collection('users').doc(user.uid).set({
-                name: user.displayName || 'User',
-                email: user.email,
-                photoURL: user.photoURL,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                lastLogin: firebase.firestore.FieldValue.serverTimestamp()
-            });
-        } else {
-            // Update last login time
-            await db.collection('users').doc(user.uid).update({
-                lastLogin: firebase.firestore.FieldValue.serverTimestamp()
-            });
+        const userData = {
+            email: user.email,
+            lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        
+        // Add name and photoURL if available
+        if (user.displayName) {
+            userData.name = user.displayName;
         }
+        if (user.photoURL) {
+            userData.photoURL = user.photoURL;
+        }
+        
+        if (!userDoc.exists) {
+            // Create new user profile
+            userData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+            await db.collection('users').doc(user.uid).set(userData);
+            console.log('New user profile created:', user.uid);
+        } else {
+            // Update existing user profile
+            await db.collection('users').doc(user.uid).update(userData);
+            console.log('User profile updated:', user.uid);
+        }
+        
+        // Redirect to dashboard after profile is ensured
+        navigateTo('dashboard.html');
+        
     } catch (error) {
         console.error('Error ensuring user profile:', error);
+        // Still redirect to dashboard even if profile creation fails
+        navigateTo('dashboard.html');
     }
 }
 
@@ -58,12 +70,17 @@ async function handleLogin(e) {
     const email = document.getElementById('login-email').value;
     const password = document.getElementById('login-password').value;
     
+    if (!email || !password) {
+        showAuthMessage('Please enter both email and password', 'warning');
+        return;
+    }
+    
     try {
         showAuthMessage('Logging in...', 'info');
         const userCredential = await auth.signInWithEmailAndPassword(email, password);
-        await ensureUserProfile(userCredential.user);
-        // Redirect will happen in auth state listener
+        // Profile creation and redirect will happen in ensureUserProfile
     } catch (error) {
+        console.error('Login error:', error);
         showAuthMessage(error.message, 'danger');
     }
 }
@@ -74,6 +91,11 @@ async function handleSignup(e) {
     const email = document.getElementById('signup-email').value;
     const password = document.getElementById('signup-password').value;
     const confirmPassword = document.getElementById('signup-confirm-password').value;
+    
+    if (!name || !email || !password || !confirmPassword) {
+        showAuthMessage('Please fill in all fields', 'warning');
+        return;
+    }
     
     if (password !== confirmPassword) {
         showAuthMessage("Passwords don't match", 'danger');
@@ -95,17 +117,14 @@ async function handleSignup(e) {
             displayName: name
         });
         
-        // Create user document in Firestore
-        await db.collection('users').doc(user.uid).set({
-            name: name,
-            email: email,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            lastLogin: firebase.firestore.FieldValue.serverTimestamp()
-        });
+        // Force refresh user data
+        await user.reload();
         
-        showAuthMessage('Account created successfully!', 'success');
+        // Profile creation will happen in ensureUserProfile
+        showAuthMessage('Account created successfully! Redirecting...', 'success');
         
     } catch (error) {
+        console.error('Signup error:', error);
         showAuthMessage(error.message, 'danger');
     }
 }
@@ -114,31 +133,31 @@ async function handleResetPassword(e) {
     e.preventDefault();
     const email = document.getElementById('reset-email').value;
     
+    if (!email) {
+        showAuthMessage('Please enter your email address', 'warning');
+        return;
+    }
+    
     try {
+        showAuthMessage('Sending reset email...', 'info');
         await auth.sendPasswordResetEmail(email);
         showAuthMessage('Password reset email sent! Check your inbox.', 'success');
     } catch (error) {
+        console.error('Password reset error:', error);
         showAuthMessage(error.message, 'danger');
     }
 }
 
 async function handleGoogleSignIn() {
     const provider = new firebase.auth.GoogleAuthProvider();
+    provider.addScope('profile');
+    provider.addScope('email');
     
     try {
         const result = await auth.signInWithPopup(provider);
-        const user = result.user;
-        
-        // Ensure user profile exists with Google data
-        await db.collection('users').doc(user.uid).set({
-            name: user.displayName,
-            email: user.email,
-            photoURL: user.photoURL,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            lastLogin: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
-        
+        // Profile creation and redirect will happen in ensureUserProfile
     } catch (error) {
+        console.error('Google sign-in error:', error);
         showAuthMessage(error.message, 'danger');
     }
 }
