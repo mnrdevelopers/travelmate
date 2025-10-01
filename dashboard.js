@@ -140,6 +140,23 @@ async function loadUserTrips() {
     }
 }
 
+// Helper function to safely convert Firestore timestamps
+function safeConvertTimestamp(timestamp) {
+    if (!timestamp) return new Date();
+    
+    if (timestamp.toDate && typeof timestamp.toDate === 'function') {
+        return timestamp.toDate();
+    } else if (timestamp.seconds) {
+        return new Date(timestamp.seconds * 1000);
+    } else if (timestamp instanceof Date) {
+        return timestamp;
+    } else if (typeof timestamp === 'string') {
+        return new Date(timestamp);
+    } else {
+        return new Date();
+    }
+}
+
 function showLoadingState(show) {
     const tripsContainer = document.getElementById('trips-container');
     const emptyTrips = document.getElementById('empty-trips');
