@@ -44,28 +44,17 @@
         </div>
     </nav>
 
-   <!-- Trip Details Content -->
-<div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <a href="dashboard.html" class="btn btn-outline-secondary me-2">
-                <i class="fas fa-arrow-left me-1"></i>Back to Dashboard
-            </a>
-            <h2 id="trip-details-name" class="d-inline-block ms-2">Trip Name</h2>
-        </div>
-        <div class="d-flex align-items-center">
-            <span class="trip-code me-3" id="trip-details-code">ABC123</span>
-            <div class="dropdown">
-                <button class="btn btn-outline-primary dropdown-toggle" type="button" id="tripActionsDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="fas fa-cog me-1"></i>Actions
-                </button>
-                <ul class="dropdown-menu" aria-labelledby="tripActionsDropdown">
-                    <li><a class="dropdown-item" href="#" id="edit-trip-btn"><i class="fas fa-edit me-2"></i>Edit Trip</a></li>
-                    <li><a class="dropdown-item text-danger" href="#" id="delete-trip-btn"><i class="fas fa-trash me-2"></i>Delete Trip</a></li>
-                </ul>
+    <!-- Trip Details Content -->
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <a href="dashboard.html" class="btn btn-outline-secondary me-2">
+                    <i class="fas fa-arrow-left me-1"></i>Back to Dashboard
+                </a>
+                <h2 id="trip-details-name" class="d-inline-block ms-2">Trip Name</h2>
             </div>
+            <span class="trip-code" id="trip-details-code">ABC123</span>
         </div>
-    </div>
         
         <ul class="nav nav-tabs" id="trip-tabs">
             <li class="nav-item">
@@ -389,59 +378,6 @@
         </div>
     </div>
 </div>
-
-    <!-- Edit Trip Modal -->
-<div class="modal fade" id="editTripModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Edit Trip</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <form id="edit-trip-form">
-                    <div class="mb-3">
-                        <label for="edit-trip-name" class="form-label">Trip Name</label>
-                        <input type="text" class="form-control" id="edit-trip-name" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="edit-start-location" class="form-label">Start Location</label>
-                        <input type="text" class="form-control" id="edit-start-location" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="edit-destination" class="form-label">Destination</label>
-                        <input type="text" class="form-control" id="edit-destination" required>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="edit-start-date" class="form-label">Start Date</label>
-                            <input type="date" class="form-control" id="edit-start-date" required>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="edit-end-date" class="form-label">End Date</label>
-                            <input type="date" class="form-control" id="edit-end-date" required>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label for="edit-budget" class="form-label">Total Budget (<span class="rupee-symbol">₹</span>)</label>
-                        <input type="number" class="form-control" id="edit-budget" min="0" step="0.01" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="edit-description" class="form-label">Description (Optional)</label>
-                        <textarea class="form-control" id="edit-description" rows="3"></textarea>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="save-trip-edit-btn">Save Changes</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-    <!-- Toast Container -->
-<div id="toast-container" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100;"></div>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
