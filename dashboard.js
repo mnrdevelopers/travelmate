@@ -331,16 +331,38 @@ async function saveProfile() {
     }
 }
 
+// Add to dashboard.js
 async function handleAvatarUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
 
-    // Note: For full avatar upload, you'd need Firebase Storage
-    // This is a simplified version that just shows a message
-    showAlert('Avatar upload requires Firebase Storage setup. For now, you can update your display name.', 'info');
-    
-    // Reset the file input
-    event.target.value = '';
+    try {
+        const storageRef = firebase.storage().ref();
+        const avatarRef = storageRef.child(`avatars/${currentUser.uid}`);
+        
+        const snapshot = await avatarRef.put(file);
+        const downloadURL = await snapshot.ref.getDownloadURL();
+        
+        // Update user profile
+        await currentUser.updateProfile({
+            photoURL: downloadURL
+        });
+        
+        // Update Firestore
+        await db.collection('users').doc(currentUser.uid).set({
+            photoURL: downloadURL
+        }, { merge: true });
+        
+        // Update UI
+        document.getElementById('profile-avatar').src = downloadURL;
+        document.getElementById('user-avatar').src = downloadURL;
+        
+        showAlert('Avatar updated successfully!', 'success');
+        
+    } catch (error) {
+        console.error('Error uploading avatar:', error);
+        showAlert('Error uploading avatar', 'danger');
+    }
 }
 
 async function leaveAllTrips() {
