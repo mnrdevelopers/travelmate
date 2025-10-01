@@ -813,18 +813,20 @@ async function handleLogout() {
     }
 }
 
-// Debug function to test route calculation with specific locations
-async function testRouteCalculation() {
+// Simple test function that shows results in alert
+function testRouteCalculation() {
     const testStart = "New Delhi";
     const testDest = "Mumbai";
     
-    try {
-        console.log("Testing route calculation...");
-        const result = await calculateRealDistance(testStart, testDest);
-        console.log("Test result:", result);
-        showAlert(`Test: ${testStart} to ${testDest} - ${result.distance} in ${result.duration}`, 'info');
-    } catch (error) {
-        console.error("Test failed:", error);
-        showAlert('Test failed: ' + error.message, 'danger');
-    }
+    console.log("Testing route calculation...");
+    
+    calculateRealDistance(testStart, testDest)
+        .then(result => {
+            console.log("Test result:", result);
+            showAlert(`Test: ${testStart} to ${testDest} - ${result.distance} in ${result.duration}`, 'info');
+        })
+        .catch(error => {
+            console.error("Test failed:", error);
+            showAlert('Test failed: ' + error.message, 'danger');
+        });
 }
