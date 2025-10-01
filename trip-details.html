@@ -247,6 +247,69 @@
                 </div>
             </div>
         </div>
+
+    <!-- Edit Trip Modal for Trip Details Page -->
+<div class="modal fade" id="editTripModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Trip</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="edit-trip-form">
+                    <input type="hidden" id="edit-trip-id">
+                    <div class="mb-3">
+                        <label for="edit-trip-name" class="form-label">Trip Name</label>
+                        <input type="text" class="form-control" id="edit-trip-name" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="edit-start-location" class="form-label">Start Location</label>
+                            <input type="text" class="form-control" id="edit-start-location" placeholder="City, Country" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="edit-trip-destination" class="form-label">Destination</label>
+                            <input type="text" class="form-control" id="edit-trip-destination" placeholder="City, Country" required>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="edit-start-date" class="form-label">Start Date</label>
+                            <input type="date" class="form-control" id="edit-start-date" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="edit-end-date" class="form-label">End Date</label>
+                            <input type="date" class="form-control" id="edit-end-date" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-trip-budget" class="form-label">Total Budget (<span class="rupee-symbol">₹</span>)</label>
+                        <input type="number" class="form-control" id="edit-trip-budget" min="0" step="0.01" required>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="edit-calculate-distance">
+                        <label class="form-check-label" for="edit-calculate-distance">
+                            Recalculate travel distance and time
+                        </label>
+                    </div>
+                    <div id="edit-distance-results" class="distance-info d-none">
+                        <h6><i class="fas fa-route me-2"></i>Travel Information</h6>
+                        <div id="edit-distance-details">
+                            <!-- Distance results will appear here -->
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="update-trip-btn-trip-details">
+                    <i class="fas fa-save me-1"></i>Update Trip
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
         
      <!-- Add Expense Modal -->
 <div class="modal fade" id="addExpenseModal" tabindex="-1">
