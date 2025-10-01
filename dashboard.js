@@ -18,6 +18,7 @@ function setupDashboardEventListeners() {
     document.getElementById('join-trip-code-btn').addEventListener('click', joinTripWithCode);
     document.getElementById('logout-btn').addEventListener('click', handleLogout);
     document.getElementById('copy-code-btn').addEventListener('click', copyTripCode);
+    document.getElementById('nav-profile').addEventListener('click', showProfileModal);
     
     // Distance calculation
     document.getElementById('calculate-distance').addEventListener('change', function() {
