@@ -1494,3 +1494,84 @@ async function updateProfile() {
         showToast('Error updating profile', 'danger');
     }
 }
+
+async function updateTripFromDetails() {
+    const tripId = document.getElementById('edit-trip-id').value;
+    const name = document.getElementById('edit-trip-name').value;
+    const startLocation = document.getElementById('edit-start-location').value;
+    const destination = document.getElementById('edit-trip-destination').value;
+    const startDate = document.getElementById('edit-start-date').value;
+    const endDate = document.getElementById('edit-end-date').value;
+    const budget = parseFloat(document.getElementById('edit-trip-budget').value);
+    const recalculateDistance = document.getElementById('edit-calculate-distance').checked;
+    
+    if (!name || !validateLocation(startLocation) || !validateLocation(destination) || !startDate || !endDate || !budget) {
+        showToast('Please fill in all fields with valid data', 'warning');
+        return;
+    }
+    
+    if (!validateDates(startDate, endDate)) {
+        showToast('End date must be after start date', 'warning');
+        return;
+    }
+    
+    if (budget <= 0) {
+        showToast('Budget must be greater than 0', 'warning');
+        return;
+    }
+    
+    try {
+        const updateBtn = document.getElementById('update-trip-btn-trip-details');
+        updateBtn.disabled = true;
+        updateBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Updating...';
+        
+        const updateData = {
+            name: name.trim(),
+            startLocation: startLocation.trim(),
+            destination: destination.trim(),
+            startDate,
+            endDate,
+            budget,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        
+        // Recalculate route if requested
+        if (recalculateDistance) {
+            try {
+                const routeData = await calculateRealDistance(startLocation, destination);
+                updateData.route = {
+                    ...routeData,
+                    calculatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+            } catch (error) {
+                console.error('Error recalculating route:', error);
+                // Continue without route data if calculation fails
+            }
+        }
+        
+        await db.collection('trips').doc(tripId).update(updateData);
+        
+        // Update local trip data
+        currentTrip = {
+            ...currentTrip,
+            ...updateData
+        };
+        setCurrentTrip(currentTrip);
+        
+        // Reload the trip details to reflect changes
+        await loadTripDetails();
+        
+        const modal = bootstrap.Modal.getInstance(document.getElementById('editTripModal'));
+        modal.hide();
+        
+        showToast('Trip updated successfully!', 'success');
+        
+    } catch (error) {
+        console.error('Error updating trip:', error);
+        showToast('Error updating trip. Please try again.', 'danger');
+    } finally {
+        const updateBtn = document.getElementById('update-trip-btn-trip-details');
+        updateBtn.disabled = false;
+        updateBtn.innerHTML = '<i class="fas fa-save me-1"></i>Update Trip';
+    }
+}
