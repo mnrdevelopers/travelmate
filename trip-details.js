@@ -404,7 +404,10 @@ function createExpenseItem(expense, index) {
 }
 
 async function loadMemberNameForExpense(expenseItem, memberId) {
-    if (memberId === auth.currentUser.uid) return;
+    if (memberId === auth.currentUser.uid) {
+        expenseItem.querySelector('.text-muted small').innerHTML = '<i class="fas fa-user me-1"></i>Added by: You';
+        return;
+    }
     
     try {
         const memberName = await getMemberName(memberId);
@@ -414,6 +417,8 @@ async function loadMemberNameForExpense(expenseItem, memberId) {
         }
     } catch (error) {
         console.error('Error loading member name for expense:', error);
+        // Set a default value
+        expenseItem.querySelector('.text-muted small').innerHTML = '<i class="fas fa-user me-1"></i>Added by: Traveler';
     }
 }
 
