@@ -1347,3 +1347,14 @@ async function deleteCurrentTrip() {
         showToast('Error deleting trip', 'danger');
     }
 }
+
+function handleRouteCalculationError(error) {
+    console.error('Route calculation error:', error);
+    if (error.message.includes('API request failed')) {
+        return 'Route service temporarily unavailable. Please try again later.';
+    } else if (error.message.includes('Location not found')) {
+        return 'One or both locations could not be found. Please check the location names.';
+    } else {
+        return 'Failed to calculate route. Please check your locations and try again.';
+    }
+}
