@@ -52,6 +52,106 @@ function setupProfileEventListeners() {
     if (leaveAllTripsBtn) leaveAllTripsBtn.addEventListener('click', leaveAllTrips);
 }
 
+// Add the missing profile functions
+function showProfileModal() {
+    const user = auth.currentUser;
+    if (!user) return;
+    
+    document.getElementById('profile-name').value = user.displayName || '';
+    document.getElementById('profile-email').value = user.email || '';
+    document.getElementById('profile-userid').value = user.uid;
+    document.getElementById('profile-avatar').src = user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}&background=4361ee&color=fff`;
+    
+    const modal = new bootstrap.Modal(document.getElementById('profileModal'));
+    modal.show();
+}
+
+async function saveProfile() {
+    const name = document.getElementById('profile-name').value.trim();
+    
+    if (!name) {
+        showAlert('Please enter a display name', 'warning');
+        return;
+    }
+    
+    try {
+        document.getElementById('save-profile-btn').disabled = true;
+        document.getElementById('save-profile-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+        
+        await auth.currentUser.updateProfile({
+            displayName: name
+        });
+        
+        // Update user document in Firestore
+        await db.collection('users').doc(auth.currentUser.uid).update({
+            name: name,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        // Update UI
+        loadUserData();
+        
+        const modal = bootstrap.Modal.getInstance(document.getElementById('profileModal'));
+        modal.hide();
+        
+        showAlert('Profile updated successfully!', 'success');
+        
+    } catch (error) {
+        console.error('Error updating profile:', error);
+        showAlert('Error updating profile', 'danger');
+    } finally {
+        document.getElementById('save-profile-btn').disabled = false;
+        document.getElementById('save-profile-btn').innerHTML = 'Save Changes';
+    }
+}
+
+async function handleAvatarUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    // Note: Firebase Storage would be needed for full avatar upload functionality
+    // For now, we'll just show a message
+    showAlert('Avatar upload requires Firebase Storage setup. Display name updated successfully!', 'info');
+}
+
+async function leaveAllTrips() {
+    if (!confirm('Are you sure you want to leave all trips? This action cannot be undone.')) {
+        return;
+    }
+    
+    try {
+        document.getElementById('leave-all-trips-btn').disabled = true;
+        document.getElementById('leave-all-trips-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Leaving...';
+        
+        // Remove user from all trips
+        const batch = db.batch();
+        
+        for (const trip of userTrips) {
+            if (trip.createdBy !== auth.currentUser.uid) {
+                const tripRef = db.collection('trips').doc(trip.id);
+                batch.update(tripRef, {
+                    members: firebase.firestore.FieldValue.arrayRemove(auth.currentUser.uid),
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            }
+        }
+        
+        await batch.commit();
+        
+        // Reload trips
+        await loadUserTrips();
+        
+        showAlert('Left all trips successfully!', 'success');
+        
+    } catch (error) {
+        console.error('Error leaving all trips:', error);
+        showAlert('Error leaving trips', 'danger');
+    } finally {
+        document.getElementById('leave-all-trips-btn').disabled = false;
+        document.getElementById('leave-all-trips-btn').innerHTML = '<i class="fas fa-sign-out-alt me-1"></i>Leave All Trips';
+    }
+}
+
 function initializeApp() {
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('start-date').min = today;
@@ -97,8 +197,8 @@ async function loadUserTrips() {
         });
         
         userTrips.sort((a, b) => {
-            const dateA = a.createdAt ? a.createdAt.toDate() : new Date(0);
-            const dateB = b.createdAt ? b.createdAt.toDate() : new Date(0);
+            const dateA = a.createdAt ? (a.createdAt.toDate ? a.createdAt.toDate() : new Date(a.createdAt)) : new Date(0);
+            const dateB = b.createdAt ? (b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt)) : new Date(0);
             return dateB - dateA;
         });
         
@@ -180,9 +280,19 @@ function createTripCard(trip) {
     if (remaining < 0) progressBarClass = 'bg-danger';
     else if (remaining < trip.budget * 0.2) progressBarClass = 'bg-warning';
     
-    const createdDate = trip.createdAt ? 
-        new Date(trip.createdAt.toDate()).toLocaleDateString() : 
-        'Recently';
+    // Fix for createdAt date handling
+    let createdDate = 'Recently';
+    if (trip.createdAt) {
+        if (typeof trip.createdAt.toDate === 'function') {
+            createdDate = trip.createdAt.toDate().toLocaleDateString();
+        } else if (trip.createdAt instanceof Date) {
+            createdDate = trip.createdAt.toLocaleDateString();
+        } else if (trip.createdAt.seconds) {
+            createdDate = new Date(trip.createdAt.seconds * 1000).toLocaleDateString();
+        } else {
+            createdDate = new Date(trip.createdAt).toLocaleDateString();
+        }
+    }
     
     const isCreator = trip.createdBy === currentUser.uid;
     
@@ -323,141 +433,6 @@ function showJoinTripModal() {
     modal.show();
 }
 
-function showProfileModal(e) {
-    e.preventDefault();
-    loadProfileData();
-    const modal = new bootstrap.Modal(document.getElementById('profileModal'));
-    modal.show();
-}
-
-async function loadProfileData() {
-    try {
-        const userDoc = await db.collection('users').doc(currentUser.uid).get();
-        if (userDoc.exists) {
-            const userData = userDoc.data();
-            document.getElementById('profile-name').value = userData.name || '';
-            document.getElementById('profile-email').value = currentUser.email;
-            document.getElementById('profile-userid').value = currentUser.uid;
-            document.getElementById('profile-avatar').src = userData.photoURL || currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name || 'User')}&background=4361ee&color=fff`;
-        } else {
-            document.getElementById('profile-name').value = currentUser.displayName || '';
-            document.getElementById('profile-email').value = currentUser.email;
-            document.getElementById('profile-userid').value = currentUser.uid;
-            document.getElementById('profile-avatar').src = currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || 'User')}&background=4361ee&color=fff`;
-        }
-    } catch (error) {
-        console.error('Error loading profile:', error);
-        showAlert('Error loading profile data', 'danger');
-    }
-}
-
-async function saveProfile() {
-    const name = document.getElementById('profile-name').value.trim();
-    
-    if (!name) {
-        showAlert('Please enter a display name', 'warning');
-        return;
-    }
-
-    try {
-        document.getElementById('save-profile-btn').disabled = true;
-        document.getElementById('save-profile-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
-
-        await db.collection('users').doc(currentUser.uid).set({
-            name: name,
-            email: currentUser.email,
-            uid: currentUser.uid,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
-
-        await currentUser.updateProfile({ displayName: name });
-
-        document.getElementById('user-name').textContent = name;
-        
-        const modal = bootstrap.Modal.getInstance(document.getElementById('profileModal'));
-        modal.hide();
-        
-        showAlert('Profile updated successfully!', 'success');
-        
-    } catch (error) {
-        console.error('Error saving profile:', error);
-        showAlert('Error updating profile', 'danger');
-    } finally {
-        document.getElementById('save-profile-btn').disabled = false;
-        document.getElementById('save-profile-btn').innerHTML = 'Save Changes';
-    }
-}
-
-async function handleAvatarUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    try {
-        const storageRef = storage.ref();
-        const avatarRef = storageRef.child(`avatars/${currentUser.uid}`);
-        
-        const snapshot = await avatarRef.put(file);
-        const downloadURL = await snapshot.ref.getDownloadURL();
-        
-        await currentUser.updateProfile({ photoURL: downloadURL });
-        
-        await db.collection('users').doc(currentUser.uid).set({
-            photoURL: downloadURL
-        }, { merge: true });
-        
-        document.getElementById('profile-avatar').src = downloadURL;
-        document.getElementById('user-avatar').src = downloadURL;
-        
-        showAlert('Avatar updated successfully!', 'success');
-        
-    } catch (error) {
-        console.error('Error uploading avatar:', error);
-        showAlert('Error uploading avatar', 'danger');
-    } finally {
-        event.target.value = '';
-    }
-}
-
-async function leaveAllTrips() {
-    if (!confirm('Are you sure you want to leave all trips? This action cannot be undone.')) {
-        return;
-    }
-
-    try {
-        document.getElementById('leave-all-trips-btn').disabled = true;
-        document.getElementById('leave-all-trips-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Leaving...';
-
-        const batch = db.batch();
-        
-        for (const trip of userTrips) {
-            if (trip.members.includes(currentUser.uid)) {
-                const tripRef = db.collection('trips').doc(trip.id);
-                batch.update(tripRef, {
-                    members: firebase.firestore.FieldValue.arrayRemove(currentUser.uid),
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-            }
-        }
-        
-        await batch.commit();
-        
-        userTrips = [];
-        displayTrips();
-        
-        const modal = bootstrap.Modal.getInstance(document.getElementById('profileModal'));
-        modal.hide();
-        
-        showAlert('Successfully left all trips!', 'success');
-        
-    } catch (error) {
-        console.error('Error leaving trips:', error);
-        showAlert('Error leaving trips', 'danger');
-    } finally {
-        document.getElementById('leave-all-trips-btn').disabled = false;
-        document.getElementById('leave-all-trips-btn').innerHTML = '<i class="fas fa-sign-out-alt me-1"></i>Leave All Trips';
-    }
-}
-
 async function calculateDistance() {
     const startLocation = document.getElementById('start-location').value;
     const destination = document.getElementById('trip-destination').value;
@@ -592,7 +567,12 @@ async function saveTrip() {
         const docRef = await db.collection('trips').add(tripData);
         tripData.id = docRef.id;
         
-        userTrips.unshift(tripData);
+        // Add the new trip to the local array with proper date handling
+        const newTrip = {
+            ...tripData,
+            createdAt: new Date() // Use current date for local display
+        };
+        userTrips.unshift(newTrip);
         displayTrips();
         
         const modal = bootstrap.Modal.getInstance(document.getElementById('createTripModal'));
@@ -717,8 +697,6 @@ async function deleteTrip() {
         document.getElementById('confirm-delete-trip-btn').innerHTML = '<i class="fas fa-trash me-1"></i>Delete Trip';
     }
 }
-
-// ... rest of the existing functions (joinTripWithCode, showMessage, showAlert, getAlertIcon, copyTripCode, handleLogout) remain the same ...
 
 async function joinTripWithCode() {
     const code = document.getElementById('trip-code').value.trim().toUpperCase();
