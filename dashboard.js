@@ -687,7 +687,8 @@ function generateTripCode() {
 
 // Utility function to set current trip
 function setCurrentTrip(trip) {
-    localStorage.setItem('currentTrip', JSON.stringify(trip));
+    // Use sessionStorage for consistency with trip-details.js
+    sessionStorage.setItem('currentTrip', JSON.stringify(trip));
 }
 
 // Utility function to navigate to page
