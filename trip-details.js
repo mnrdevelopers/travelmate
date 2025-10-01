@@ -151,8 +151,8 @@ async function loadTripOverview(trip) {
         progressBar.className = 'progress-bar bg-success';
     }
     
-    // Update distance if available
-    if (trip.route) {
+    // Update distance if available - FIXED: Ensure route data is displayed
+    if (trip.route && trip.route.distance) {
         document.getElementById('overview-distance').textContent = `${trip.route.distance} (${trip.route.duration})`;
     } else {
         document.getElementById('overview-distance').textContent = 'Not calculated';
@@ -161,7 +161,7 @@ async function loadTripOverview(trip) {
     // Load members
     await loadTripMembers(trip);
 
-     // Add trip actions (edit/delete/leave buttons)
+    // Add trip actions (edit/delete/leave buttons)
     addTripActions(trip);
 }
 
@@ -1013,6 +1013,9 @@ async function calculateRoute() {
         // Use the utility function from utils.js
         const routeData = await calculateRealDistance(currentTrip.startLocation, currentTrip.destination);
         
+        console.log('Route calculated in trip details:', routeData);
+        
+        // Update Firestore
         await db.collection('trips').doc(currentTrip.id).update({
             route: {
                 ...routeData,
@@ -1021,8 +1024,15 @@ async function calculateRoute() {
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         
-        currentTrip.route = routeData;
+        // Update local trip data immediately
+        currentTrip.route = {
+            ...routeData,
+            calculatedAt: new Date()
+        };
+        
+        // Update the UI immediately without reloading
         loadTripRoute(currentTrip);
+        loadTripOverview(currentTrip); // This updates the overview section
         
         showToast('Route calculated successfully!', 'success');
         
