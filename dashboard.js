@@ -99,16 +99,34 @@ async function loadUserTrips() {
         userTrips = [];
         tripsSnapshot.forEach(doc => {
             const tripData = doc.data();
-            userTrips.push({
+            
+            // Convert Firestore timestamps to proper format
+            const processedTrip = {
                 id: doc.id,
                 ...tripData
-            });
+            };
+            
+            // Handle createdAt timestamp safely
+            if (tripData.createdAt && tripData.createdAt.toDate) {
+                processedTrip.createdAt = tripData.createdAt.toDate();
+            } else if (tripData.createdAt && tripData.createdAt.seconds) {
+                // Handle Firestore timestamp from server
+                processedTrip.createdAt = new Date(tripData.createdAt.seconds * 1000);
+            } else if (tripData.createdAt) {
+                // Keep as is if it's already a Date object or string
+                processedTrip.createdAt = tripData.createdAt;
+            } else {
+                // Fallback to current date
+                processedTrip.createdAt = new Date();
+            }
+            
+            userTrips.push(processedTrip);
         });
         
         // Sort by createdAt on client side (newest first)
         userTrips.sort((a, b) => {
-            const dateA = a.createdAt ? a.createdAt.toDate() : new Date(0);
-            const dateB = b.createdAt ? b.createdAt.toDate() : new Date(0);
+            const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt);
+            const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
             return dateB - dateA; // Descending order
         });
         
@@ -194,10 +212,26 @@ function createTripCard(trip) {
         progressBarClass = 'bg-warning';
     }
     
-    // Format creation date
-    const createdDate = trip.createdAt ? 
-        new Date(trip.createdAt.toDate()).toLocaleDateString() : 
-        'Recently';
+    // Format creation date safely
+    let createdDate = 'Recently';
+    if (trip.createdAt) {
+        try {
+            // Handle both Firestore Timestamp and Date objects
+            if (trip.createdAt.toDate && typeof trip.createdAt.toDate === 'function') {
+                createdDate = trip.createdAt.toDate().toLocaleDateString();
+            } else if (trip.createdAt instanceof Date) {
+                createdDate = trip.createdAt.toLocaleDateString();
+            } else if (typeof trip.createdAt === 'string') {
+                createdDate = new Date(trip.createdAt).toLocaleDateString();
+            } else if (trip.createdAt.seconds) {
+                // Handle Firestore timestamp from server
+                createdDate = new Date(trip.createdAt.seconds * 1000).toLocaleDateString();
+            }
+        } catch (error) {
+            console.warn('Error formatting creation date:', error);
+            createdDate = 'Recently';
+        }
+    }
     
     col.innerHTML = `
         <div class="card trip-card" data-trip-id="${trip.id}">
@@ -665,10 +699,28 @@ async function saveTrip() {
         document.getElementById('save-trip-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Creating...';
         
         const docRef = await db.collection('trips').add(tripData);
-        tripData.id = docRef.id;
         
-        // Add to local state
-        userTrips.unshift(tripData);
+        // Create a proper trip object for local state with converted timestamps
+      const newTrip = {
+    id: docRef.id,
+    name: tripData.name,
+    startLocation: tripData.startLocation,
+    destination: tripData.destination,
+    startDate: tripData.startDate,
+    endDate: tripData.endDate,
+    budget: tripData.budget,
+    code: tripData.code,
+    createdBy: tripData.createdBy,
+    members: tripData.members,
+    expenses: tripData.expenses,
+    itinerary: tripData.itinerary,
+    createdAt: new Date(), // Use current date for local display
+    route: tripData.route || null
+};
+
+// Add to local state
+userTrips.unshift(newTrip);
+        
         displayTrips();
         
         // Close modal
