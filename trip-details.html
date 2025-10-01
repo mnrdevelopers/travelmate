@@ -289,15 +289,16 @@
                             <button type="button" class="btn btn-sm btn-outline-primary" id="add-custom-category-btn-modal">
                                 <i class="fas fa-plus me-1"></i>Custom
                             </button>
-                        </div>
-                        <select class="form-select" id="expense-category" required>
-                            <option value="fuel">Fuel</option>
-                            <option value="hotel">Hotel</option>
-                            <option value="food">Food</option>
-                            <option value="activities">Activities</option>
-                            <option value="other">Other</option>
-                        </select>
-                    </div>
+                       <div class="mb-3">
+    <label for="expense-category" class="form-label">Category</label>
+    <select class="form-select" id="expense-category" required>
+        <option value="fuel">Fuel</option>
+        <option value="hotel">Hotel</option>
+        <option value="food">Food</option>
+        <option value="activities">Activities</option>
+        <option value="other">Other (Add Custom Category)</option>
+    </select>
+</div>
                     <!-- Add Payment Mode Field -->
                     <div class="mb-3">
                         <label for="expense-payment-mode" class="form-label">Payment Mode</label>
