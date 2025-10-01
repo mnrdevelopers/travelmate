@@ -18,9 +18,7 @@ function setupDashboardEventListeners() {
     document.getElementById('logout-btn').addEventListener('click', handleLogout);
     document.getElementById('copy-code-btn').addEventListener('click', copyTripCode);
     
-     // Distance calculation - FIXED: Add real-time calculation
-    document.getElementById('start-location').addEventListener('input', handleLocationChange);
-    document.getElementById('trip-destination').addEventListener('input', handleLocationChange);
+    // Distance calculation
     document.getElementById('calculate-distance').addEventListener('change', function() {
         if (this.checked) {
             calculateDistance();
@@ -31,14 +29,6 @@ function setupDashboardEventListeners() {
     
     // Profile CRUD operations
     setupProfileEventListeners();
-}
-
-// Add real-time distance calculation when locations change
-function handleLocationChange() {
-    const calculateCheckbox = document.getElementById('calculate-distance');
-    if (calculateCheckbox.checked) {
-        calculateDistance();
-    }
 }
 
 function setupProfileEventListeners() {
@@ -99,34 +89,16 @@ async function loadUserTrips() {
         userTrips = [];
         tripsSnapshot.forEach(doc => {
             const tripData = doc.data();
-            
-            // Convert Firestore timestamps to proper format
-            const processedTrip = {
+            userTrips.push({
                 id: doc.id,
                 ...tripData
-            };
-            
-            // Handle createdAt timestamp safely
-            if (tripData.createdAt && tripData.createdAt.toDate) {
-                processedTrip.createdAt = tripData.createdAt.toDate();
-            } else if (tripData.createdAt && tripData.createdAt.seconds) {
-                // Handle Firestore timestamp from server
-                processedTrip.createdAt = new Date(tripData.createdAt.seconds * 1000);
-            } else if (tripData.createdAt) {
-                // Keep as is if it's already a Date object or string
-                processedTrip.createdAt = tripData.createdAt;
-            } else {
-                // Fallback to current date
-                processedTrip.createdAt = new Date();
-            }
-            
-            userTrips.push(processedTrip);
+            });
         });
         
         // Sort by createdAt on client side (newest first)
         userTrips.sort((a, b) => {
-            const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt);
-            const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
+            const dateA = a.createdAt ? a.createdAt.toDate() : new Date(0);
+            const dateB = b.createdAt ? b.createdAt.toDate() : new Date(0);
             return dateB - dateA; // Descending order
         });
         
@@ -137,23 +109,6 @@ async function loadUserTrips() {
         showError('Failed to load trips. Please refresh the page.');
     } finally {
         showLoadingState(false);
-    }
-}
-
-// Helper function to safely convert Firestore timestamps
-function safeConvertTimestamp(timestamp) {
-    if (!timestamp) return new Date();
-    
-    if (timestamp.toDate && typeof timestamp.toDate === 'function') {
-        return timestamp.toDate();
-    } else if (timestamp.seconds) {
-        return new Date(timestamp.seconds * 1000);
-    } else if (timestamp instanceof Date) {
-        return timestamp;
-    } else if (typeof timestamp === 'string') {
-        return new Date(timestamp);
-    } else {
-        return new Date();
     }
 }
 
@@ -229,26 +184,10 @@ function createTripCard(trip) {
         progressBarClass = 'bg-warning';
     }
     
-    // Format creation date safely
-    let createdDate = 'Recently';
-    if (trip.createdAt) {
-        try {
-            // Handle both Firestore Timestamp and Date objects
-            if (trip.createdAt.toDate && typeof trip.createdAt.toDate === 'function') {
-                createdDate = trip.createdAt.toDate().toLocaleDateString();
-            } else if (trip.createdAt instanceof Date) {
-                createdDate = trip.createdAt.toLocaleDateString();
-            } else if (typeof trip.createdAt === 'string') {
-                createdDate = new Date(trip.createdAt).toLocaleDateString();
-            } else if (trip.createdAt.seconds) {
-                // Handle Firestore timestamp from server
-                createdDate = new Date(trip.createdAt.seconds * 1000).toLocaleDateString();
-            }
-        } catch (error) {
-            console.warn('Error formatting creation date:', error);
-            createdDate = 'Recently';
-        }
-    }
+    // Format creation date
+    const createdDate = trip.createdAt ? 
+        new Date(trip.createdAt.toDate()).toLocaleDateString() : 
+        'Recently';
     
     col.innerHTML = `
         <div class="card trip-card" data-trip-id="${trip.id}">
@@ -447,49 +386,30 @@ async function leaveAllTrips() {
 }
 
 async function calculateDistance() {
-    const startLocation = document.getElementById('start-location').value.trim();
-    const destination = document.getElementById('trip-destination').value.trim();
+    const startLocation = document.getElementById('start-location').value;
+    const destination = document.getElementById('trip-destination').value;
     
     if (!startLocation || !destination) {
         showAlert('Please enter both start location and destination', 'warning');
-        document.getElementById('distance-results').classList.add('d-none');
-        return;
-    }
-    
-    // If locations are the same, show warning
-    if (startLocation.toLowerCase() === destination.toLowerCase()) {
-        document.getElementById('distance-details').innerHTML = `
-            <div class="alert alert-warning">
-                <i class="fas fa-exclamation-triangle me-2"></i>
-                Start location and destination are the same.
-            </div>
-        `;
-        document.getElementById('distance-results').classList.remove('d-none');
         return;
     }
     
     try {
         // Show loading state
         document.getElementById('distance-details').innerHTML = `
-            <div class="text-center py-2">
+            <div class="text-center">
                 <div class="spinner-border spinner-border-sm me-2" role="status"></div>
                 Calculating distance...
             </div>
         `;
         document.getElementById('distance-results').classList.remove('d-none');
         
-        // Try to use OpenRouteService API first
-        let distance, duration;
-        try {
-            const routeData = await calculateRouteWithAPI(startLocation, destination);
-            distance = routeData.distance;
-            duration = routeData.duration;
-        } catch (apiError) {
-            console.log('API failed, using simulation:', apiError);
-            // Fallback to simulation
-            distance = calculateApproximateDistance(startLocation, destination);
-            duration = calculateApproximateDuration(distance);
-        }
+        // Simulate API call
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // Simple distance calculation simulation
+        const distance = calculateApproximateDistance(startLocation, destination);
+        const duration = calculateApproximateDuration(distance);
         
         displayDistanceResults(distance, duration);
         
@@ -504,114 +424,18 @@ async function calculateDistance() {
     }
 }
 
-// Enhanced API-based distance calculation
-async function calculateRouteWithAPI(start, destination) {
-    if (!OPENROUTESERVICE_API_KEY) {
-        throw new Error('API key not configured');
-    }
-    
-    try {
-        // Geocode start location
-        const startGeocode = await fetch(`https://api.openrouteservice.org/geocode/search?api_key=${OPENROUTESERVICE_API_KEY}&text=${encodeURIComponent(start)}`);
-        const startData = await startGeocode.json();
-        
-        if (!startData.features || startData.features.length === 0) {
-            throw new Error('Start location not found');
-        }
-        
-        // Geocode destination
-        const destGeocode = await fetch(`https://api.openrouteservice.org/geocode/search?api_key=${OPENROUTESERVICE_API_KEY}&text=${encodeURIComponent(destination)}`);
-        const destData = await destGeocode.json();
-        
-        if (!destData.features || destData.features.length === 0) {
-            throw new Error('Destination not found');
-        }
-        
-        const startCoords = startData.features[0].geometry.coordinates;
-        const destCoords = destData.features[0].geometry.coordinates;
-        
-        // Get route directions
-        const routeResponse = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
-            method: 'POST',
-            headers: {
-                'Authorization': OPENROUTESERVICE_API_KEY,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                coordinates: [startCoords, destCoords],
-                instructions: false,
-                preference: 'recommended'
-            })
-        });
-        
-        const routeData = await routeResponse.json();
-        
-        if (routeData.routes && routeData.routes.length > 0) {
-            const route = routeData.routes[0];
-            const distance = (route.summary.distance / 1000).toFixed(1); // Convert to km
-            const duration = formatDurationFromSeconds(route.summary.duration);
-            
-            return {
-                distance: `${distance} km`,
-                duration: duration
-            };
-        } else {
-            throw new Error('No route found');
-        }
-        
-    } catch (error) {
-        console.error('OpenRouteService API error:', error);
-        throw error;
-    }
-}
-
-// Helper function to format duration from seconds
-function formatDurationFromSeconds(seconds) {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    
-    if (hours > 0) {
-        return `${hours} hour${hours > 1 ? 's' : ''} ${minutes} minute${minutes > 1 ? 's' : ''}`;
-    } else {
-        return `${minutes} minutes`;
-    }
-}
-
-// Enhanced simulation with better accuracy
 function calculateApproximateDistance(start, destination) {
-    // Simple hash-based calculation for consistent results
-    const startHash = stringToHash(start);
-    const destHash = stringToHash(destination);
-    
-    // Base distance between 50-800 km based on hash difference
-    const baseDistance = 100 + Math.abs(startHash - destHash) % 700;
-    
-    // Add some realistic variation
-    const variation = (Math.random() * 100) - 50; // ±50 km
-    return Math.max(10, baseDistance + variation); // Minimum 10km
-}
-
-// Helper function to create consistent hash from string
-function stringToHash(str) {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-        const char = str.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash; // Convert to 32-bit integer
-    }
-    return Math.abs(hash);
+    // Simple simulation - in real app, this would be API call
+    const baseDistance = 350; // km
+    const randomVariation = Math.random() * 200 - 100; // ±100 km
+    return Math.max(50, baseDistance + randomVariation); // Minimum 50km
 }
 
 function calculateApproximateDuration(distance) {
-    // More realistic calculation considering traffic, roads, etc.
-    const averageSpeed = 60; // km/h (more realistic average)
-    const baseHours = distance / averageSpeed;
+    // Assume average speed of 80 km/h for calculation
+    const hours = distance / 80;
+    const totalMinutes = Math.round(hours * 60);
     
-    // Add time for breaks, traffic, etc. (15-30% more time)
-    const additionalTime = baseHours * (0.15 + (Math.random() * 0.15));
-    const totalHours = baseHours + additionalTime;
-    
-    const totalMinutes = Math.round(totalHours * 60);
     const hoursPart = Math.floor(totalMinutes / 60);
     const minutesPart = totalMinutes % 60;
     
@@ -626,24 +450,10 @@ function displayDistanceResults(distance, duration) {
     const distanceDetails = document.getElementById('distance-details');
     
     distanceDetails.innerHTML = `
-        <div class="row">
-            <div class="col-6">
-                <div class="text-center p-3 bg-light rounded">
-                    <i class="fas fa-route text-primary mb-2"></i>
-                    <div><strong>Distance</strong></div>
-                    <div class="fw-bold text-primary">${typeof distance === 'number' ? distance.toFixed(1) + ' km' : distance}</div>
-                </div>
-            </div>
-            <div class="col-6">
-                <div class="text-center p-3 bg-light rounded">
-                    <i class="fas fa-clock text-success mb-2"></i>
-                    <div><strong>Duration</strong></div>
-                    <div class="fw-bold text-success">${duration}</div>
-                </div>
-            </div>
-        </div>
-        <div class="alert alert-info mt-3">
-            <small><i class="fas fa-info-circle me-1"></i>Actual travel time may vary based on traffic and route conditions</small>
+        <p><strong>Distance:</strong> ${distance.toFixed(1)} km</p>
+        <p><strong>Estimated Travel Time:</strong> ${duration}</p>
+        <div class="alert alert-info mt-2">
+            <small><i class="fas fa-info-circle me-1"></i>Distance calculation is approximate</small>
         </div>
     `;
 }
@@ -655,7 +465,6 @@ async function saveTrip() {
     const startDate = document.getElementById('start-date').value;
     const endDate = document.getElementById('end-date').value;
     const budget = parseFloat(document.getElementById('trip-budget').value);
-    const calculateDistanceChecked = document.getElementById('calculate-distance').checked;
     
     // Validation
     if (!name || !startLocation || !destination || !startDate || !endDate || !budget) {
@@ -692,52 +501,16 @@ async function saveTrip() {
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
     
-    // Add route information if calculated
-    if (calculateDistanceChecked) {
-        const distanceInfo = document.getElementById('distance-details');
-        if (!distanceInfo.classList.contains('d-none')) {
-            // Extract distance and duration from displayed results
-            const distanceText = distanceInfo.querySelector('.text-primary')?.textContent;
-            const durationText = distanceInfo.querySelector('.text-success')?.textContent;
-            
-            if (distanceText && durationText) {
-                tripData.route = {
-                    distance: distanceText,
-                    duration: durationText,
-                    calculatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                };
-            }
-        }
-    }
-    
     try {
         // Show loading state
         document.getElementById('save-trip-btn').disabled = true;
         document.getElementById('save-trip-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Creating...';
         
         const docRef = await db.collection('trips').add(tripData);
+        tripData.id = docRef.id;
         
-        // Create a proper trip object for local state with converted timestamps
-      const newTrip = {
-    id: docRef.id,
-    name: tripData.name,
-    startLocation: tripData.startLocation,
-    destination: tripData.destination,
-    startDate: tripData.startDate,
-    endDate: tripData.endDate,
-    budget: tripData.budget,
-    code: tripData.code,
-    createdBy: tripData.createdBy,
-    members: tripData.members,
-    expenses: tripData.expenses,
-    itinerary: tripData.itinerary,
-    createdAt: new Date(), // Use current date for local display
-    route: tripData.route || null
-};
-
-// Add to local state
-userTrips.unshift(newTrip);
-        
+        // Add to local state
+        userTrips.unshift(tripData);
         displayTrips();
         
         // Close modal
@@ -914,8 +687,7 @@ function generateTripCode() {
 
 // Utility function to set current trip
 function setCurrentTrip(trip) {
-    // Use sessionStorage for consistency with trip-details.js
-    sessionStorage.setItem('currentTrip', JSON.stringify(trip));
+    localStorage.setItem('currentTrip', JSON.stringify(trip));
 }
 
 // Utility function to navigate to page
