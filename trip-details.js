@@ -359,6 +359,49 @@ async function loadTripMembers(trip) {
     }
 }
 
+// Enhanced member loading in trip-details.js
+async function ensureUserData(userId, userData) {
+    try {
+        await db.collection('users').doc(userId).set({
+            uid: userId,
+            name: userData.name || 'Traveler',
+            email: userData.email,
+            photoURL: userData.photoURL,
+            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+    } catch (error) {
+        console.error('Error ensuring user data:', error);
+    }
+}
+
+// Add this function to dashboard.js and trip-details.js
+async function calculateRealDistance(startLocation, destination) {
+    try {
+        const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
+            method: 'POST',
+            headers: {
+                'Authorization': OPENROUTESERVICE_API_KEY,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                coordinates: [
+                    [/* start coords */], 
+                    [/* end coords */]
+                ]
+            })
+        });
+        
+        const data = await response.json();
+        return {
+            distance: (data.routes[0].summary.distance / 1000).toFixed(1) + ' km',
+            duration: formatDuration(data.routes[0].summary.duration)
+        };
+    } catch (error) {
+        console.error('Route calculation failed:', error);
+        return null;
+    }
+}
+
 // Debug function to check user data in Firestore
 async function debugUserData(memberId) {
     try {
@@ -382,6 +425,14 @@ async function debugUserData(memberId) {
     } catch (error) {
         console.error('Debug error:', error);
     }
+}
+
+function validateLocation(location) {
+    return location && location.trim().length > 0;
+}
+
+function validateDates(startDate, endDate) {
+    return new Date(startDate) <= new Date(endDate);
 }
 
 function loadTripExpenses(trip) {
