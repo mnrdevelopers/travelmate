@@ -445,3 +445,97 @@ html, body {
 .progress-bar.bg-success { background-color: #28a745 !important; }
 .progress-bar.bg-warning { background-color: #ffc107 !important; }
 .progress-bar.bg-danger { background-color: #dc3545 !important; }
+
+/* Enhanced trip features styles */
+.stop-item {
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.route-segment {
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    margin-bottom: 5px;
+    border-left: 3px solid #4361ee;
+}
+
+.transport-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-left: 8px;
+}
+
+.transport-self-driving { background-color: #4361ee; color: white; }
+.transport-rental-car { background-color: #06d6a0; color: white; }
+.transport-public-transport { background-color: #7209b7; color: white; }
+.transport-flight { background-color: #f72585; color: white; }
+.transport-train { background-color: #3a0ca3; color: white; }
+
+.fuel-calculator {
+    background: #e8f5e8;
+    border-radius: 8px;
+    padding: 15px;
+    margin: 10px 0;
+}
+
+.fuel-cost-display {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #2e7d32;
+}
+
+.km-reading-input {
+    max-width: 150px;
+}
+
+.vehicle-details-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 10px;
+    padding: 15px;
+}
+
+/* Meter reading integration */
+.meter-reading-btn {
+    background: #ff6b6b;
+    color: white;
+    border: none;
+    border-radius: 20px;
+    padding: 8px 16px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.meter-reading-btn:hover {
+    background: #ff5252;
+    transform: translateY(-2px);
+}
+
+.meter-reading-modal .reading-display {
+    font-size: 2rem;
+    font-weight: bold;
+    text-align: center;
+    color: #4361ee;
+    margin: 20px 0;
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+    .stop-item .input-group {
+        flex-direction: column;
+    }
+    
+    .stop-item .remove-stop-btn {
+        margin-top: 5px;
+        align-self: flex-end;
+    }
+}
