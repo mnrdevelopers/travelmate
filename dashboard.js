@@ -37,9 +37,6 @@ function setupDashboardEventListeners() {
         }
     });
     
-    // Enhanced trip features
-    setupEnhancedTripFeatures();
-    
     // Profile operations
     setupProfileEventListeners();
 }
@@ -528,22 +525,15 @@ function displayDistanceResults(distance, duration) {
 
 async function saveTrip() {
     const name = document.getElementById('trip-name').value;
-    const transportType = document.getElementById('transport-type').value;
-    const fuelType = document.getElementById('fuel-type').value;
-    const vehicleMileage = parseFloat(document.getElementById('vehicle-mileage').value) || 0;
     const startLocation = document.getElementById('start-location').value;
     const destination = document.getElementById('trip-destination').value;
-    const stops = getStops();
     const startDate = document.getElementById('start-date').value;
     const endDate = document.getElementById('end-date').value;
     const budget = parseFloat(document.getElementById('trip-budget').value);
-    const drivingCharges = parseFloat(document.getElementById('driving-charges').value) || 0;
     const calculateDistance = document.getElementById('calculate-distance').checked;
     
-    // Validation
-    if (!name || !validateLocation(startLocation) || !validateLocation(destination) || 
-        !startDate || !endDate || !budget) {
-        showAlert('Please fill in all required fields', 'warning');
+    if (!name || !validateLocation(startLocation) || !validateLocation(destination) || !startDate || !endDate || !budget) {
+        showAlert('Please fill in all fields with valid data', 'warning');
         return;
     }
     
@@ -552,14 +542,17 @@ async function saveTrip() {
         return;
     }
     
+    if (budget <= 0) {
+        showAlert('Budget must be greater than 0', 'warning');
+        return;
+    }
+    
     const code = generateTripCode();
     
     const tripData = {
         name: name.trim(),
-        transportType: transportType,
         startLocation: startLocation.trim(),
         destination: destination.trim(),
-        stops: stops,
         startDate,
         endDate,
         budget,
@@ -572,30 +565,23 @@ async function saveTrip() {
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
     
-    // Add vehicle details if applicable
-    if (transportType === 'self-driving' || transportType === 'rental-car') {
-        tripData.vehicleDetails = {
-            fuelType: fuelType,
-            mileage: vehicleMileage,
-            drivingCharges: drivingCharges
-        };
-    }
-    
-    // Calculate route with stops if requested
+    // Calculate route if requested
     if (calculateDistance) {
         try {
             document.getElementById('save-trip-btn').disabled = true;
             document.getElementById('save-trip-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Calculating Route...';
             
-            const allLocations = [startLocation, ...stops, destination];
-            const routeData = await calculateRouteWithStops(allLocations);
+            const routeData = await calculateRealDistance(startLocation, destination);
             tripData.route = {
                 ...routeData,
                 calculatedAt: firebase.firestore.FieldValue.serverTimestamp()
             };
             
+            console.log('Route calculated during trip creation:', routeData);
+            
         } catch (error) {
             console.error('Error calculating route during trip creation:', error);
+            // Continue without route data if calculation fails
             showAlert('Trip created but route calculation failed. You can calculate it later.', 'warning');
         }
     }
@@ -607,10 +593,12 @@ async function saveTrip() {
         const docRef = await db.collection('trips').add(tripData);
         tripData.id = docRef.id;
         
-        userTrips.unshift({
+        // Add the new trip to the local array with proper date handling
+        const newTrip = {
             ...tripData,
-            createdAt: new Date()
-        });
+            createdAt: new Date() // Use current date for local display
+        };
+        userTrips.unshift(newTrip);
         displayTrips();
         
         const modal = bootstrap.Modal.getInstance(document.getElementById('createTripModal'));
@@ -627,188 +615,6 @@ async function saveTrip() {
         document.getElementById('save-trip-btn').disabled = false;
         document.getElementById('save-trip-btn').innerHTML = 'Create Trip';
     }
-}
-
-async function calculateRouteWithStops(locations) {
-    if (locations.length < 2) {
-        throw new Error('At least two locations required');
-    }
-    
-    try {
-        let totalDistance = 0;
-        let totalDuration = 0;
-        const segments = [];
-        
-        // Calculate route for each segment
-        for (let i = 0; i < locations.length - 1; i++) {
-            const segment = await calculateRealDistance(locations[i], locations[i + 1]);
-            
-            // Extract numeric distance (remove " km")
-            const distanceKm = parseFloat(segment.distance);
-            totalDistance += distanceKm;
-            
-            // Extract duration in minutes
-            const durationMinutes = parseDurationToMinutes(segment.duration);
-            totalDuration += durationMinutes;
-            
-            segments.push({
-                from: locations[i],
-                to: locations[i + 1],
-                distance: segment.distance,
-                duration: segment.duration,
-                distanceKm: distanceKm,
-                durationMinutes: durationMinutes
-            });
-        }
-        
-        return {
-            distance: `${totalDistance.toFixed(1)} km`,
-            duration: formatMinutesToDuration(totalDuration),
-            totalDistance: totalDistance,
-            totalDuration: totalDuration,
-            segments: segments,
-            stops: locations.slice(1, -1) // All locations except start and end
-        };
-        
-    } catch (error) {
-        console.error('Error calculating route with stops:', error);
-        throw error;
-    }
-}
-
-// Enhanced fuel cost calculation with current prices
-async function calculateFuelCost(distanceKm, fuelType, mileage) {
-    if (!mileage || mileage <= 0) return 0;
-    
-    const fuelConsumed = distanceKm / mileage;
-    const fuelPrice = await getCurrentFuelPrice(fuelType);
-    
-    return fuelConsumed * fuelPrice;
-}
-
-async function getCurrentFuelPrice(fuelType) {
-    // Try to get cached prices first
-    const cachedPrices = JSON.parse(localStorage.getItem('fuelPrices') || '{}');
-    
-    if (cachedPrices.timestamp && Date.now() - cachedPrices.timestamp < 24 * 60 * 60 * 1000) {
-        return cachedPrices[fuelType] || getDefaultFuelPrice(fuelType);
-    }
-    
-    // Default prices (can be enhanced with real API)
-    const defaultPrices = {
-        'petrol': 106.3,  // Current average in India
-        'diesel': 94.3,
-        'cng': 78.5,
-        'electric': 8.5   // per kWh
-    };
-    
-    // Cache the prices
-    const pricesToCache = {
-        ...defaultPrices,
-        timestamp: Date.now()
-    };
-    localStorage.setItem('fuelPrices', JSON.stringify(pricesToCache));
-    
-    return defaultPrices[fuelType] || 0;
-}
-
-function getDefaultFuelPrice(fuelType) {
-    const defaultPrices = {
-        'petrol': 100,
-        'diesel': 90,
-        'cng': 70,
-        'electric': 8
-    };
-    return defaultPrices[fuelType] || 0;
-}
-
-// Initialize enhanced features
-document.addEventListener('DOMContentLoaded', function() {
-    setupEnhancedTripFeatures();
-});
-
-// Enhanced trip creation with new features
-function setupEnhancedTripFeatures() {
-    // Transport type change handler
-    const transportTypeSelect = document.getElementById('transport-type');
-    if (transportTypeSelect) {
-        transportTypeSelect.addEventListener('change', function() {
-            const isCarType = this.value === 'self-driving' || this.value === 'rental-car';
-            const vehicleDetails = document.getElementById('vehicle-details');
-            const selfDrivingCharges = document.getElementById('self-driving-charges');
-            
-            if (vehicleDetails) {
-                vehicleDetails.classList.toggle('d-none', !isCarType);
-            }
-            if (selfDrivingCharges) {
-                selfDrivingCharges.classList.toggle('d-none', this.value !== 'self-driving');
-            }
-        });
-    }
-    
-    // Add stop functionality
-    const addStopBtn = document.getElementById('add-stop-btn');
-    if (addStopBtn) {
-        addStopBtn.addEventListener('click', addStopField);
-    }
-    
-    // Auto-calculate fuel cost when mileage changes
-    const mileageInput = document.getElementById('vehicle-mileage');
-    if (mileageInput) {
-        mileageInput.addEventListener('change', updateFuelCostEstimate);
-    }
-    
-    const fuelTypeSelect = document.getElementById('fuel-type');
-    if (fuelTypeSelect) {
-        fuelTypeSelect.addEventListener('change', updateFuelCostEstimate);
-    }
-}
-
-function updateFuelCostEstimate() {
-    // This would update fuel cost estimates when mileage or fuel type changes
-    console.log('Fuel cost estimate updated');
-}
-
-function addStopField() {
-    const stopsContainer = document.getElementById('stops-container');
-    const stopIndex = stopsContainer.children.length;
-    
-    const stopDiv = document.createElement('div');
-    stopDiv.className = 'stop-item input-group mb-2';
-    stopDiv.innerHTML = `
-        <input type="text" class="form-control stop-location" placeholder="Stop location" data-stop-index="${stopIndex}">
-        <button type="button" class="btn btn-outline-danger remove-stop-btn" data-stop-index="${stopIndex}">
-            <i class="fas fa-times"></i>
-        </button>
-    `;
-    
-    stopsContainer.appendChild(stopDiv);
-    
-    // Add remove event listener
-    stopDiv.querySelector('.remove-stop-btn').addEventListener('click', function() {
-        this.parentElement.remove();
-        reindexStops();
-    });
-}
-
-function reindexStops() {
-    const stops = document.querySelectorAll('.stop-item');
-    stops.forEach((stop, index) => {
-        const input = stop.querySelector('.stop-location');
-        const btn = stop.querySelector('.remove-stop-btn');
-        input.dataset.stopIndex = index;
-        btn.dataset.stopIndex = index;
-    });
-}
-
-function getStops() {
-    const stops = [];
-    document.querySelectorAll('.stop-location').forEach(input => {
-        if (input.value.trim()) {
-            stops.push(input.value.trim());
-        }
-    });
-    return stops;
 }
 
 async function updateTrip() {
@@ -1066,59 +872,4 @@ function validateDates(startDate, endDate) {
         return false;
     }
     return true;
-}
-
-// Meter reading functionality
-let currentMeterReading = 0;
-
-function setupMeterReading() {
-    document.getElementById('increment-reading').addEventListener('click', function() {
-        currentMeterReading++;
-        updateMeterDisplay();
-    });
-    
-    document.getElementById('reset-reading').addEventListener('click', function() {
-        currentMeterReading = 0;
-        updateMeterDisplay();
-    });
-    
-    document.getElementById('custom-reading').addEventListener('input', function() {
-        currentMeterReading = parseInt(this.value) || 0;
-        updateMeterDisplay();
-    });
-    
-    document.getElementById('save-reading').addEventListener('click', function() {
-        saveMeterReading(currentMeterReading);
-    });
-}
-
-function updateMeterDisplay() {
-    document.getElementById('current-reading').textContent = `${currentMeterReading} km`;
-}
-
-function saveMeterReading(reading) {
-    // Save to current trip or global storage
-    if (currentTrip) {
-        if (!currentTrip.meterReadings) currentTrip.meterReadings = [];
-        currentTrip.meterReadings.push({
-            reading: reading,
-            timestamp: new Date().toISOString(),
-            location: 'Current Location' // Could use geolocation API
-        });
-        
-        // Update Firestore
-        db.collection('trips').doc(currentTrip.id).update({
-            meterReadings: currentTrip.meterReadings,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        
-        showToast('Meter reading saved!', 'success');
-    }
-}
-
-function showMeterReadingModal() {
-    currentMeterReading = 0;
-    updateMeterDisplay();
-    const modal = new bootstrap.Modal(document.getElementById('meterReadingModal'));
-    modal.show();
 }
