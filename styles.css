@@ -563,3 +563,95 @@ html, body {
 .route-segment small {
     font-size: 0.8rem;
 }
+
+/* Enhanced Dashboard Styles */
+.card.bg-primary { background: linear-gradient(135deg, #4361ee, #3a0ca3) !important; }
+.card.bg-success { background: linear-gradient(135deg, #4cc9f0, #4895ef) !important; }
+.card.bg-warning { background: linear-gradient(135deg, #ffd166, #ff9e00) !important; }
+.card.bg-info { background: linear-gradient(135deg, #06d6a0, #04a777) !important; }
+.card.bg-dark { background: linear-gradient(135deg, #7209b7, #560bad) !important; }
+
+/* Stat Cards */
+.stat-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+/* Car Expense Badges */
+.car-expense-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+}
+
+/* Responsive Charts */
+@media (max-width: 768px) {
+    .chart-container {
+        height: 300px !important;
+    }
+    
+    .stat-card .card-body {
+        padding: 1rem;
+    }
+    
+    .stat-card h2 {
+        font-size: 1.5rem;
+    }
+}
+
+/* Trip Status Badges */
+.badge.bg-info { background-color: #17a2b8 !important; }
+.badge.bg-secondary { background-color: #6c757d !important; }
+.badge.bg-success { background-color: #28a745 !important; }
+
+/* Quick Action Buttons */
+.quick-action-btn {
+    transition: all 0.3s ease;
+}
+
+.quick-action-btn:hover {
+    transform: scale(1.05);
+}
+
+/* Car Calculator Styles */
+.rupee-symbol {
+    font-family: Arial, sans-serif;
+    font-weight: bold;
+}
+
+.vehicle-item {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
+}
+
+.vehicle-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.calculation-card {
+    border-left: 4px solid #4361ee;
+}
+
+.rental-card {
+    border-left: 4px solid #f72585;
+}
+
+.expense-card {
+    border-left: 4px solid #4cc9f0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .vehicle-actions {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .vehicle-actions .btn {
+        width: 100%;
+    }
+}
