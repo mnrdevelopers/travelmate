@@ -539,3 +539,27 @@ html, body {
         align-self: flex-end;
     }
 }
+
+/* Route segments styling */
+.segments-container {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.route-segment {
+    border-left: 4px solid #4361ee;
+    transition: all 0.3s ease;
+}
+
+.route-segment:hover {
+    background-color: #f8f9fa;
+    transform: translateX(5px);
+}
+
+.route-segment .card-body {
+    padding: 0.75rem 1rem;
+}
+
+.route-segment small {
+    font-size: 0.8rem;
+}
