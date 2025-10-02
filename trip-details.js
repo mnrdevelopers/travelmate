@@ -74,6 +74,7 @@ function checkAuthState() {
             navigateTo('auth.html');
         } else {
             loadUserData();
+            await loadCustomCategories();
         }
     });
 }
@@ -93,6 +94,9 @@ async function loadTripDetails() {
     }
     
     try {
+        // Load custom categories first
+        await loadCustomCategories();
+        
         // Refresh trip data from Firestore
         const tripDoc = await db.collection('trips').doc(currentTrip.id).get();
         if (tripDoc.exists) {
@@ -476,8 +480,23 @@ async function getMemberName(memberId) {
 }
 
 function getCategoryName(categoryId) {
+    // Check if it's a default category
+    const defaultCategories = {
+        'fuel': 'Fuel',
+        'hotel': 'Hotel', 
+        'food': 'Food',
+        'activities': 'Activities'
+    };
+    
+    if (defaultCategories[categoryId]) {
+        return defaultCategories[categoryId];
+    }
+    
+    // Check if it's a custom category
     const customCategory = customCategories.find(cat => cat.id === categoryId);
     if (customCategory) return customCategory.name;
+    
+    // Fallback
     return categoryId.charAt(0).toUpperCase() + categoryId.slice(1);
 }
 
@@ -485,6 +504,25 @@ function handleCategoryChange(event) {
     if (event.target.value === 'other') {
         showCustomCategoryModal();
         setTimeout(() => event.target.value = 'fuel', 100);
+    }
+}
+
+async function deleteCustomCategory(categoryId) {
+    if (!confirm('Are you sure you want to delete this custom category?')) return;
+    
+    try {
+        const categoryToDelete = customCategories.find(cat => cat.id === categoryId);
+        if (!categoryToDelete) return;
+        
+        await db.collection('users').doc(auth.currentUser.uid).update({
+            customCategories: firebase.firestore.FieldValue.arrayRemove(categoryToDelete)
+        });
+        
+        await loadCustomCategories();
+        showToast('Custom category deleted successfully!', 'success');
+    } catch (error) {
+        console.error('Error deleting custom category:', error);
+        showToast('Error deleting category', 'danger');
     }
 }
 
@@ -1114,11 +1152,16 @@ async function saveCustomCategory() {
             name: name,
             color: color,
             createdBy: auth.currentUser.uid,
-            createdAt: new Date().toISOString()
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
-        customCategories.push(category);
-        updateCategoryDropdown();
+        // Save to Firestore
+        await db.collection('users').doc(auth.currentUser.uid).update({
+            customCategories: firebase.firestore.FieldValue.arrayUnion(category)
+        });
+
+        // Update local array
+        await loadCustomCategories();
         
         const categorySelect = document.getElementById('expense-category');
         categorySelect.value = category.id;
@@ -1130,15 +1173,58 @@ async function saveCustomCategory() {
         
     } catch (error) {
         console.error('Error saving category:', error);
-        showToast('Error adding category', 'danger');
+        
+        // If user document doesn't exist, create it first
+        if (error.code === 'not-found') {
+            try {
+                await db.collection('users').doc(auth.currentUser.uid).set({
+                    customCategories: [category],
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                await loadCustomCategories();
+                showToast('Custom category added and selected!', 'success');
+            } catch (createError) {
+                console.error('Error creating user document:', createError);
+                showToast('Error adding category', 'danger');
+            }
+        } else {
+            showToast('Error adding category', 'danger');
+        }
     } finally {
         document.getElementById('save-category-btn').disabled = false;
         document.getElementById('save-category-btn').innerHTML = 'Add Category';
     }
 }
 
+async function loadCustomCategories() {
+    try {
+        const userDoc = await db.collection('users').doc(auth.currentUser.uid).get();
+        
+        if (userDoc.exists) {
+            const userData = userDoc.data();
+            customCategories = userData.customCategories || [];
+        } else {
+            // Create user document if it doesn't exist
+            await db.collection('users').doc(auth.currentUser.uid).set({
+                name: auth.currentUser.displayName || '',
+                email: auth.currentUser.email || '',
+                customCategories: [],
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            customCategories = [];
+        }
+        
+        updateCategoryDropdown();
+    } catch (error) {
+        console.error('Error loading custom categories:', error);
+        customCategories = [];
+    }
+}
+
 function updateCategoryDropdown() {
     const categorySelect = document.getElementById('expense-category');
+    if (!categorySelect) return;
+    
     const currentSelection = categorySelect.value;
     
     categorySelect.innerHTML = '';
@@ -1150,6 +1236,7 @@ function updateCategoryDropdown() {
         {value: 'activities', text: 'Activities'}
     ];
     
+    // Add default categories
     defaultCategories.forEach(category => {
         const option = document.createElement('option');
         option.value = category.value;
@@ -1157,20 +1244,24 @@ function updateCategoryDropdown() {
         categorySelect.appendChild(option);
     });
     
+    // Add custom categories
     customCategories.forEach(category => {
         const option = document.createElement('option');
         option.value = category.id;
         option.textContent = category.name;
         option.style.color = category.color;
+        option.setAttribute('data-color', category.color);
         categorySelect.appendChild(option);
     });
     
+    // Add "Other" option to create new categories
     const otherOption = document.createElement('option');
     otherOption.value = 'other';
     otherOption.textContent = 'Other (Add Custom Category)';
     otherOption.style.fontStyle = 'italic';
     categorySelect.appendChild(otherOption);
     
+    // Restore previous selection if it exists
     if (currentSelection && categorySelect.querySelector(`[value="${currentSelection}"]`)) {
         categorySelect.value = currentSelection;
     } else if (categorySelect.options.length > 0) {
