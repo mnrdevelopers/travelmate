@@ -5,8 +5,8 @@ let paymentChart = null;
 let customCategories = [];
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Only setup event listeners, checkAuthState will handle the rest
     checkAuthState();
-    loadTripDetails();
     setupTripDetailsEventListeners();
 });
 
@@ -69,12 +69,13 @@ function setupEnhancedCRUDEventListeners() {
 }
 
 function checkAuthState() {
-    auth.onAuthStateChanged(async (user) => { // Add async here
+    auth.onAuthStateChanged(async (user) => {
         if (!user) {
             navigateTo('auth.html');
         } else {
             loadUserData();
-            await loadCustomCategories(); // Now this await is valid
+            // Wait for user to be fully set before loading trip details
+            await loadTripDetails();
         }
     });
 }
@@ -86,6 +87,13 @@ function loadUserData() {
 }
 
 async function loadTripDetails() {
+    // Check if user is authenticated
+    const user = auth.currentUser;
+    if (!user) {
+        console.log('User not authenticated, waiting for auth state...');
+        return;
+    }
+    
     currentTrip = getCurrentTrip();
     
     if (!currentTrip) {
@@ -94,7 +102,7 @@ async function loadTripDetails() {
     }
     
     try {
-        // Load custom categories first
+        // Load custom categories first - now user should be available
         await loadCustomCategories();
         
         // Refresh trip data from Firestore
@@ -118,7 +126,7 @@ async function loadTripDetails() {
         loadTripRoute(currentTrip);
         
         // Add leave trip button if user is not the creator
-        if (currentTrip.createdBy !== auth.currentUser.uid) {
+        if (currentTrip.createdBy !== user.uid) {
             addLeaveTripButton();
         }
         
@@ -1267,8 +1275,18 @@ async function saveCustomCategory() {
 }
 
 async function loadCustomCategories() {
+    const user = auth.currentUser;
+    
+    // Check if user is available
+    if (!user) {
+        console.log('User not available for loading custom categories');
+        customCategories = [];
+        updateCategoryDropdown();
+        return;
+    }
+    
     try {
-        const userDoc = await db.collection('users').doc(auth.currentUser.uid).get();
+        const userDoc = await db.collection('users').doc(user.uid).get();
         
         if (userDoc.exists) {
             const userData = userDoc.data();
@@ -1283,9 +1301,9 @@ async function loadCustomCategories() {
             });
         } else {
             // Create user document if it doesn't exist
-            await db.collection('users').doc(auth.currentUser.uid).set({
-                name: auth.currentUser.displayName || '',
-                email: auth.currentUser.email || '',
+            await db.collection('users').doc(user.uid).set({
+                name: user.displayName || '',
+                email: user.email || '',
                 customCategories: [],
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
@@ -1296,6 +1314,7 @@ async function loadCustomCategories() {
     } catch (error) {
         console.error('Error loading custom categories:', error);
         customCategories = [];
+        updateCategoryDropdown();
     }
 }
 
