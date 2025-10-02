@@ -428,9 +428,9 @@ function getFuelUnit(fuelType) {
 function loadTripExpenses() {
     const db = firebase.firestore();
     
+    // Temporary workaround - remove ordering while indexes build
     db.collection('expenses')
         .where('tripId', '==', currentTrip.id)
-        .orderBy('date', 'desc')
         .get()
         .then((querySnapshot) => {
             tripExpenses = [];
@@ -452,7 +452,13 @@ function loadTripExpenses() {
             querySnapshot.forEach((doc) => {
                 const expense = { id: doc.id, ...doc.data() };
                 tripExpenses.push(expense);
-                
+            });
+            
+            // Sort expenses by date locally (newest first)
+            tripExpenses.sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            // Create expense items after sorting
+            tripExpenses.forEach(expense => {
                 const expenseItem = createExpenseItem(expense);
                 expensesList.appendChild(expenseItem);
             });
@@ -758,10 +764,9 @@ function deleteExpense(expenseId) {
 function loadTripItinerary() {
     const db = firebase.firestore();
     
+    // Temporary workaround - remove ordering while indexes build
     db.collection('itinerary')
         .where('tripId', '==', currentTrip.id)
-        .orderBy('day')
-        .orderBy('time')
         .get()
         .then((querySnapshot) => {
             tripItinerary = [];
@@ -779,13 +784,20 @@ function loadTripItinerary() {
             
             emptyItinerary.style.display = 'none';
             
-            // Group activities by day
-            const activitiesByDay = {};
-            
             querySnapshot.forEach((doc) => {
                 const activity = { id: doc.id, ...doc.data() };
                 tripItinerary.push(activity);
-                
+            });
+            
+            // Sort activities locally
+            tripItinerary.sort((a, b) => {
+                if (a.day !== b.day) return a.day - b.day;
+                return a.time.localeCompare(b.time);
+            });
+            
+            // Group activities by day
+            const activitiesByDay = {};
+            tripItinerary.forEach(activity => {
                 if (!activitiesByDay[activity.day]) {
                     activitiesByDay[activity.day] = [];
                 }
