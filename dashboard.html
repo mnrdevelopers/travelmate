@@ -25,6 +25,11 @@
             <i class="fas fa-home me-1"></i>Dashboard
         </a>
     </li>
+                   <li class="nav-item">
+    <a class="nav-link" href="car-calculations.html">
+        <i class="fas fa-calculator me-1"></i>Car Calculator
+    </a>
+</li>
     <li class="nav-item">
         <a class="nav-link" href="#" id="nav-profile">
             <i class="fas fa-user me-1"></i>Profile
@@ -88,35 +93,172 @@
     </div>
 </div>
     
-    <!-- Dashboard Content -->
-    <div class="container mt-4">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2>My Trips</h2>
-            <div>
-                <button class="btn btn-primary me-2" id="create-trip-btn">
-                    <i class="fas fa-plus me-1"></i>New Trip
-                </button>
-                <button class="btn btn-outline-primary" id="join-trip-btn">
-                    <i class="fas fa-user-plus me-1"></i>Join Trip
-                </button>
+  <!-- Replace the existing dashboard content with this enhanced version -->
+
+<!-- Dashboard Content -->
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>My Trips</h2>
+        <div>
+            <button class="btn btn-primary me-2" id="create-trip-btn">
+                <i class="fas fa-plus me-1"></i>New Trip
+            </button>
+            <button class="btn btn-outline-primary me-2" id="join-trip-btn">
+                <i class="fas fa-user-plus me-1"></i>Join Trip
+            </button>
+            <a href="car-calculations.html" class="btn btn-success">
+                <i class="fas fa-calculator me-1"></i>Car Calculator
+            </a>
+        </div>
+    </div>
+    
+    <!-- Enhanced Statistics Dashboard -->
+    <div class="row mb-5">
+        <div class="col-md-3 mb-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="card-title">Total Trips</h4>
+                            <h2 id="total-trips-count">0</h2>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-suitcase-rolling fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-        
-        <div id="trips-container" class="row">
-            <!-- Trips will be loaded here -->
+        <div class="col-md-3 mb-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="card-title">Active Trips</h4>
+                            <h2 id="active-trips-count">0</h2>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-map-marked-alt fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-        
-      <div id="empty-trips" class="empty-state">
-    <div class="empty-icon mb-4">
-        <i class="fas fa-suitcase-rolling"></i>
+        <div class="col-md-3 mb-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="card-title">Total Spent</h4>
+                            <h2><span class="rupee-symbol">₹</span><span id="total-spent-amount">0</span></h2>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-rupee-sign fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="card-title">Car Expenses</h4>
+                            <h2><span class="rupee-symbol">₹</span><span id="car-expenses-amount">0</span></h2>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-car fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    <h4>No trips yet</h4>
-    <p>Create your first trip or join an existing one to get started!</p>
-    <button class="btn btn-primary mt-2" id="create-first-trip-btn">
-        <i class="fas fa-plus me-1"></i>Create Your First Trip
-    </button>
+
+    <!-- Car Expense Breakdown -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Car Expense Breakdown</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <canvas id="carExpenseChart" height="200"></canvas>
+                        </div>
+                        <div class="col-md-4">
+                            <div id="car-expense-details">
+                                <div class="text-center text-muted py-4">
+                                    <i class="fas fa-car fa-3x mb-3"></i>
+                                    <p>No car expenses recorded yet</p>
+                                    <a href="car-calculations.html" class="btn btn-primary btn-sm">
+                                        <i class="fas fa-calculator me-1"></i>Calculate Car Expenses
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upcoming Trips -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0"><i class="fas fa-calendar-alt me-2"></i>Upcoming Trips</h5>
+                </div>
+                <div class="card-body">
+                    <div id="upcoming-trips-list">
+                        <!-- Upcoming trips will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Car Calculations -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-calculator me-2"></i>Recent Car Calculations</h5>
+                </div>
+                <div class="card-body">
+                    <div id="recent-calculations-list">
+                        <!-- Recent calculations will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Trips Grid -->
+    <div class="row">
+        <div class="col-12">
+            <h4 class="mb-3">All Trips</h4>
+        </div>
+    </div>
+    
+    <div id="trips-container" class="row">
+        <!-- Trips will be loaded here -->
+    </div>
+    
+    <div id="empty-trips" class="empty-state">
+        <div class="empty-icon mb-4">
+            <i class="fas fa-suitcase-rolling"></i>
+        </div>
+        <h4>No trips yet</h4>
+        <p>Create your first trip or join an existing one to get started!</p>
+        <button class="btn btn-primary mt-2" id="create-first-trip-btn">
+            <i class="fas fa-plus me-1"></i>Create Your First Trip
+        </button>
+    </div>
 </div>
-    </div>
 
     <!-- Create Trip Modal -->
     <div class="modal fade" id="createTripModal" tabindex="-1">
