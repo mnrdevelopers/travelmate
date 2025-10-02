@@ -21,7 +21,7 @@ function setupTripDetailsEventListeners() {
     // Add event listener for update trip button in trip details page
     document.getElementById('update-trip-btn-trip-details').addEventListener('click', updateTripFromDetails);
     
-    // Profile navigation - check if element exists first
+   // Profile navigation
     const navProfile = document.getElementById('nav-profile');
     if (navProfile) {
         navProfile.addEventListener('click', showProfileModal);
@@ -1173,6 +1173,11 @@ async function calculateRoute() {
         const routeData = await calculateRouteWithStops(allLocations);
         
         console.log('Route calculated in trip details:', routeData);
+
+        // After calculating route, add auto fuel expenses
+        if (currentTrip.transportType === 'self-driving' || currentTrip.transportType === 'rental-car') {
+            await addAutoFuelExpenses(currentTrip, routeData);
+        }
         
         // Prepare update data with proper timestamp
         const updateData = {
@@ -1618,7 +1623,7 @@ function showProfileModal() {
     const user = auth.currentUser;
     if (!user) return;
     
-    // Create profile modal HTML dynamically since it doesn't exist in trip-details.html
+    // Create profile modal HTML
     const modalHtml = `
         <div class="modal fade" id="profileModal" tabindex="-1">
             <div class="modal-dialog">
@@ -1630,7 +1635,9 @@ function showProfileModal() {
                     <div class="modal-body">
                         <form id="profile-form">
                             <div class="text-center mb-4">
-                                <img id="profile-avatar" class="user-avatar mb-3" style="width: 100px; height: 100px;" src="${user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}&background=4361ee&color=fff`}" alt="Profile">
+                                <img id="profile-avatar" class="user-avatar mb-3" style="width: 100px; height: 100px;" 
+                                     src="${user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}&background=4361ee&color=fff`}" 
+                                     alt="Profile">
                             </div>
                             <div class="mb-3">
                                 <label for="profile-name" class="form-label">Display Name</label>
@@ -1649,7 +1656,7 @@ function showProfileModal() {
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <button type="button" class="btn btn-primary" onclick="updateProfile()">Save Changes</button>
+                        <button type="button" class="btn btn-primary" id="save-profile-trip-details">Save Changes</button>
                     </div>
                 </div>
             </div>
@@ -1665,9 +1672,107 @@ function showProfileModal() {
     // Add modal to DOM
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     
+    // Add event listener for save button
+    document.getElementById('save-profile-trip-details').addEventListener('click', updateProfileFromTripDetails);
+    
     // Show the modal
     const modal = new bootstrap.Modal(document.getElementById('profileModal'));
     modal.show();
+}
+
+async function updateProfileFromTripDetails() {
+    const name = document.getElementById('profile-name').value.trim();
+    
+    if (!name) {
+        showToast('Please enter a display name', 'warning');
+        return;
+    }
+    
+    try {
+        const saveBtn = document.getElementById('save-profile-trip-details');
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+        
+        await auth.currentUser.updateProfile({
+            displayName: name
+        });
+        
+        // Update user document in Firestore
+        await db.collection('users').doc(auth.currentUser.uid).update({
+            name: name,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        // Update UI
+        loadUserData();
+        
+        const modal = bootstrap.Modal.getInstance(document.getElementById('profileModal'));
+        modal.hide();
+        
+        showToast('Profile updated successfully!', 'success');
+        
+    } catch (error) {
+        console.error('Error updating profile:', error);
+        showToast('Error updating profile', 'danger');
+    } finally {
+        const saveBtn = document.getElementById('save-profile-trip-details');
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = 'Save Changes';
+        }
+    }
+}
+
+// Add this function to automatically create fuel expenses when route is calculated
+async function addAutoFuelExpenses(trip, routeData) {
+    if (trip.transportType !== 'self-driving' && trip.transportType !== 'rental-car') return;
+    
+    if (!trip.vehicleDetails || !trip.vehicleDetails.mileage) return;
+    
+    try {
+        const fuelExpenses = [];
+        
+        if (routeData.segments) {
+            for (const segment of routeData.segments) {
+                const fuelCost = await calculateFuelCost(
+                    segment.distanceKm,
+                    trip.vehicleDetails.fuelType,
+                    trip.vehicleDetails.mileage
+                );
+                
+                if (fuelCost > 0) {
+                    fuelExpenses.push({
+                        description: `Fuel: ${segment.from} to ${segment.to}`,
+                        amount: parseFloat(fuelCost.toFixed(2)),
+                        category: 'fuel',
+                        date: new Date().toISOString().split('T')[0],
+                        paymentMode: 'cash',
+                        addedBy: auth.currentUser.uid,
+                        addedAt: new Date().toISOString(),
+                        autoCalculated: true,
+                        distance: segment.distance,
+                        segment: `${segment.from} → ${segment.to}`
+                    });
+                }
+            }
+        }
+        
+        if (fuelExpenses.length > 0) {
+            // Add to existing expenses
+            const updatedExpenses = [...(trip.expenses || []), ...fuelExpenses];
+            
+            await db.collection('trips').doc(trip.id).update({
+                expenses: updatedExpenses,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            currentTrip.expenses = updatedExpenses;
+            showToast(`Added ${fuelExpenses.length} fuel expense(s) automatically!`, 'success');
+        }
+        
+    } catch (error) {
+        console.error('Error adding auto fuel expenses:', error);
+    }
 }
 
 // Add profile update function
