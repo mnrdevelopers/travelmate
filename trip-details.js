@@ -170,12 +170,82 @@ async function loadTripOverview(trip) {
     } else {
         document.getElementById('overview-distance').textContent = 'Not calculated';
     }
+
+    // Add car expense section
+    addCarExpenseSection(trip);
     
     // Load members
     await loadTripMembers(trip);
 
     // Add trip actions (edit/delete/leave buttons)
     addTripActions(trip);
+}
+
+
+function addCarExpenseSection(trip) {
+    const overviewTab = document.getElementById('overview');
+    
+    // Remove existing car expense section if it exists
+    const existingSection = overviewTab.querySelector('#car-expense-section');
+    if (existingSection) {
+        existingSection.remove();
+    }
+    
+    // Calculate car expenses for this trip
+    const carExpenses = trip.expenses ? trip.expenses.filter(expense => 
+        expense.category === 'fuel' || 
+        expense.description.toLowerCase().includes('car') ||
+        expense.description.toLowerCase().includes('fuel') ||
+        expense.description.toLowerCase().includes('rental') ||
+        expense.description.toLowerCase().includes('maintenance') ||
+        expense.description.toLowerCase().includes('toll') ||
+        expense.description.toLowerCase().includes('parking')
+    ) : [];
+    
+    const totalCarExpenses = carExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+    
+    if (carExpenses.length === 0) {
+        return; // Don't show section if no car expenses
+    }
+    
+    // Create car expense section
+    const carExpenseSection = document.createElement('div');
+    carExpenseSection.id = 'car-expense-section';
+    carExpenseSection.className = 'card mb-4';
+    carExpenseSection.innerHTML = `
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0"><i class="fas fa-car me-2"></i>Car & Fuel Expenses</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6 class="text-primary">Total Car Expenses: <span class="rupee-symbol">₹</span>${totalCarExpenses.toFixed(2)}</h6>
+                    <div class="mt-3">
+                        ${carExpenses.slice(0, 3).map(expense => `
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <small>${expense.description}</small>
+                                <small class="fw-bold"><span class="rupee-symbol">₹</span>${expense.amount.toFixed(2)}</small>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="text-center">
+                        <a href="car-calculations.html" class="btn btn-primary btn-sm mb-2">
+                            <i class="fas fa-calculator me-1"></i>Calculate More
+                        </a>
+                        <p class="small text-muted mb-0">
+                            ${carExpenses.length} car-related expenses recorded
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Insert after trip information card
+    const tripInfoCard = overviewTab.querySelector('.card');
+    tripInfoCard.parentNode.insertBefore(carExpenseSection, tripInfoCard.nextSibling);
 }
 
 async function loadTripMembers(trip) {
