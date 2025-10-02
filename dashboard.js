@@ -1,6 +1,7 @@
 let currentUser = null;
 let userTrips = [];
 let customCategories = [];
+let carExpenseChart = null;
 
 document.addEventListener('DOMContentLoaded', function() {
     checkAuthState();
@@ -220,6 +221,9 @@ async function loadUserTrips() {
         });
         
         displayTrips();
+        updateDashboardStats();
+        loadUpcomingTrips();
+        loadRecentCalculations();
         
     } catch (error) {
         console.error('Error loading trips:', error);
@@ -227,6 +231,296 @@ async function loadUserTrips() {
     } finally {
         showLoadingState(false);
     }
+}
+
+async function loadRecentCalculations() {
+    const recentCalculationsList = document.getElementById('recent-calculations-list');
+    
+    try {
+        // Load from localStorage (you can modify this to use Firestore)
+        const templates = JSON.parse(localStorage.getItem('carCalculationTemplates') || '[]');
+        const recentCalculations = templates.slice(-3).reverse(); // Show last 3 calculations
+        
+        if (recentCalculations.length === 0) {
+            recentCalculationsList.innerHTML = `
+                <div class="text-center text-muted py-3">
+                    <i class="fas fa-calculator fa-2x mb-3"></i>
+                    <p>No recent calculations</p>
+                    <a href="car-calculations.html" class="btn btn-primary btn-sm">
+                        <i class="fas fa-calculator me-1"></i>Create Calculation
+                    </a>
+                </div>
+            `;
+            return;
+        }
+        
+        recentCalculationsList.innerHTML = recentCalculations.map(calc => {
+            const date = new Date(calc.timestamp).toLocaleDateString();
+            
+            return `
+                <div class="card mb-2">
+                    <div class="card-body py-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-1">${calc.vehicleType === 'rental' ? 'Rental Car' : 'Self Owned'} Calculation</h6>
+                                <small class="text-muted">
+                                    <i class="fas fa-route me-1"></i>${calc.tripDistance} km
+                                </small>
+                                <br>
+                                <small class="text-muted">
+                                    <i class="fas fa-gas-pump me-1"></i>${calc.fuelConsumed} L
+                                </small>
+                            </div>
+                            <div class="text-end">
+                                <h6 class="text-success mb-0"><span class="rupee-symbol">₹</span>${calc.totalCost.toFixed(2)}</h6>
+                                <small class="text-muted">${date}</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+    } catch (error) {
+        console.error('Error loading recent calculations:', error);
+        recentCalculationsList.innerHTML = `
+            <div class="text-center text-muted py-3">
+                <p>Error loading calculations</p>
+            </div>
+        `;
+    }
+}
+
+
+
+function loadUpcomingTrips() {
+    const upcomingTripsList = document.getElementById('upcoming-trips-list');
+    const today = new Date();
+    
+    const upcomingTrips = userTrips.filter(trip => {
+        const startDate = new Date(trip.startDate);
+        return startDate > today;
+    }).slice(0, 5); // Show only next 5 upcoming trips
+    
+    if (upcomingTrips.length === 0) {
+        upcomingTripsList.innerHTML = `
+            <div class="text-center text-muted py-3">
+                <i class="fas fa-calendar-times fa-2x mb-3"></i>
+                <p>No upcoming trips</p>
+                <button class="btn btn-primary btn-sm" id="create-trip-from-upcoming">
+                    <i class="fas fa-plus me-1"></i>Create New Trip
+                </button>
+            </div>
+        `;
+        
+        document.getElementById('create-trip-from-upcoming').addEventListener('click', showCreateTripModal);
+        return;
+    }
+    
+    upcomingTripsList.innerHTML = upcomingTrips.map(trip => {
+        const startDate = new Date(trip.startDate);
+        const daysUntil = Math.ceil((startDate - today) / (1000 * 60 * 60 * 24));
+        
+        return `
+            <div class="card mb-2">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-1">${trip.name}</h6>
+                            <small class="text-muted">
+                                <i class="fas fa-map-marker-alt me-1"></i>${trip.startLocation} → ${trip.destination}
+                            </small>
+                            <br>
+                            <small class="text-muted">
+                                <i class="fas fa-calendar me-1"></i>${startDate.toLocaleDateString()}
+                            </small>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge bg-primary">In ${daysUntil} days</span>
+                            <div class="mt-1">
+                                <small class="text-muted trip-code">${trip.code}</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function updateDashboardStats() {
+    const totalTrips = userTrips.length;
+    const today = new Date();
+    
+    // Count active trips (trips that are currently ongoing)
+    const activeTrips = userTrips.filter(trip => {
+        const startDate = new Date(trip.startDate);
+        const endDate = new Date(trip.endDate);
+        return startDate <= today && endDate >= today;
+    }).length;
+    
+    // Calculate total spent across all trips
+    const totalSpent = userTrips.reduce((total, trip) => {
+        const tripExpenses = trip.expenses ? trip.expenses.reduce((sum, expense) => sum + expense.amount, 0) : 0;
+        return total + tripExpenses;
+    }, 0);
+    
+    // Calculate car-related expenses
+    const carExpenses = userTrips.reduce((total, trip) => {
+        if (!trip.expenses) return total;
+        
+        const tripCarExpenses = trip.expenses.filter(expense => 
+            expense.category === 'fuel' || 
+            expense.description.toLowerCase().includes('car') ||
+            expense.description.toLowerCase().includes('fuel') ||
+            expense.description.toLowerCase().includes('rental') ||
+            expense.description.toLowerCase().includes('maintenance') ||
+            expense.description.toLowerCase().includes('toll') ||
+            expense.description.toLowerCase().includes('parking')
+        ).reduce((sum, expense) => sum + expense.amount, 0);
+        
+        return total + tripCarExpenses;
+    }, 0);
+    
+    // Update DOM elements
+    document.getElementById('total-trips-count').textContent = totalTrips;
+    document.getElementById('active-trips-count').textContent = activeTrips;
+    document.getElementById('total-spent-amount').textContent = totalSpent.toFixed(2);
+    document.getElementById('car-expenses-amount').textContent = carExpenses.toFixed(2);
+    
+    // Update car expense chart
+    updateCarExpenseChart(userTrips);
+}
+
+// Update car expense chart
+function updateCarExpenseChart(trips) {
+    const ctx = document.getElementById('carExpenseChart').getContext('2d');
+    
+    // Destroy previous chart if it exists
+    if (carExpenseChart) {
+        carExpenseChart.destroy();
+    }
+    
+    // Calculate car expense breakdown
+    const expenseCategories = {
+        fuel: 0,
+        rental: 0,
+        maintenance: 0,
+        toll: 0,
+        parking: 0,
+        other: 0
+    };
+    
+    trips.forEach(trip => {
+        if (trip.expenses) {
+            trip.expenses.forEach(expense => {
+                const desc = expense.description.toLowerCase();
+                const amount = expense.amount;
+                
+                if (expense.category === 'fuel' || desc.includes('fuel')) {
+                    expenseCategories.fuel += amount;
+                } else if (desc.includes('rental') || desc.includes('car rental')) {
+                    expenseCategories.rental += amount;
+                } else if (desc.includes('maintenance') || desc.includes('service')) {
+                    expenseCategories.maintenance += amount;
+                } else if (desc.includes('toll')) {
+                    expenseCategories.toll += amount;
+                } else if (desc.includes('parking')) {
+                    expenseCategories.parking += amount;
+                } else if (desc.includes('car') || desc.includes('vehicle')) {
+                    expenseCategories.other += amount;
+                }
+            });
+        }
+    });
+    
+    // Filter out zero categories
+    const labels = [];
+    const data = [];
+    const backgroundColors = [
+        '#ff6b6b', // fuel - red
+        '#4ecdc4', // rental - teal
+        '#45b7d1', // maintenance - blue
+        '#96ceb4', // toll - green
+        '#feca57', // parking - yellow
+        '#b8b8b8'  // other - gray
+    ];
+    
+    Object.keys(expenseCategories).forEach((category, index) => {
+        if (expenseCategories[category] > 0) {
+            labels.push(category.charAt(0).toUpperCase() + category.slice(1));
+            data.push(expenseCategories[category]);
+        }
+    });
+    
+    if (data.length === 0) {
+        document.getElementById('car-expense-details').innerHTML = `
+            <div class="text-center text-muted py-4">
+                <i class="fas fa-car fa-3x mb-3"></i>
+                <p>No car expenses recorded yet</p>
+                <a href="car-calculations.html" class="btn btn-primary btn-sm">
+                    <i class="fas fa-calculator me-1"></i>Calculate Car Expenses
+                </a>
+            </div>
+        `;
+        return;
+    }
+    
+    // Create chart
+    carExpenseChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: backgroundColors.slice(0, labels.length),
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 15,
+                        usePointStyle: true
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.raw || 0;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = Math.round((value / total) * 100);
+                            return `${label}: ₹${value.toFixed(2)} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+    
+    // Update expense details
+    const totalCarExpenses = data.reduce((sum, value) => sum + value, 0);
+    document.getElementById('car-expense-details').innerHTML = `
+        <div class="text-center">
+            <h4 class="text-primary"><span class="rupee-symbol">₹</span>${totalCarExpenses.toFixed(2)}</h4>
+            <p class="text-muted mb-3">Total Car Expenses</p>
+            ${labels.map((label, index) => `
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="small">${label}:</span>
+                    <span class="fw-bold"><span class="rupee-symbol">₹</span>${data[index].toFixed(2)}</span>
+                </div>
+            `).join('')}
+            <a href="car-calculations.html" class="btn btn-primary btn-sm mt-3">
+                <i class="fas fa-calculator me-1"></i>New Calculation
+            </a>
+        </div>
+    `;
 }
 
 function showLoadingState(show) {
@@ -287,46 +581,55 @@ function displayTrips() {
 
 function createTripCard(trip) {
     const col = document.createElement('div');
-    col.className = 'col-md-6 col-lg-4';
+    col.className = 'col-md-6 col-lg-4 mb-4';
     
-    const startDate = new Date(trip.startDate).toLocaleDateString();
-    const endDate = new Date(trip.endDate).toLocaleDateString();
+    const startDate = new Date(trip.startDate);
+    const endDate = new Date(trip.endDate);
+    const today = new Date();
     
     const totalSpent = trip.expenses ? trip.expenses.reduce((sum, expense) => sum + expense.amount, 0) : 0;
     const progressPercent = Math.min((totalSpent / trip.budget) * 100, 100);
     const remaining = trip.budget - totalSpent;
     
+    // Calculate car expenses for this trip
+    const carExpenses = trip.expenses ? trip.expenses.filter(expense => 
+        expense.category === 'fuel' || 
+        expense.description.toLowerCase().includes('car') ||
+        expense.description.toLowerCase().includes('fuel') ||
+        expense.description.toLowerCase().includes('rental') ||
+        expense.description.toLowerCase().includes('maintenance') ||
+        expense.description.toLowerCase().includes('toll') ||
+        expense.description.toLowerCase().includes('parking')
+    ).reduce((sum, expense) => sum + expense.amount, 0) : 0;
+    
     let progressBarClass = 'bg-success';
     if (remaining < 0) progressBarClass = 'bg-danger';
     else if (remaining < trip.budget * 0.2) progressBarClass = 'bg-warning';
     
-    // Fix for createdAt date handling
-    let createdDate = 'Recently';
-    if (trip.createdAt) {
-        if (typeof trip.createdAt.toDate === 'function') {
-            createdDate = trip.createdAt.toDate().toLocaleDateString();
-        } else if (trip.createdAt instanceof Date) {
-            createdDate = trip.createdAt.toLocaleDateString();
-        } else if (trip.createdAt.seconds) {
-            createdDate = new Date(trip.createdAt.seconds * 1000).toLocaleDateString();
-        } else {
-            createdDate = new Date(trip.createdAt).toLocaleDateString();
-        }
+    // Trip status badge
+    let statusBadge = '';
+    if (startDate > today) {
+        statusBadge = '<span class="badge bg-info">Upcoming</span>';
+    } else if (endDate < today) {
+        statusBadge = '<span class="badge bg-secondary">Completed</span>';
+    } else {
+        statusBadge = '<span class="badge bg-success">Active</span>';
     }
     
     const isCreator = trip.createdBy === currentUser.uid;
     
     col.innerHTML = `
-        <div class="card trip-card" data-trip-id="${trip.id}">
+        <div class="card trip-card h-100" data-trip-id="${trip.id}">
             <div class="trip-card-header">
                 <div class="d-flex justify-content-between align-items-start">
                     <div class="flex-grow-1">
                         <h5 class="card-title mb-1">${trip.name}</h5>
-                        <p class="card-text mb-0">${startDate} - ${endDate}</p>
+                        <p class="card-text mb-1">${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}</p>
+                        ${statusBadge}
                     </div>
                     ${isCreator ? `
                         <div class="dropdown">
-                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
                                 <i class="fas fa-ellipsis-v"></i>
                             </button>
                             <ul class="dropdown-menu">
@@ -345,13 +648,32 @@ function createTripCard(trip) {
                 <p class="card-text">
                     <i class="fas fa-map-marker-alt me-2"></i>${trip.startLocation} → ${trip.destination}
                 </p>
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span>Budget: <span class="rupee-symbol">₹</span>${trip.budget.toFixed(2)}</span>
-                    <span>Spent: <span class="rupee-symbol">₹</span>${totalSpent.toFixed(2)}</span>
+                
+                <!-- Budget Progress -->
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span>Budget: <span class="rupee-symbol">₹</span>${trip.budget.toFixed(2)}</span>
+                        <span>Spent: <span class="rupee-symbol">₹</span>${totalSpent.toFixed(2)}</span>
+                    </div>
+                    <div class="progress mb-2" style="height: 10px;">
+                        <div class="progress-bar ${progressBarClass}" role="progressbar" style="width: ${progressPercent}%"></div>
+                    </div>
                 </div>
-                <div class="progress mb-3" style="height: 10px;">
-                    <div class="progress-bar ${progressBarClass}" role="progressbar" style="width: ${progressPercent}%"></div>
+                
+                <!-- Car Expense Info -->
+                ${carExpenses > 0 ? `
+                <div class="mb-3 p-2 bg-light rounded">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <small class="text-muted">
+                            <i class="fas fa-car me-1"></i>Car Expenses:
+                        </small>
+                        <small class="fw-bold text-primary">
+                            <span class="rupee-symbol">₹</span>${carExpenses.toFixed(2)}
+                        </small>
+                    </div>
                 </div>
+                ` : ''}
+                
                 <div class="d-flex justify-content-between align-items-center">
                     <button class="btn btn-outline-primary btn-sm view-trip-btn">
                         <i class="fas fa-eye me-1"></i>View Details
@@ -363,10 +685,6 @@ function createTripCard(trip) {
                         </div>
                         <span class="trip-code">${trip.code}</span>
                     </div>
-                </div>
-                <div class="mt-2">
-                    <small class="text-muted">Created: ${createdDate}</small>
-                    ${isCreator ? '<span class="badge bg-primary ms-2"><i class="fas fa-crown me-1"></i>Creator</span>' : ''}
                 </div>
             </div>
         </div>
