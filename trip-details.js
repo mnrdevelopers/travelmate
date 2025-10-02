@@ -69,12 +69,12 @@ function setupEnhancedCRUDEventListeners() {
 }
 
 function checkAuthState() {
-    auth.onAuthStateChanged(user => {
+    auth.onAuthStateChanged(async (user) => { // Add async here
         if (!user) {
             navigateTo('auth.html');
         } else {
             loadUserData();
-            await loadCustomCategories();
+            await loadCustomCategories(); // Now this await is valid
         }
     });
 }
