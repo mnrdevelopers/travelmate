@@ -10,34 +10,54 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function setupDashboardEventListeners() {
-    // Trip management
-    document.getElementById('create-trip-btn').addEventListener('click', showCreateTripModal);
-    document.getElementById('create-first-trip-btn').addEventListener('click', showCreateTripModal);
-    document.getElementById('join-trip-btn').addEventListener('click', showJoinTripModal);
-    document.getElementById('save-trip-btn').addEventListener('click', saveTrip);
-    document.getElementById('update-trip-btn').addEventListener('click', updateTrip);
-    document.getElementById('confirm-delete-trip-btn').addEventListener('click', deleteTrip);
-    document.getElementById('join-trip-code-btn').addEventListener('click', joinTripWithCode);
-    document.getElementById('logout-btn').addEventListener('click', handleLogout);
-    document.getElementById('copy-code-btn').addEventListener('click', copyTripCode);
-    document.getElementById('nav-profile').addEventListener('click', showProfileModal);
+    // Trip management - with null checks
+    const createTripBtn = document.getElementById('create-trip-btn');
+    const createFirstTripBtn = document.getElementById('create-first-trip-btn');
+    const joinTripBtn = document.getElementById('join-trip-btn');
+    const saveTripBtn = document.getElementById('save-trip-btn');
+    const updateTripBtn = document.getElementById('update-trip-btn');
+    const confirmDeleteTripBtn = document.getElementById('confirm-delete-trip-btn');
+    const joinTripCodeBtn = document.getElementById('join-trip-code-btn');
+    const logoutBtn = document.getElementById('logout-btn');
+    const copyCodeBtn = document.getElementById('copy-code-btn');
+    const navProfile = document.getElementById('nav-profile');
+    
+    if (createTripBtn) createTripBtn.addEventListener('click', showCreateTripModal);
+    if (createFirstTripBtn) createFirstTripBtn.addEventListener('click', showCreateTripModal);
+    if (joinTripBtn) joinTripBtn.addEventListener('click', showJoinTripModal);
+    if (saveTripBtn) saveTripBtn.addEventListener('click', saveTrip);
+    if (updateTripBtn) updateTripBtn.addEventListener('click', updateTrip);
+    if (confirmDeleteTripBtn) confirmDeleteTripBtn.addEventListener('click', deleteTrip);
+    if (joinTripCodeBtn) joinTripCodeBtn.addEventListener('click', joinTripWithCode);
+    if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
+    if (copyCodeBtn) copyCodeBtn.addEventListener('click', copyTripCode);
+    if (navProfile) navProfile.addEventListener('click', showProfileModal);
     
     // Distance calculation - updated for multiple stops
-    document.getElementById('calculate-distance').addEventListener('change', function() {
-        if (this.checked) {
-            calculateDistanceWithStops(); // Changed from calculateDistance
-        } else {
-            document.getElementById('distance-results').classList.add('d-none');
-        }
-    });
+    const calculateDistance = document.getElementById('calculate-distance');
+    const editCalculateDistance = document.getElementById('edit-calculate-distance');
     
-    document.getElementById('edit-calculate-distance').addEventListener('change', function() {
-        if (this.checked) {
-            calculateEditDistanceWithStops(); // Changed from calculateEditDistance
-        } else {
-            document.getElementById('edit-distance-results').classList.add('d-none');
-        }
-    });
+    if (calculateDistance) {
+        calculateDistance.addEventListener('change', function() {
+            if (this.checked) {
+                calculateDistanceWithStops();
+            } else {
+                const distanceResults = document.getElementById('distance-results');
+                if (distanceResults) distanceResults.classList.add('d-none');
+            }
+        });
+    }
+    
+    if (editCalculateDistance) {
+        editCalculateDistance.addEventListener('change', function() {
+            if (this.checked) {
+                calculateEditDistanceWithStops();
+            } else {
+                const editDistanceResults = document.getElementById('edit-distance-results');
+                if (editDistanceResults) editDistanceResults.classList.add('d-none');
+            }
+        });
+    }
     
     // Profile operations
     setupProfileEventListeners();
@@ -49,14 +69,22 @@ function setupDashboardEventListeners() {
 // Multiple stops functionality
 function setupMultipleStops() {
     // Add stop button for create modal
-    document.getElementById('add-stop-btn').addEventListener('click', addIntermediateStop);
+    const addStopBtn = document.getElementById('add-stop-btn');
+    const editAddStopBtn = document.getElementById('edit-add-stop-btn');
     
-    // Add stop button for edit modal
-    document.getElementById('edit-add-stop-btn').addEventListener('click', addEditIntermediateStop);
+    if (addStopBtn) {
+        addStopBtn.addEventListener('click', addIntermediateStop);
+    }
+    
+    if (editAddStopBtn) {
+        editAddStopBtn.addEventListener('click', addEditIntermediateStop);
+    }
 }
 
 function addIntermediateStop() {
     const container = document.getElementById('intermediate-stops-container');
+    if (!container) return;
+    
     const stopIndex = container.children.length;
     
     const stopDiv = document.createElement('div');
@@ -84,6 +112,8 @@ function addIntermediateStop() {
 
 function addEditIntermediateStop() {
     const container = document.getElementById('edit-intermediate-stops-container');
+    if (!container) return;
+    
     const stopIndex = container.children.length;
     
     const stopDiv = document.createElement('div');
@@ -113,7 +143,9 @@ function renumberStops() {
     const stops = document.querySelectorAll('.intermediate-stop');
     stops.forEach((stop, index) => {
         const input = stop.querySelector('.intermediate-location');
-        input.placeholder = `Stop ${index + 1} (City, Country)`;
+        if (input) {
+            input.placeholder = `Stop ${index + 1} (City, Country)`;
+        }
     });
 }
 
@@ -121,13 +153,15 @@ function renumberEditStops() {
     const stops = document.querySelectorAll('.edit-intermediate-stop');
     stops.forEach((stop, index) => {
         const input = stop.querySelector('.edit-intermediate-location');
-        input.placeholder = `Stop ${index + 1} (City, Country)`;
+        if (input) {
+            input.placeholder = `Stop ${index + 1} (City, Country)`;
+        }
     });
 }
 
 function getStopsFromCreateForm() {
-    const startLocation = document.getElementById('start-location').value;
-    const destination = document.getElementById('trip-destination').value;
+    const startLocation = document.getElementById('start-location');
+    const destination = document.getElementById('trip-destination');
     
     const intermediateInputs = document.querySelectorAll('.intermediate-location');
     const intermediateStops = Array.from(intermediateInputs)
@@ -135,15 +169,15 @@ function getStopsFromCreateForm() {
         .filter(stop => stop.length > 0);
     
     return {
-        startLocation,
+        startLocation: startLocation ? startLocation.value : '',
         intermediateStops,
-        destination
+        destination: destination ? destination.value : ''
     };
 }
 
 function getStopsFromEditForm() {
-    const startLocation = document.getElementById('edit-start-location').value;
-    const destination = document.getElementById('edit-trip-destination').value;
+    const startLocation = document.getElementById('edit-start-location');
+    const destination = document.getElementById('edit-trip-destination');
     
     const intermediateInputs = document.querySelectorAll('.edit-intermediate-location');
     const intermediateStops = Array.from(intermediateInputs)
@@ -151,14 +185,16 @@ function getStopsFromEditForm() {
         .filter(stop => stop.length > 0);
     
     return {
-        startLocation,
+        startLocation: startLocation ? startLocation.value : '',
         intermediateStops,
-        destination
+        destination: destination ? destination.value : ''
     };
 }
 
 function populateEditStops(trip) {
     const container = document.getElementById('edit-intermediate-stops-container');
+    if (!container) return;
+    
     container.innerHTML = '';
     
     if (trip.intermediateStops && trip.intermediateStops.length > 0) {
@@ -182,13 +218,18 @@ async function calculateDistanceWithStops() {
     }
     
     try {
-        document.getElementById('distance-details').innerHTML = `
-            <div class="text-center">
-                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-                Calculating route with ${stopsData.intermediateStops.length + 1} segments...
-            </div>
-        `;
-        document.getElementById('distance-results').classList.remove('d-none');
+        const distanceDetails = document.getElementById('distance-details');
+        if (distanceDetails) {
+            distanceDetails.innerHTML = `
+                <div class="text-center">
+                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                    Calculating route with ${stopsData.intermediateStops.length + 1} segments...
+                </div>
+            `;
+        }
+        
+        const distanceResults = document.getElementById('distance-results');
+        if (distanceResults) distanceResults.classList.remove('d-none');
         
         const allStops = [stopsData.startLocation, ...stopsData.intermediateStops, stopsData.destination];
         const routeSegments = [];
@@ -229,12 +270,15 @@ async function calculateDistanceWithStops() {
         
     } catch (error) {
         console.error('Error calculating route with stops:', error);
-        document.getElementById('distance-details').innerHTML = `
-            <div class="alert alert-danger">
-                <i class="fas fa-exclamation-triangle me-2"></i>
-                Error calculating route. Please try again.
-            </div>
-        `;
+        const distanceDetails = document.getElementById('distance-details');
+        if (distanceDetails) {
+            distanceDetails.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Error calculating route. Please try again.
+                </div>
+            `;
+        }
     }
 }
 
@@ -247,13 +291,18 @@ async function calculateEditDistanceWithStops() {
     }
     
     try {
-        document.getElementById('edit-distance-details').innerHTML = `
-            <div class="text-center">
-                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-                Calculating route with ${stopsData.intermediateStops.length + 1} segments...
-            </div>
-        `;
-        document.getElementById('edit-distance-results').classList.remove('d-none');
+        const editDistanceDetails = document.getElementById('edit-distance-details');
+        if (editDistanceDetails) {
+            editDistanceDetails.innerHTML = `
+                <div class="text-center">
+                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                    Calculating route with ${stopsData.intermediateStops.length + 1} segments...
+                </div>
+            `;
+        }
+        
+        const editDistanceResults = document.getElementById('edit-distance-results');
+        if (editDistanceResults) editDistanceResults.classList.remove('d-none');
         
         const allStops = [stopsData.startLocation, ...stopsData.intermediateStops, stopsData.destination];
         const routeSegments = [];
@@ -294,17 +343,21 @@ async function calculateEditDistanceWithStops() {
         
     } catch (error) {
         console.error('Error calculating route with stops:', error);
-        document.getElementById('edit-distance-details').innerHTML = `
-            <div class="alert alert-danger">
-                <i class="fas fa-exclamation-triangle me-2"></i>
-                Error calculating route. Please try again.
-            </div>
-        `;
+        const editDistanceDetails = document.getElementById('edit-distance-details');
+        if (editDistanceDetails) {
+            editDistanceDetails.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Error calculating route. Please try again.
+                </div>
+            `;
+        }
     }
 }
 
 function displayDistanceResultsWithStops(segments, totalDistance, totalDuration) {
     const distanceDetails = document.getElementById('distance-details');
+    if (!distanceDetails) return;
     
     let html = `
         <div class="route-summary mb-3 p-3 bg-light rounded">
@@ -344,6 +397,7 @@ function displayDistanceResultsWithStops(segments, totalDistance, totalDuration)
 
 function displayEditDistanceResultsWithStops(segments, totalDistance, totalDuration) {
     const distanceDetails = document.getElementById('edit-distance-details');
+    if (!distanceDetails) return;
     
     let html = `
         <div class="route-summary mb-3 p-3 bg-light rounded">
@@ -398,17 +452,28 @@ function showProfileModal() {
     const user = auth.currentUser;
     if (!user) return;
     
-    document.getElementById('profile-name').value = user.displayName || '';
-    document.getElementById('profile-email').value = user.email || '';
-    document.getElementById('profile-userid').value = user.uid;
-    document.getElementById('profile-avatar').src = user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}&background=4361ee&color=fff`;
+    const profileName = document.getElementById('profile-name');
+    const profileEmail = document.getElementById('profile-email');
+    const profileUserId = document.getElementById('profile-userid');
+    const profileAvatar = document.getElementById('profile-avatar');
     
-    const modal = new bootstrap.Modal(document.getElementById('profileModal'));
-    modal.show();
+    if (profileName) profileName.value = user.displayName || '';
+    if (profileEmail) profileEmail.value = user.email || '';
+    if (profileUserId) profileUserId.value = user.uid;
+    if (profileAvatar) profileAvatar.src = user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}&background=4361ee&color=fff`;
+    
+    const profileModal = document.getElementById('profileModal');
+    if (profileModal) {
+        const modal = new bootstrap.Modal(profileModal);
+        modal.show();
+    }
 }
 
 async function saveProfile() {
-    const name = document.getElementById('profile-name').value.trim();
+    const nameInput = document.getElementById('profile-name');
+    if (!nameInput) return;
+    
+    const name = nameInput.value.trim();
     
     if (!name) {
         showAlert('Please enter a display name', 'warning');
@@ -416,8 +481,11 @@ async function saveProfile() {
     }
     
     try {
-        document.getElementById('save-profile-btn').disabled = true;
-        document.getElementById('save-profile-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+        const saveProfileBtn = document.getElementById('save-profile-btn');
+        if (saveProfileBtn) {
+            saveProfileBtn.disabled = true;
+            saveProfileBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+        }
         
         await auth.currentUser.updateProfile({
             displayName: name
@@ -432,8 +500,11 @@ async function saveProfile() {
         // Update UI
         loadUserData();
         
-        const modal = bootstrap.Modal.getInstance(document.getElementById('profileModal'));
-        modal.hide();
+        const profileModal = document.getElementById('profileModal');
+        if (profileModal) {
+            const modal = bootstrap.Modal.getInstance(profileModal);
+            if (modal) modal.hide();
+        }
         
         showAlert('Profile updated successfully!', 'success');
         
@@ -441,8 +512,11 @@ async function saveProfile() {
         console.error('Error updating profile:', error);
         showAlert('Error updating profile', 'danger');
     } finally {
-        document.getElementById('save-profile-btn').disabled = false;
-        document.getElementById('save-profile-btn').innerHTML = 'Save Changes';
+        const saveProfileBtn = document.getElementById('save-profile-btn');
+        if (saveProfileBtn) {
+            saveProfileBtn.disabled = false;
+            saveProfileBtn.innerHTML = 'Save Changes';
+        }
     }
 }
 
@@ -475,8 +549,11 @@ async function leaveAllTrips() {
     }
     
     try {
-        document.getElementById('leave-all-trips-btn').disabled = true;
-        document.getElementById('leave-all-trips-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Leaving...';
+        const leaveAllTripsBtn = document.getElementById('leave-all-trips-btn');
+        if (leaveAllTripsBtn) {
+            leaveAllTripsBtn.disabled = true;
+            leaveAllTripsBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Leaving...';
+        }
         
         // Remove user from all trips
         const batch = db.batch();
@@ -502,17 +579,26 @@ async function leaveAllTrips() {
         console.error('Error leaving all trips:', error);
         showAlert('Error leaving trips', 'danger');
     } finally {
-        document.getElementById('leave-all-trips-btn').disabled = false;
-        document.getElementById('leave-all-trips-btn').innerHTML = '<i class="fas fa-sign-out-alt me-1"></i>Leave All Trips';
+        const leaveAllTripsBtn = document.getElementById('leave-all-trips-btn');
+        if (leaveAllTripsBtn) {
+            leaveAllTripsBtn.disabled = false;
+            leaveAllTripsBtn.innerHTML = '<i class="fas fa-sign-out-alt me-1"></i>Leave All Trips';
+        }
     }
 }
 
 function initializeApp() {
     const today = new Date().toISOString().split('T')[0];
-    document.getElementById('start-date').min = today;
-    document.getElementById('end-date').min = today;
-    document.getElementById('edit-start-date').min = today;
-    document.getElementById('edit-end-date').min = today;
+    
+    const startDate = document.getElementById('start-date');
+    const endDate = document.getElementById('end-date');
+    const editStartDate = document.getElementById('edit-start-date');
+    const editEndDate = document.getElementById('edit-end-date');
+    
+    if (startDate) startDate.min = today;
+    if (endDate) endDate.min = today;
+    if (editStartDate) editStartDate.min = today;
+    if (editEndDate) editEndDate.min = today;
 }
 
 function checkAuthState() {
@@ -520,7 +606,7 @@ function checkAuthState() {
         if (user) {
             currentUser = user;
             loadUserData();
-            await loadCustomCategories(); // Add this line
+            await loadCustomCategories();
             loadUserTrips();
         } else {
             navigateTo('auth.html');
@@ -531,8 +617,11 @@ function checkAuthState() {
 function loadUserData() {
     if (!currentUser) return;
     
-    document.getElementById('user-name').textContent = currentUser.displayName || 'Traveler';
-    document.getElementById('user-avatar').src = currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || 'Traveler')}&background=4361ee&color=fff`;
+    const userName = document.getElementById('user-name');
+    const userAvatar = document.getElementById('user-avatar');
+    
+    if (userName) userName.textContent = currentUser.displayName || 'Traveler';
+    if (userAvatar) userAvatar.src = currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || 'Traveler')}&background=4361ee&color=fff`;
 }
 
 async function loadUserTrips() {
@@ -573,6 +662,7 @@ async function loadUserTrips() {
 
 async function loadRecentCalculations() {
     const recentCalculationsList = document.getElementById('recent-calculations-list');
+    if (!recentCalculationsList) return;
     
     try {
         // Load from localStorage (you can modify this to use Firestore)
@@ -631,6 +721,8 @@ async function loadRecentCalculations() {
 
 function loadUpcomingTrips() {
     const upcomingTripsList = document.getElementById('upcoming-trips-list');
+    if (!upcomingTripsList) return;
+    
     const today = new Date();
     
     const upcomingTrips = userTrips.filter(trip => {
@@ -649,7 +741,10 @@ function loadUpcomingTrips() {
             </div>
         `;
         
-        document.getElementById('create-trip-from-upcoming').addEventListener('click', showCreateTripModal);
+        const createTripBtn = document.getElementById('create-trip-from-upcoming');
+        if (createTripBtn) {
+            createTripBtn.addEventListener('click', showCreateTripModal);
+        }
         return;
     }
     
@@ -685,6 +780,13 @@ function loadUpcomingTrips() {
 }
 
 function updateDashboardStats() {
+    const totalTripsCount = document.getElementById('total-trips-count');
+    const activeTripsCount = document.getElementById('active-trips-count');
+    const totalSpentAmount = document.getElementById('total-spent-amount');
+    const carExpensesAmount = document.getElementById('car-expenses-amount');
+    
+    if (!totalTripsCount || !activeTripsCount || !totalSpentAmount || !carExpensesAmount) return;
+    
     const totalTrips = userTrips.length;
     const today = new Date();
     
@@ -719,10 +821,10 @@ function updateDashboardStats() {
     }, 0);
     
     // Update DOM elements
-    document.getElementById('total-trips-count').textContent = totalTrips;
-    document.getElementById('active-trips-count').textContent = activeTrips;
-    document.getElementById('total-spent-amount').textContent = totalSpent.toFixed(2);
-    document.getElementById('car-expenses-amount').textContent = carExpenses.toFixed(2);
+    totalTripsCount.textContent = totalTrips;
+    activeTripsCount.textContent = activeTrips;
+    totalSpentAmount.textContent = totalSpent.toFixed(2);
+    carExpensesAmount.textContent = carExpenses.toFixed(2);
     
     // Update car expense chart
     updateCarExpenseChart(userTrips);
@@ -730,7 +832,11 @@ function updateDashboardStats() {
 
 // Update car expense chart
 function updateCarExpenseChart(trips) {
-    const ctx = document.getElementById('carExpenseChart').getContext('2d');
+    const ctx = document.getElementById('carExpenseChart');
+    if (!ctx) return;
+    
+    const ctx2d = ctx.getContext('2d');
+    if (!ctx2d) return;
     
     // Destroy previous chart if it exists
     if (carExpenseChart) {
@@ -789,21 +895,24 @@ function updateCarExpenseChart(trips) {
         }
     });
     
-    if (data.length === 0) {
-        document.getElementById('car-expense-details').innerHTML = `
-            <div class="text-center text-muted py-4">
-                <i class="fas fa-car fa-3x mb-3"></i>
-                <p>No car expenses recorded yet</p>
-                <a href="car-calculations.html" class="btn btn-primary btn-sm">
-                    <i class="fas fa-calculator me-1"></i>Calculate Car Expenses
-                </a>
-            </div>
-        `;
-        return;
+    const carExpenseDetails = document.getElementById('car-expense-details');
+    if (carExpenseDetails) {
+        if (data.length === 0) {
+            carExpenseDetails.innerHTML = `
+                <div class="text-center text-muted py-4">
+                    <i class="fas fa-car fa-3x mb-3"></i>
+                    <p>No car expenses recorded yet</p>
+                    <a href="car-calculations.html" class="btn btn-primary btn-sm">
+                        <i class="fas fa-calculator me-1"></i>Calculate Car Expenses
+                    </a>
+                </div>
+            `;
+            return;
+        }
     }
     
     // Create chart
-    carExpenseChart = new Chart(ctx, {
+    carExpenseChart = new Chart(ctx2d, {
         type: 'doughnut',
         data: {
             labels: labels,
@@ -842,21 +951,23 @@ function updateCarExpenseChart(trips) {
     
     // Update expense details
     const totalCarExpenses = data.reduce((sum, value) => sum + value, 0);
-    document.getElementById('car-expense-details').innerHTML = `
-        <div class="text-center">
-            <h4 class="text-primary"><span class="rupee-symbol">₹</span>${totalCarExpenses.toFixed(2)}</h4>
-            <p class="text-muted mb-3">Total Car Expenses</p>
-            ${labels.map((label, index) => `
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span class="small">${label}:</span>
-                    <span class="fw-bold"><span class="rupee-symbol">₹</span>${data[index].toFixed(2)}</span>
-                </div>
-            `).join('')}
-            <a href="car-calculations.html" class="btn btn-primary btn-sm mt-3">
-                <i class="fas fa-calculator me-1"></i>New Calculation
-            </a>
-        </div>
-    `;
+    if (carExpenseDetails) {
+        carExpenseDetails.innerHTML = `
+            <div class="text-center">
+                <h4 class="text-primary"><span class="rupee-symbol">₹</span>${totalCarExpenses.toFixed(2)}</h4>
+                <p class="text-muted mb-3">Total Car Expenses</p>
+                ${labels.map((label, index) => `
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="small">${label}:</span>
+                        <span class="fw-bold"><span class="rupee-symbol">₹</span>${data[index].toFixed(2)}</span>
+                    </div>
+                `).join('')}
+                <a href="car-calculations.html" class="btn btn-primary btn-sm mt-3">
+                    <i class="fas fa-calculator me-1"></i>New Calculation
+                </a>
+            </div>
+        `;
+    }
 }
 
 function showLoadingState(show) {
@@ -864,20 +975,24 @@ function showLoadingState(show) {
     const emptyTrips = document.getElementById('empty-trips');
     
     if (show) {
-        tripsContainer.innerHTML = `
-            <div class="col-12 text-center py-5">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Loading...</span>
+        if (tripsContainer) {
+            tripsContainer.innerHTML = `
+                <div class="col-12 text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2 text-muted">Loading your trips...</p>
                 </div>
-                <p class="mt-2 text-muted">Loading your trips...</p>
-            </div>
-        `;
-        emptyTrips.classList.add('d-none');
+            `;
+        }
+        if (emptyTrips) emptyTrips.classList.add('d-none');
     }
 }
 
 function showError(message) {
     const tripsContainer = document.getElementById('trips-container');
+    if (!tripsContainer) return;
+    
     tripsContainer.innerHTML = `
         <div class="col-12">
             <div class="alert alert-danger d-flex align-items-center" role="alert">
@@ -899,6 +1014,8 @@ function showError(message) {
 function displayTrips() {
     const tripsContainer = document.getElementById('trips-container');
     const emptyTrips = document.getElementById('empty-trips');
+    
+    if (!tripsContainer || !emptyTrips) return;
     
     if (userTrips.length === 0) {
         tripsContainer.innerHTML = '';
@@ -956,22 +1073,24 @@ function createTripCard(trip) {
     
     col.innerHTML = `
         <div class="card trip-card h-100" data-trip-id="${trip.id}">
-            <div class="trip-card-header">
+            <div class="card-header bg-primary text-white">
                 <div class="d-flex justify-content-between align-items-start">
                     <div class="flex-grow-1">
                         <h5 class="card-title mb-1">${trip.name}</h5>
-                        <div class="d-flex align-items-center mb-2">
-                            <small class="text-muted trip-code">${trip.code}</small>
-                            ${isCreator ? '<span class="badge bg-primary ms-2">Owner</span>' : ''}
+                        <div class="d-flex align-items-center">
+                            <small class="text-light-opacity trip-code">${trip.code}</small>
+                            ${isCreator ? '<span class="badge bg-warning text-dark ms-2">Owner</span>' : ''}
                         </div>
                     </div>
                     ${statusBadge}
                 </div>
-                <div class="route-info">
-                    <div class="d-flex align-items-center text-muted small">
+            </div>
+            <div class="card-body">
+                <div class="route-info mb-3">
+                    <div class="d-flex align-items-center text-muted small mb-2">
                         <i class="fas fa-map-marker-alt text-danger me-1"></i>
                         <span>${trip.startLocation}</span>
-                        <i class="fas fa-arrow-right mx-2"></i>
+                        <i class="fas fa-arrow-right mx-2 text-muted"></i>
                         <i class="fas fa-map-marker-alt text-success me-1"></i>
                         <span>${trip.destination}</span>
                     </div>
@@ -984,13 +1103,11 @@ function createTripCard(trip) {
                         </div>
                     ` : ''}
                 </div>
-            </div>
-            
-            <div class="card-body">
+                
                 <div class="trip-dates mb-3">
                     <div class="d-flex justify-content-between text-muted small">
                         <span><i class="fas fa-calendar me-1"></i>${startDate.toLocaleDateString()}</span>
-                        <span><i class="fas fa-arrow-right mx-1"></i></span>
+                        <span><i class="fas fa-arrow-right mx-1 text-muted"></i></span>
                         <span><i class="fas fa-calendar me-1"></i>${endDate.toLocaleDateString()}</span>
                     </div>
                 </div>
@@ -1013,6 +1130,7 @@ function createTripCard(trip) {
                     </div>
                 </div>
                 
+                ${carExpenses > 0 ? `
                 <div class="car-expenses mb-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <small class="text-muted">
@@ -1023,6 +1141,7 @@ function createTripCard(trip) {
                         </small>
                     </div>
                 </div>
+                ` : ''}
                 
                 ${trip.route ? `
                     <div class="route-info mb-3">
@@ -1040,18 +1159,18 @@ function createTripCard(trip) {
             
             <div class="card-footer bg-transparent">
                 <div class="d-flex gap-2">
-                    <button class="btn btn-primary btn-sm flex-fill view-trip-btn" data-trip-id="${trip.id}">
+                    <button class="btn btn-primary btn-sm flex-fill view-trip-btn">
                         <i class="fas fa-eye me-1"></i>View
                     </button>
                     ${isCreator ? `
-                        <button class="btn btn-outline-secondary btn-sm edit-trip-btn" data-trip-id="${trip.id}">
+                        <button class="btn btn-outline-secondary btn-sm edit-trip-btn">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="btn btn-outline-danger btn-sm delete-trip-btn" data-trip-id="${trip.id}">
+                        <button class="btn btn-outline-danger btn-sm delete-trip-btn">
                             <i class="fas fa-trash"></i>
                         </button>
                     ` : `
-                        <button class="btn btn-outline-danger btn-sm leave-trip-btn" data-trip-id="${trip.id}">
+                        <button class="btn btn-outline-danger btn-sm leave-trip-btn">
                             <i class="fas fa-sign-out-alt"></i>
                         </button>
                     `}
@@ -1061,113 +1180,165 @@ function createTripCard(trip) {
     `;
     
     // Add event listeners
-    col.querySelector('.view-trip-btn').addEventListener('click', () => viewTrip(trip.id));
+    const viewBtn = col.querySelector('.view-trip-btn');
+    if (viewBtn) {
+        viewBtn.addEventListener('click', () => viewTrip(trip.id));
+    }
     
     if (isCreator) {
-        col.querySelector('.edit-trip-btn').addEventListener('click', () => showEditTripModal(trip));
-        col.querySelector('.delete-trip-btn').addEventListener('click', () => showDeleteConfirmation(trip));
+        const editBtn = col.querySelector('.edit-trip-btn');
+        const deleteBtn = col.querySelector('.delete-trip-btn');
+        
+        if (editBtn) {
+            editBtn.addEventListener('click', () => showEditTripModal(trip));
+        }
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', () => showDeleteConfirmation(trip));
+        }
     } else {
-        col.querySelector('.leave-trip-btn').addEventListener('click', () => leaveTrip(trip.id));
+        const leaveBtn = col.querySelector('.leave-trip-btn');
+        if (leaveBtn) {
+            leaveBtn.addEventListener('click', () => leaveTrip(trip.id));
+        }
     }
     
     return col;
 }
 
 function showCreateTripModal() {
-    document.getElementById('create-trip-form').reset();
-    document.getElementById('distance-results').classList.add('d-none');
-    document.getElementById('calculate-distance').checked = false;
+    const createTripForm = document.getElementById('create-trip-form');
+    const distanceResults = document.getElementById('distance-results');
+    const calculateDistance = document.getElementById('calculate-distance');
+    const intermediateStopsContainer = document.getElementById('intermediate-stops-container');
+    const startDate = document.getElementById('start-date');
+    const endDate = document.getElementById('end-date');
     
-    // Clear intermediate stops
-    document.getElementById('intermediate-stops-container').innerHTML = '';
+    if (createTripForm) createTripForm.reset();
+    if (distanceResults) distanceResults.classList.add('d-none');
+    if (calculateDistance) calculateDistance.checked = false;
+    if (intermediateStopsContainer) intermediateStopsContainer.innerHTML = '';
     
     const today = new Date();
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     
-    document.getElementById('start-date').value = today.toISOString().split('T')[0];
-    document.getElementById('end-date').value = tomorrow.toISOString().split('T')[0];
+    if (startDate) startDate.value = today.toISOString().split('T')[0];
+    if (endDate) endDate.value = tomorrow.toISOString().split('T')[0];
     
-    const modal = new bootstrap.Modal(document.getElementById('createTripModal'));
-    modal.show();
+    const createTripModal = document.getElementById('createTripModal');
+    if (createTripModal) {
+        const modal = new bootstrap.Modal(createTripModal);
+        modal.show();
+    }
 }
 
 function showEditTripModal(trip) {
-    document.getElementById('edit-trip-id').value = trip.id;
-    document.getElementById('edit-trip-name').value = trip.name;
+    const editTripId = document.getElementById('edit-trip-id');
+    const editTripName = document.getElementById('edit-trip-name');
+    const editStartLocation = document.getElementById('edit-start-location');
+    const editTripDestination = document.getElementById('edit-trip-destination');
+    const editStartDate = document.getElementById('edit-start-date');
+    const editEndDate = document.getElementById('edit-end-date');
+    const editTripBudget = document.getElementById('edit-trip-budget');
+    const editDistanceResults = document.getElementById('edit-distance-results');
+    const editCalculateDistance = document.getElementById('edit-calculate-distance');
     
-    // Populate route stops
-    document.getElementById('edit-start-location').value = trip.startLocation;
-    document.getElementById('edit-trip-destination').value = trip.destination;
+    // Only set values if elements exist
+    if (editTripId) editTripId.value = trip.id;
+    if (editTripName) editTripName.value = trip.name || '';
+    if (editStartLocation) editStartLocation.value = trip.startLocation || '';
+    if (editTripDestination) editTripDestination.value = trip.destination || '';
+    if (editStartDate) editStartDate.value = trip.startDate || '';
+    if (editEndDate) editEndDate.value = trip.endDate || '';
+    if (editTripBudget) editTripBudget.value = trip.budget || '';
     
     // Populate intermediate stops
     populateEditStops(trip);
     
-    document.getElementById('edit-start-date').value = trip.startDate;
-    document.getElementById('edit-end-date').value = trip.endDate;
-    document.getElementById('edit-trip-budget').value = trip.budget;
-    
-    document.getElementById('edit-distance-results').classList.add('d-none');
-    document.getElementById('edit-calculate-distance').checked = false;
+    if (editDistanceResults) editDistanceResults.classList.add('d-none');
+    if (editCalculateDistance) editCalculateDistance.checked = false;
     
     // If route already exists, show it
-    if (trip.route) {
-        document.getElementById('edit-distance-results').classList.remove('d-none');
-        document.getElementById('edit-distance-details').innerHTML = `
-            <p><strong>Current Distance:</strong> ${trip.route.totalDistance || trip.route.distance}</p>
-            <p><strong>Current Travel Time:</strong> ${trip.route.totalDuration || trip.route.duration}</p>
-            ${trip.route.segments ? `
-                <div class="mt-2">
-                    <small><strong>Route with ${trip.route.segments.length} segments</strong></small>
+    if (trip.route && editDistanceResults) {
+        editDistanceResults.classList.remove('d-none');
+        const editDistanceDetails = document.getElementById('edit-distance-details');
+        if (editDistanceDetails) {
+            editDistanceDetails.innerHTML = `
+                <p><strong>Current Distance:</strong> ${trip.route.totalDistance || trip.route.distance || 'N/A'}</p>
+                <p><strong>Current Travel Time:</strong> ${trip.route.totalDuration || trip.route.duration || 'N/A'}</p>
+                ${trip.route.segments ? `
+                    <div class="mt-2">
+                        <small><strong>Route with ${trip.route.segments.length} segments</strong></small>
+                    </div>
+                ` : ''}
+                <div class="alert alert-info mt-2">
+                    <small><i class="fas fa-info-circle me-1"></i>Check the box above to recalculate with updated locations</small>
                 </div>
-            ` : ''}
-            <div class="alert alert-info mt-2">
-                <small><i class="fas fa-info-circle me-1"></i>Check the box above to recalculate with updated locations</small>
-            </div>
-        `;
+            `;
+        }
     }
     
-    const modal = new bootstrap.Modal(document.getElementById('editTripModal'));
-    modal.show();
+    const editTripModal = document.getElementById('editTripModal');
+    if (editTripModal) {
+        const modal = new bootstrap.Modal(editTripModal);
+        modal.show();
+    }
 }
 
 function showDeleteConfirmation(trip) {
-    document.getElementById('delete-trip-name').textContent = trip.name;
-    document.getElementById('delete-trip-id').value = trip.id;
+    const deleteTripName = document.getElementById('delete-trip-name');
+    const deleteTripId = document.getElementById('delete-trip-id');
     
-    const modal = new bootstrap.Modal(document.getElementById('deleteTripModal'));
-    modal.show();
+    if (deleteTripName) deleteTripName.textContent = trip.name;
+    if (deleteTripId) deleteTripId.value = trip.id;
+    
+    const deleteTripModal = document.getElementById('deleteTripModal');
+    if (deleteTripModal) {
+        const modal = new bootstrap.Modal(deleteTripModal);
+        modal.show();
+    }
 }
 
 function showJoinTripModal() {
-    document.getElementById('join-trip-form').reset();
-    const modal = new bootstrap.Modal(document.getElementById('joinTripModal'));
-    modal.show();
+    const joinTripForm = document.getElementById('join-trip-form');
+    if (joinTripForm) joinTripForm.reset();
+    
+    const joinTripModal = document.getElementById('joinTripModal');
+    if (joinTripModal) {
+        const modal = new bootstrap.Modal(joinTripModal);
+        modal.show();
+    }
 }
 
 // Update the saveTrip function to handle multiple stops:
 async function saveTrip() {
-    const name = document.getElementById('trip-name').value;
-    const startDate = document.getElementById('start-date').value;
-    const endDate = document.getElementById('end-date').value;
-    const budget = parseFloat(document.getElementById('trip-budget').value);
-    const calculateDistance = document.getElementById('calculate-distance').checked;
+    const name = document.getElementById('trip-name');
+    const startDate = document.getElementById('start-date');
+    const endDate = document.getElementById('end-date');
+    const budget = document.getElementById('trip-budget');
+    const calculateDistance = document.getElementById('calculate-distance');
+    
+    if (!name || !startDate || !endDate || !budget || !calculateDistance) {
+        showAlert('Please fill in all required fields', 'warning');
+        return;
+    }
     
     // Get stops data
     const stopsData = getStopsFromCreateForm();
     
-    if (!name || !validateLocation(stopsData.startLocation) || !validateLocation(stopsData.destination) || !startDate || !endDate || !budget) {
+    if (!name.value || !validateLocation(stopsData.startLocation) || !validateLocation(stopsData.destination) || !startDate.value || !endDate.value || !budget.value) {
         showAlert('Please fill in all fields with valid data', 'warning');
         return;
     }
     
-    if (!validateDates(startDate, endDate)) {
-        showAlert('End date must be after start date', 'warning');
+    const budgetValue = parseFloat(budget.value);
+    if (isNaN(budgetValue) || budgetValue <= 0) {
+        showAlert('Budget must be a number greater than 0', 'warning');
         return;
     }
     
-    if (budget <= 0) {
-        showAlert('Budget must be greater than 0', 'warning');
+    if (!validateDates(startDate.value, endDate.value)) {
+        showAlert('End date must be after start date', 'warning');
         return;
     }
     
@@ -1175,13 +1346,13 @@ async function saveTrip() {
     
     // Create trip data with multiple stops
     const tripData = {
-        name: name.trim(),
+        name: name.value.trim(),
         startLocation: stopsData.startLocation.trim(),
         destination: stopsData.destination.trim(),
         intermediateStops: stopsData.intermediateStops,
-        startDate,
-        endDate,
-        budget,
+        startDate: startDate.value,
+        endDate: endDate.value,
+        budget: budgetValue,
         code,
         createdBy: currentUser.uid,
         members: [currentUser.uid],
@@ -1192,10 +1363,13 @@ async function saveTrip() {
     };
     
     // Calculate route if requested
-    if (calculateDistance) {
+    if (calculateDistance.checked) {
         try {
-            document.getElementById('save-trip-btn').disabled = true;
-            document.getElementById('save-trip-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Calculating Route...';
+            const saveTripBtn = document.getElementById('save-trip-btn');
+            if (saveTripBtn) {
+                saveTripBtn.disabled = true;
+                saveTripBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Calculating Route...';
+            }
             
             const allStops = [stopsData.startLocation, ...stopsData.intermediateStops, stopsData.destination];
             const routeSegments = [];
@@ -1247,8 +1421,11 @@ async function saveTrip() {
     }
     
     try {
-        document.getElementById('save-trip-btn').disabled = true;
-        document.getElementById('save-trip-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Creating...';
+        const saveTripBtn = document.getElementById('save-trip-btn');
+        if (saveTripBtn) {
+            saveTripBtn.disabled = true;
+            saveTripBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Creating...';
+        }
         
         const docRef = await db.collection('trips').add(tripData);
         tripData.id = docRef.id;
@@ -1261,64 +1438,84 @@ async function saveTrip() {
         userTrips.unshift(newTrip);
         displayTrips();
         
-        const modal = bootstrap.Modal.getInstance(document.getElementById('createTripModal'));
-        modal.hide();
+        const createTripModal = document.getElementById('createTripModal');
+        if (createTripModal) {
+            const modal = bootstrap.Modal.getInstance(createTripModal);
+            if (modal) modal.hide();
+        }
         
-        document.getElementById('share-trip-code').textContent = code;
-        const shareModal = new bootstrap.Modal(document.getElementById('shareTripModal'));
-        shareModal.show();
+        const shareTripCode = document.getElementById('share-trip-code');
+        if (shareTripCode) shareTripCode.textContent = code;
+        
+        const shareTripModal = document.getElementById('shareTripModal');
+        if (shareTripModal) {
+            const modal = new bootstrap.Modal(shareTripModal);
+            modal.show();
+        }
         
     } catch (error) {
         console.error('Error creating trip:', error);
         showAlert('Error creating trip. Please try again.', 'danger');
     } finally {
-        document.getElementById('save-trip-btn').disabled = false;
-        document.getElementById('save-trip-btn').innerHTML = 'Create Trip';
+        const saveTripBtn = document.getElementById('save-trip-btn');
+        if (saveTripBtn) {
+            saveTripBtn.disabled = false;
+            saveTripBtn.innerHTML = 'Create Trip';
+        }
     }
 }
 
 async function updateTrip() {
-    const tripId = document.getElementById('edit-trip-id').value;
-    const name = document.getElementById('edit-trip-name').value;
-    const startDate = document.getElementById('edit-start-date').value;
-    const endDate = document.getElementById('edit-end-date').value;
-    const budget = parseFloat(document.getElementById('edit-trip-budget').value);
-    const calculateDistance = document.getElementById('edit-calculate-distance').checked;
+    const tripId = document.getElementById('edit-trip-id');
+    const name = document.getElementById('edit-trip-name');
+    const startDate = document.getElementById('edit-start-date');
+    const endDate = document.getElementById('edit-end-date');
+    const budget = document.getElementById('edit-trip-budget');
+    const calculateDistance = document.getElementById('edit-calculate-distance');
+    
+    if (!tripId || !name || !startDate || !endDate || !budget || !calculateDistance) {
+        showAlert('Please fill in all required fields', 'warning');
+        return;
+    }
     
     // Get stops data
     const stopsData = getStopsFromEditForm();
     
-    if (!name || !validateLocation(stopsData.startLocation) || !validateLocation(stopsData.destination) || !startDate || !endDate || !budget) {
+    if (!name.value || !validateLocation(stopsData.startLocation) || !validateLocation(stopsData.destination) || !startDate.value || !endDate.value || !budget.value) {
         showAlert('Please fill in all fields with valid data', 'warning');
         return;
     }
     
-    if (!validateDates(startDate, endDate)) {
+    const budgetValue = parseFloat(budget.value);
+    if (isNaN(budgetValue) || budgetValue <= 0) {
+        showAlert('Budget must be a number greater than 0', 'warning');
+        return;
+    }
+    
+    if (!validateDates(startDate.value, endDate.value)) {
         showAlert('End date must be after start date', 'warning');
         return;
     }
     
-    if (budget <= 0) {
-        showAlert('Budget must be greater than 0', 'warning');
-        return;
-    }
-    
     const updateData = {
-        name: name.trim(),
+        name: name.value.trim(),
         startLocation: stopsData.startLocation.trim(),
         destination: stopsData.destination.trim(),
         intermediateStops: stopsData.intermediateStops,
-        startDate,
-        endDate,
-        budget,
+        startDate: startDate.value,
+        endDate: endDate.value,
+        budget: budgetValue,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
     
     // Calculate route if requested
-    if (calculateDistance) {
+    if (calculateDistance.checked) {
         try {
-            document.getElementById('update-trip-btn').disabled = true;
-            document.getElementById('update-trip-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Calculating Route...';
+            const updateTripBtn = document.getElementById('update-trip-btn');
+            if (updateTripBtn) {
+                updateTripBtn.disabled = true;
+                updateTripBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Calculating Route...';
+            }
             
             const allStops = [stopsData.startLocation, ...stopsData.intermediateStops, stopsData.destination];
             const routeSegments = [];
@@ -1370,13 +1567,16 @@ async function updateTrip() {
     }
     
     try {
-        document.getElementById('update-trip-btn').disabled = true;
-        document.getElementById('update-trip-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Updating...';
+        const updateTripBtn = document.getElementById('update-trip-btn');
+        if (updateTripBtn) {
+            updateTripBtn.disabled = true;
+            updateTripBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Updating...';
+        }
         
-        await db.collection('trips').doc(tripId).update(updateData);
+        await db.collection('trips').doc(tripId.value).update(updateData);
         
         // Update the local trip data
-        const tripIndex = userTrips.findIndex(trip => trip.id === tripId);
+        const tripIndex = userTrips.findIndex(trip => trip.id === tripId.value);
         if (tripIndex !== -1) {
             userTrips[tripIndex] = {
                 ...userTrips[tripIndex],
@@ -1385,8 +1585,11 @@ async function updateTrip() {
             displayTrips();
         }
         
-        const modal = bootstrap.Modal.getInstance(document.getElementById('editTripModal'));
-        modal.hide();
+        const editTripModal = document.getElementById('editTripModal');
+        if (editTripModal) {
+            const modal = bootstrap.Modal.getInstance(editTripModal);
+            if (modal) modal.hide();
+        }
         
         showAlert('Trip updated successfully!', 'success');
         
@@ -1394,26 +1597,36 @@ async function updateTrip() {
         console.error('Error updating trip:', error);
         showAlert('Error updating trip. Please try again.', 'danger');
     } finally {
-        document.getElementById('update-trip-btn').disabled = false;
-        document.getElementById('update-trip-btn').innerHTML = 'Update Trip';
+        const updateTripBtn = document.getElementById('update-trip-btn');
+        if (updateTripBtn) {
+            updateTripBtn.disabled = false;
+            updateTripBtn.innerHTML = 'Update Trip';
+        }
     }
 }
 
 async function deleteTrip() {
-    const tripId = document.getElementById('delete-trip-id').value;
+    const tripId = document.getElementById('delete-trip-id');
+    if (!tripId) return;
     
     try {
-        document.getElementById('confirm-delete-trip-btn').disabled = true;
-        document.getElementById('confirm-delete-trip-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Deleting...';
+        const confirmDeleteTripBtn = document.getElementById('confirm-delete-trip-btn');
+        if (confirmDeleteTripBtn) {
+            confirmDeleteTripBtn.disabled = true;
+            confirmDeleteTripBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Deleting...';
+        }
         
-        await db.collection('trips').doc(tripId).delete();
+        await db.collection('trips').doc(tripId.value).delete();
         
         // Remove from local array
-        userTrips = userTrips.filter(trip => trip.id !== tripId);
+        userTrips = userTrips.filter(trip => trip.id !== tripId.value);
         displayTrips();
         
-        const modal = bootstrap.Modal.getInstance(document.getElementById('deleteTripModal'));
-        modal.hide();
+        const deleteTripModal = document.getElementById('deleteTripModal');
+        if (deleteTripModal) {
+            const modal = bootstrap.Modal.getInstance(deleteTripModal);
+            if (modal) modal.hide();
+        }
         
         showAlert('Trip deleted successfully!', 'success');
         
@@ -1421,13 +1634,19 @@ async function deleteTrip() {
         console.error('Error deleting trip:', error);
         showAlert('Error deleting trip. Please try again.', 'danger');
     } finally {
-        document.getElementById('confirm-delete-trip-btn').disabled = false;
-        document.getElementById('confirm-delete-trip-btn').innerHTML = 'Delete Trip';
+        const confirmDeleteTripBtn = document.getElementById('confirm-delete-trip-btn');
+        if (confirmDeleteTripBtn) {
+            confirmDeleteTripBtn.disabled = false;
+            confirmDeleteTripBtn.innerHTML = 'Delete Trip';
+        }
     }
 }
 
 async function joinTripWithCode() {
-    const code = document.getElementById('trip-code').value.trim().toUpperCase();
+    const tripCode = document.getElementById('trip-code');
+    if (!tripCode) return;
+    
+    const code = tripCode.value.trim().toUpperCase();
     
     if (!code) {
         showAlert('Please enter a trip code', 'warning');
@@ -1435,8 +1654,11 @@ async function joinTripWithCode() {
     }
     
     try {
-        document.getElementById('join-trip-code-btn').disabled = true;
-        document.getElementById('join-trip-code-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Joining...';
+        const joinTripCodeBtn = document.getElementById('join-trip-code-btn');
+        if (joinTripCodeBtn) {
+            joinTripCodeBtn.disabled = true;
+            joinTripCodeBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Joining...';
+        }
         
         // Find trip by code
         const tripsSnapshot = await db.collection('trips')
@@ -1466,8 +1688,11 @@ async function joinTripWithCode() {
         // Reload trips
         await loadUserTrips();
         
-        const modal = bootstrap.Modal.getInstance(document.getElementById('joinTripModal'));
-        modal.hide();
+        const joinTripModal = document.getElementById('joinTripModal');
+        if (joinTripModal) {
+            const modal = bootstrap.Modal.getInstance(joinTripModal);
+            if (modal) modal.hide();
+        }
         
         showAlert(`Successfully joined trip: ${tripData.name}`, 'success');
         
@@ -1475,8 +1700,11 @@ async function joinTripWithCode() {
         console.error('Error joining trip:', error);
         showAlert('Error joining trip. Please try again.', 'danger');
     } finally {
-        document.getElementById('join-trip-code-btn').disabled = false;
-        document.getElementById('join-trip-code-btn').innerHTML = 'Join Trip';
+        const joinTripCodeBtn = document.getElementById('join-trip-code-btn');
+        if (joinTripCodeBtn) {
+            joinTripCodeBtn.disabled = false;
+            joinTripCodeBtn.innerHTML = 'Join Trip';
+        }
     }
 }
 
@@ -1515,20 +1743,25 @@ function viewTrip(tripId) {
 }
 
 function copyTripCode() {
-    const code = document.getElementById('share-trip-code').textContent;
+    const shareTripCode = document.getElementById('share-trip-code');
+    if (!shareTripCode) return;
+    
+    const code = shareTripCode.textContent;
     navigator.clipboard.writeText(code).then(() => {
         const copyBtn = document.getElementById('copy-code-btn');
-        const originalHtml = copyBtn.innerHTML;
-        
-        copyBtn.innerHTML = '<i class="fas fa-check me-1"></i>Copied!';
-        copyBtn.classList.remove('btn-outline-primary');
-        copyBtn.classList.add('btn-success');
-        
-        setTimeout(() => {
-            copyBtn.innerHTML = originalHtml;
-            copyBtn.classList.remove('btn-success');
-            copyBtn.classList.add('btn-outline-primary');
-        }, 2000);
+        if (copyBtn) {
+            const originalHtml = copyBtn.innerHTML;
+            
+            copyBtn.innerHTML = '<i class="fas fa-check me-1"></i>Copied!';
+            copyBtn.classList.remove('btn-outline-primary');
+            copyBtn.classList.add('btn-success');
+            
+            setTimeout(() => {
+                copyBtn.innerHTML = originalHtml;
+                copyBtn.classList.remove('btn-success');
+                copyBtn.classList.add('btn-outline-primary');
+            }, 2000);
+        }
     });
 }
 
@@ -1550,6 +1783,16 @@ function validateLocation(location) {
 }
 
 function showAlert(message, type) {
+    // Create alerts container if it doesn't exist
+    let alertsContainer = document.getElementById('alerts-container');
+    if (!alertsContainer) {
+        alertsContainer = document.createElement('div');
+        alertsContainer.id = 'alerts-container';
+        alertsContainer.className = 'position-fixed top-0 end-0 p-3';
+        alertsContainer.style.zIndex = '9999';
+        document.body.appendChild(alertsContainer);
+    }
+    
     const alertDiv = document.createElement('div');
     alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
     alertDiv.innerHTML = `
@@ -1557,8 +1800,7 @@ function showAlert(message, type) {
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
     
-    const container = document.getElementById('alerts-container');
-    container.appendChild(alertDiv);
+    alertsContainer.appendChild(alertDiv);
     
     // Auto remove after 5 seconds
     setTimeout(() => {
@@ -1612,8 +1854,20 @@ function formatMinutesToDuration(minutes) {
     }
 }
 
+// Add favicon to prevent 404 error
+function addFavicon() {
+    const link = document.createElement('link');
+    link.rel = 'icon';
+    link.type = 'image/x-icon';
+    link.href = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚗</text></svg>';
+    document.head.appendChild(link);
+}
+
 // Add rupee symbol support
 document.addEventListener('DOMContentLoaded', function() {
+    // Add favicon
+    addFavicon();
+    
     // Add rupee symbol to elements with rupee-symbol class
     document.querySelectorAll('.rupee-symbol').forEach(element => {
         element.innerHTML = '₹';
