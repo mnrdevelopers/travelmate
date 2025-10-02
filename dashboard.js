@@ -673,14 +673,40 @@ async function calculateRouteWithStops(locations) {
     }
 }
 
-// Fuel cost calculation
-function calculateFuelCost(distanceKm, fuelType, mileage, currentFuelPrice) {
+// Enhanced fuel cost calculation with current prices
+async function calculateFuelCost(distanceKm, fuelType, mileage) {
     if (!mileage || mileage <= 0) return 0;
     
     const fuelConsumed = distanceKm / mileage;
-    let fuelPricePerLiter = currentFuelPrice || getDefaultFuelPrice(fuelType);
+    const fuelPrice = await getCurrentFuelPrice(fuelType);
     
-    return fuelConsumed * fuelPricePerLiter;
+    return fuelConsumed * fuelPrice;
+}
+
+async function getCurrentFuelPrice(fuelType) {
+    // Try to get cached prices first
+    const cachedPrices = JSON.parse(localStorage.getItem('fuelPrices') || '{}');
+    
+    if (cachedPrices.timestamp && Date.now() - cachedPrices.timestamp < 24 * 60 * 60 * 1000) {
+        return cachedPrices[fuelType] || getDefaultFuelPrice(fuelType);
+    }
+    
+    // Default prices (can be enhanced with real API)
+    const defaultPrices = {
+        'petrol': 106.3,  // Current average in India
+        'diesel': 94.3,
+        'cng': 78.5,
+        'electric': 8.5   // per kWh
+    };
+    
+    // Cache the prices
+    const pricesToCache = {
+        ...defaultPrices,
+        timestamp: Date.now()
+    };
+    localStorage.setItem('fuelPrices', JSON.stringify(pricesToCache));
+    
+    return defaultPrices[fuelType] || 0;
 }
 
 function getDefaultFuelPrice(fuelType) {
@@ -688,7 +714,7 @@ function getDefaultFuelPrice(fuelType) {
         'petrol': 100,
         'diesel': 90,
         'cng': 70,
-        'electric': 8 // per kWh
+        'electric': 8
     };
     return defaultPrices[fuelType] || 0;
 }
