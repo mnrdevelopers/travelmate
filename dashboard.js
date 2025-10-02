@@ -471,58 +471,6 @@ async function calculateDistance() {
     }
 }
 
-async function calculateEditDistance() {
-    const startLocation = document.getElementById('edit-start-location').value;
-    const destination = document.getElementById('edit-trip-destination').value;
-    
-    if (!validateLocation(startLocation) || !validateLocation(destination)) {
-        showAlert('Please enter valid locations', 'warning');
-        return;
-    }
-    
-    try {
-        document.getElementById('edit-distance-details').innerHTML = `
-            <div class="text-center">
-                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-                Calculating distance...
-            </div>
-        `;
-        document.getElementById('edit-distance-results').classList.remove('d-none');
-        
-        const routeData = await calculateRealDistance(startLocation, destination);
-        
-        document.getElementById('edit-distance-details').innerHTML = `
-            <p><strong>Distance:</strong> ${routeData.distance}</p>
-            <p><strong>Estimated Travel Time:</strong> ${routeData.duration}</p>
-            <div class="alert alert-success mt-2">
-                <small><i class="fas fa-check-circle me-1"></i>Distance calculated using OpenRouteService API</small>
-            </div>
-        `;
-        
-    } catch (error) {
-        console.error('Error calculating distance:', error);
-        const errorMessage = handleRouteCalculationError(error);
-        document.getElementById('edit-distance-details').innerHTML = `
-            <div class="alert alert-danger">
-                <i class="fas fa-exclamation-triangle me-2"></i>
-                ${errorMessage}
-            </div>
-        `;
-    }
-}
-
-function displayDistanceResults(distance, duration) {
-    const distanceDetails = document.getElementById('distance-details');
-    
-    distanceDetails.innerHTML = `
-        <p><strong>Distance:</strong> ${distance}</p>
-        <p><strong>Estimated Travel Time:</strong> ${duration}</p>
-        <div class="alert alert-success mt-2">
-            <small><i class="fas fa-check-circle me-1"></i>Distance calculated using OpenRouteService API</small>
-        </div>
-    `;
-}
-
 async function saveTrip() {
     const name = document.getElementById('trip-name').value;
     const startLocation = document.getElementById('start-location').value;
