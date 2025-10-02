@@ -37,6 +37,9 @@ function setupDashboardEventListeners() {
         }
     });
     
+    // Enhanced trip features
+    setupEnhancedTripFeatures();
+    
     // Profile operations
     setupProfileEventListeners();
 }
@@ -727,14 +730,43 @@ document.addEventListener('DOMContentLoaded', function() {
 // Enhanced trip creation with new features
 function setupEnhancedTripFeatures() {
     // Transport type change handler
-    document.getElementById('transport-type').addEventListener('change', function() {
-        const isCarType = this.value === 'self-driving' || this.value === 'rental-car';
-        document.getElementById('vehicle-details').classList.toggle('d-none', !isCarType);
-        document.getElementById('self-driving-charges').classList.toggle('d-none', this.value !== 'self-driving');
-    });
+    const transportTypeSelect = document.getElementById('transport-type');
+    if (transportTypeSelect) {
+        transportTypeSelect.addEventListener('change', function() {
+            const isCarType = this.value === 'self-driving' || this.value === 'rental-car';
+            const vehicleDetails = document.getElementById('vehicle-details');
+            const selfDrivingCharges = document.getElementById('self-driving-charges');
+            
+            if (vehicleDetails) {
+                vehicleDetails.classList.toggle('d-none', !isCarType);
+            }
+            if (selfDrivingCharges) {
+                selfDrivingCharges.classList.toggle('d-none', this.value !== 'self-driving');
+            }
+        });
+    }
     
     // Add stop functionality
-    document.getElementById('add-stop-btn').addEventListener('click', addStopField);
+    const addStopBtn = document.getElementById('add-stop-btn');
+    if (addStopBtn) {
+        addStopBtn.addEventListener('click', addStopField);
+    }
+    
+    // Auto-calculate fuel cost when mileage changes
+    const mileageInput = document.getElementById('vehicle-mileage');
+    if (mileageInput) {
+        mileageInput.addEventListener('change', updateFuelCostEstimate);
+    }
+    
+    const fuelTypeSelect = document.getElementById('fuel-type');
+    if (fuelTypeSelect) {
+        fuelTypeSelect.addEventListener('change', updateFuelCostEstimate);
+    }
+}
+
+function updateFuelCostEstimate() {
+    // This would update fuel cost estimates when mileage or fuel type changes
+    console.log('Fuel cost estimate updated');
 }
 
 function addStopField() {
