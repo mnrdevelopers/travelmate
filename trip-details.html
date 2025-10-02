@@ -237,7 +237,10 @@
         <i class="fas fa-map-marked-alt"></i>
     </div>
     <h4>No route information</h4>
-    <p>Add stops to see route details</p>
+    <p>Calculate distance to see route details</p>
+    <button class="btn btn-primary mt-2" id="calculate-route-btn">
+        <i class="fas fa-route me-1"></i>Calculate Route
+    </button>
 </div>
                         </div>
                     </div>
@@ -283,6 +286,18 @@
                     <div class="mb-3">
                         <label for="edit-trip-budget" class="form-label">Total Budget (<span class="rupee-symbol">₹</span>)</label>
                         <input type="number" class="form-control" id="edit-trip-budget" min="0" step="0.01" required>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="edit-calculate-distance">
+                        <label class="form-check-label" for="edit-calculate-distance">
+                            Recalculate travel distance and time
+                        </label>
+                    </div>
+                    <div id="edit-distance-results" class="distance-info d-none">
+                        <h6><i class="fas fa-route me-2"></i>Travel Information</h6>
+                        <div id="edit-distance-details">
+                            <!-- Distance results will appear here -->
+                        </div>
                     </div>
                 </form>
             </div>
