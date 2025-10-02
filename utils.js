@@ -62,16 +62,98 @@ function validateDates(startDate, endDate) {
 // Real OpenRouteService API integration
 async function calculateRealDistance(startLocation, destination) {
     try {
-        // First, you need to geocode the locations to get coordinates
-        // This requires additional geocoding API calls
-        console.log('Route calculation requires geocoding implementation');
+        console.log('Calculating route:', startLocation, '→', destination);
         
-        // For now, fallback to simulation
-        return calculateSimulatedDistance(startLocation, destination);
+        // Geocode both locations
+        const startCoords = await geocodeLocation(startLocation);
+        const destCoords = await geocodeLocation(destination);
+        
+        console.log('Coordinates:', startCoords, destCoords);
+        
+        // Calculate route using OpenRouteService
+        const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
+            method: 'POST',
+            headers: {
+                'Authorization': OPENROUTESERVICE_API_KEY,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                coordinates: [startCoords, destCoords],
+                format: 'json'
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`API request failed: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.routes && data.routes.length > 0) {
+            const route = data.routes[0];
+            const distance = (route.summary.distance / 1000).toFixed(1);
+            const duration = formatDuration(route.summary.duration);
+            
+            return {
+                distance: `${distance} km`,
+                duration: duration,
+                coordinates: {
+                    start: startCoords,
+                    destination: destCoords
+                },
+                rawData: data
+            };
+        } else {
+            throw new Error('No route found');
+        }
+        
     } catch (error) {
-        console.error('Route calculation failed:', error);
+        console.error('OpenRouteService API error:', error);
+        console.log('Falling back to simulated distance calculation...');
         return calculateSimulatedDistance(startLocation, destination);
     }
+}
+
+async function geocodeLocation(locationName) {
+    try {
+        const response = await fetch(
+            `https://api.openrouteservice.org/geocode/search?api_key=${OPENROUTESERVICE_API_KEY}&text=${encodeURIComponent(locationName)}`
+        );
+        const data = await response.json();
+        
+        if (data.features && data.features.length > 0) {
+            return data.features[0].geometry.coordinates; // [longitude, latitude]
+        }
+        throw new Error('Location not found');
+    } catch (error) {
+        console.error('Geocoding error:', error);
+        throw error;
+    }
+}
+
+function calculateSimulatedDistance(start, destination) {
+    // Fallback simulation when API fails
+    const baseDistance = 350;
+    const randomVariation = Math.random() * 200 - 100;
+    const distance = Math.max(50, baseDistance + randomVariation);
+    const hours = distance / 80;
+    const totalMinutes = Math.round(hours * 60);
+    
+    const hoursPart = Math.floor(totalMinutes / 60);
+    const minutesPart = totalMinutes % 60;
+    
+    let duration;
+    if (hoursPart > 0) {
+        duration = `${hoursPart} hour${hoursPart > 1 ? 's' : ''} ${minutesPart} minute${minutesPart > 1 ? 's' : ''}`;
+    } else {
+        duration = `${minutesPart} minute${minutesPart > 1 ? 's' : ''}`;
+    }
+    
+    return {
+        distance: `${distance.toFixed(1)} km`,
+        duration: duration,
+        simulated: true
+    };
 }
 
 // Utility functions for duration conversion
