@@ -166,12 +166,95 @@ async function loadTripOverview(trip) {
     } else {
         document.getElementById('overview-distance').textContent = 'Not calculated';
     }
+
+     // Display transport type and vehicle details
+    if (trip.transportType) {
+        const transportInfo = document.createElement('div');
+        transportInfo.className = 'col-sm-6 mb-3';
+        transportInfo.innerHTML = `
+            <strong><i class="fas fa-car me-2 text-primary"></i>Transport:</strong>
+            <span>${getTransportTypeDisplay(trip.transportType)}</span>
+        `;
+        document.querySelector('#overview .row').appendChild(transportInfo);
+    }
+    
+    // Display stops if any
+    if (trip.stops && trip.stops.length > 0) {
+        const stopsInfo = document.createElement('div');
+        stopsInfo.className = 'col-12 mb-3';
+        stopsInfo.innerHTML = `
+            <strong><i class="fas fa-map-pin me-2 text-primary"></i>Stops:</strong>
+            <span>${trip.stops.join(' → ')}</span>
+        `;
+        document.querySelector('#overview .row').appendChild(stopsInfo);
+    }
+    
+    // Display detailed route information
+    if (trip.route && trip.route.segments) {
+        const routeDetails = document.createElement('div');
+        routeDetails.className = 'col-12 mb-3';
+        routeDetails.innerHTML = `
+            <strong><i class="fas fa-route me-2 text-primary"></i>Route Details:</strong>
+            <div class="mt-2">
+                ${trip.route.segments.map(segment => `
+                    <div class="route-segment small">
+                        ${segment.from} → ${segment.to}: ${segment.distance} (${segment.duration})
+                    </div>
+                `).join('')}
+            </div>
+        `;
+        document.querySelector('#overview .row').appendChild(routeDetails);
+    }
     
     // Load members
     await loadTripMembers(trip);
 
     // Add trip actions (edit/delete/leave buttons)
     addTripActions(trip);
+}
+
+function getTransportTypeDisplay(transportType) {
+    const types = {
+        'self-driving': 'Self Driving',
+        'rental-car': 'Rental Car',
+        'public-transport': 'Public Transport',
+        'flight': 'Flight',
+        'train': 'Train',
+        'other': 'Other'
+    };
+    return types[transportType] || transportType;
+}
+
+// Enhanced expense tracking for fuel
+function addFuelExpenseAutomatically(trip, segment) {
+    if (trip.transportType !== 'self-driving' && trip.transportType !== 'rental-car') return;
+    
+    if (!trip.vehicleDetails || !trip.vehicleDetails.mileage) return;
+    
+    const fuelCost = calculateFuelCost(
+        segment.distanceKm,
+        trip.vehicleDetails.fuelType,
+        trip.vehicleDetails.mileage
+    );
+    
+    if (fuelCost > 0) {
+        const fuelExpense = {
+            description: `Fuel: ${segment.from} to ${segment.to}`,
+            amount: fuelCost,
+            category: 'fuel',
+            date: new Date().toISOString().split('T')[0],
+            paymentMode: 'cash',
+            addedBy: auth.currentUser.uid,
+            addedAt: new Date().toISOString(),
+            autoCalculated: true,
+            distance: segment.distance,
+            fuelConsumed: segment.distanceKm / trip.vehicleDetails.mileage
+        };
+        
+        // Add to expenses
+        if (!trip.expenses) trip.expenses = [];
+        trip.expenses.push(fuelExpense);
+    }
 }
 
 async function loadTripMembers(trip) {
