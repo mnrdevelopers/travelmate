@@ -429,6 +429,30 @@
     </div>
 </div>
 
+    <!-- Meter Reading Modal -->
+<div class="modal fade" id="meterReadingModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Car Meter Reading</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center">
+                <div class="reading-display" id="current-reading">0 km</div>
+                <div class="btn-group mb-3">
+                    <button class="btn btn-outline-primary" id="increment-reading">+1 km</button>
+                    <button class="btn btn-outline-secondary" id="reset-reading">Reset</button>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Set Custom Reading</label>
+                    <input type="number" class="form-control" id="custom-reading" placeholder="Enter km reading">
+                </div>
+                <button class="btn btn-success" id="save-reading">Save Reading</button>
+            </div>
+        </div>
+    </div>
+</div>
+
     <div id="toast-container" class="toast-container position-fixed top-0 end-0 p-3"></div>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
