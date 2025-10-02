@@ -5,32 +5,67 @@ let currentCalculation = null;
 
 document.addEventListener('DOMContentLoaded', function() {
     checkAuthState();
-    setupCarCalculatorEventListeners();
-    loadSavedVehicles();
 });
 
 function setupCarCalculatorEventListeners() {
     // Vehicle type change
-    document.getElementById('vehicle-type').addEventListener('change', toggleRentalFields);
+    const vehicleType = document.getElementById('vehicle-type');
+    if (vehicleType) {
+        vehicleType.addEventListener('change', toggleRentalFields);
+    }
     
     // Calculation buttons
-    document.getElementById('calculate-costs-btn').addEventListener('click', calculateAllCosts);
-    document.getElementById('calculate-from-readings').addEventListener('click', calculateDistanceFromReadings);
-    document.getElementById('reset-calculator-btn').addEventListener('click', resetCalculator);
+    const calculateCostsBtn = document.getElementById('calculate-costs-btn');
+    const calculateFromReadings = document.getElementById('calculate-from-readings');
+    const resetCalculatorBtn = document.getElementById('reset-calculator-btn');
+    
+    if (calculateCostsBtn) {
+        calculateCostsBtn.addEventListener('click', calculateAllCosts);
+    }
+    
+    if (calculateFromReadings) {
+        calculateFromReadings.addEventListener('click', calculateDistanceFromReadings);
+    }
+    
+    if (resetCalculatorBtn) {
+        resetCalculatorBtn.addEventListener('click', resetCalculator);
+    }
     
     // Save and actions
-    document.getElementById('save-vehicle-btn').addEventListener('click', saveVehicle);
-    document.getElementById('save-template-btn').addEventListener('click', saveCalculationTemplate);
-    document.getElementById('add-to-expenses-btn').addEventListener('click', showAddToExpensesModal);
-    document.getElementById('confirm-add-expenses').addEventListener('click', addToTripExpenses);
+    const saveVehicleBtn = document.getElementById('save-vehicle-btn');
+    const saveTemplateBtn = document.getElementById('save-template-btn');
+    const addToExpensesBtn = document.getElementById('add-to-expenses-btn');
+    const confirmAddExpenses = document.getElementById('confirm-add-expenses');
+    
+    if (saveVehicleBtn) {
+        saveVehicleBtn.addEventListener('click', saveVehicle);
+    }
+    
+    if (saveTemplateBtn) {
+        saveTemplateBtn.addEventListener('click', saveCalculationTemplate);
+    }
+    
+    if (addToExpensesBtn) {
+        addToExpensesBtn.addEventListener('click', showAddToExpensesModal);
+    }
+    
+    if (confirmAddExpenses) {
+        confirmAddExpenses.addEventListener('click', addToTripExpenses);
+    }
     
     // Logout
-    document.getElementById('logout-btn').addEventListener('click', handleLogout);
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', handleLogout);
+    }
     
     // Auto-calculate on input changes
     const autoCalculateFields = ['trip-distance', 'mileage', 'fuel-price', 'rental-cost', 'trip-duration'];
     autoCalculateFields.forEach(field => {
-        document.getElementById(field).addEventListener('input', debounce(calculateAllCosts, 500));
+        const element = document.getElementById(field);
+        if (element) {
+            element.addEventListener('input', debounce(calculateAllCosts, 500));
+        }
     });
 }
 
@@ -185,6 +220,12 @@ function showCalculationResults(calculation, hasData) {
 }
 
 async function saveVehicle() {
+    // Check authentication
+    if (!auth.currentUser) {
+        showAlert('Please sign in to save vehicles', 'warning');
+        return;
+    }
+    
     const vehicleData = {
         name: document.getElementById('vehicle-name').value.trim() || 'My Vehicle',
         type: document.getElementById('vehicle-type').value,
@@ -204,8 +245,12 @@ async function saveVehicle() {
     }
     
     try {
+        document.getElementById('save-vehicle-btn').disabled = true;
+        document.getElementById('save-vehicle-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+        
         await db.collection('users').doc(auth.currentUser.uid).update({
-            vehicles: firebase.firestore.FieldValue.arrayUnion(vehicleData)
+            vehicles: firebase.firestore.FieldValue.arrayUnion(vehicleData),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         
         showAlert('Vehicle saved successfully!', 'success');
@@ -219,7 +264,8 @@ async function saveVehicle() {
             try {
                 await db.collection('users').doc(auth.currentUser.uid).set({
                     vehicles: [vehicleData],
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
                 showAlert('Vehicle saved successfully!', 'success');
                 loadSavedVehicles();
@@ -230,13 +276,27 @@ async function saveVehicle() {
         } else {
             showAlert('Error saving vehicle', 'danger');
         }
+    } finally {
+        document.getElementById('save-vehicle-btn').disabled = false;
+        document.getElementById('save-vehicle-btn').innerHTML = '<i class="fas fa-save me-1"></i>Save Vehicle';
     }
 }
 
 async function loadSavedVehicles() {
     try {
+        // Check if user is authenticated
+        if (!auth.currentUser) {
+            console.log('User not authenticated, skipping vehicle load');
+            return;
+        }
+        
         const userDoc = await db.collection('users').doc(auth.currentUser.uid).get();
         const vehiclesList = document.getElementById('saved-vehicles-list');
+        
+        if (!vehiclesList) {
+            console.error('Saved vehicles list element not found');
+            return;
+        }
         
         if (userDoc.exists && userDoc.data().vehicles) {
             savedVehicles = userDoc.data().vehicles;
@@ -297,6 +357,14 @@ async function loadSavedVehicles() {
         }
     } catch (error) {
         console.error('Error loading vehicles:', error);
+        const vehiclesList = document.getElementById('saved-vehicles-list');
+        if (vehiclesList) {
+            vehiclesList.innerHTML = `
+                <div class="text-center text-danger py-3">
+                    <p>Error loading vehicles</p>
+                </div>
+            `;
+        }
     }
 }
 
@@ -526,8 +594,12 @@ function debounce(func, wait) {
 function checkAuthState() {
     auth.onAuthStateChanged((user) => {
         if (user) {
+            // User is signed in
             loadUserData();
+            setupCarCalculatorEventListeners();
+            loadSavedVehicles(); // Move this here
         } else {
+            // User is signed out
             navigateTo('auth.html');
         }
     });
