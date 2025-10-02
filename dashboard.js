@@ -1,875 +1,554 @@
+// Dashboard JavaScript
 let currentUser = null;
 let userTrips = [];
 
 document.addEventListener('DOMContentLoaded', function() {
-    checkAuthState();
-    setupDashboardEventListeners();
-    initializeApp();
-});
-
-function setupDashboardEventListeners() {
-    // Trip management
-    document.getElementById('create-trip-btn').addEventListener('click', showCreateTripModal);
-    document.getElementById('create-first-trip-btn').addEventListener('click', showCreateTripModal);
-    document.getElementById('join-trip-btn').addEventListener('click', showJoinTripModal);
-    document.getElementById('save-trip-btn').addEventListener('click', saveTrip);
-    document.getElementById('update-trip-btn').addEventListener('click', updateTrip);
-    document.getElementById('confirm-delete-trip-btn').addEventListener('click', deleteTrip);
-    document.getElementById('join-trip-code-btn').addEventListener('click', joinTripWithCode);
-    document.getElementById('logout-btn').addEventListener('click', handleLogout);
-    document.getElementById('copy-code-btn').addEventListener('click', copyTripCode);
-    document.getElementById('nav-profile').addEventListener('click', showProfileModal);
-    
-    // Distance calculation
-    document.getElementById('calculate-distance').addEventListener('change', function() {
-        if (this.checked) {
-            calculateDistance();
-        } else {
-            document.getElementById('distance-results').classList.add('d-none');
-        }
-    });
-    
-    document.getElementById('edit-calculate-distance').addEventListener('change', function() {
-        if (this.checked) {
-            calculateEditDistance();
-        } else {
-            document.getElementById('edit-distance-results').classList.add('d-none');
-        }
-    });
-    
-    // Profile operations
-    setupProfileEventListeners();
-}
-
-function setupProfileEventListeners() {
-    const navProfile = document.getElementById('nav-profile');
-    const saveProfileBtn = document.getElementById('save-profile-btn');
-    const avatarUpload = document.getElementById('avatar-upload');
-    const leaveAllTripsBtn = document.getElementById('leave-all-trips-btn');
-    
-    if (navProfile) navProfile.addEventListener('click', showProfileModal);
-    if (saveProfileBtn) saveProfileBtn.addEventListener('click', saveProfile);
-    if (avatarUpload) avatarUpload.addEventListener('change', handleAvatarUpload);
-    if (leaveAllTripsBtn) leaveAllTripsBtn.addEventListener('click', leaveAllTrips);
-}
-
-// Add the missing profile functions
-function showProfileModal() {
-    const user = auth.currentUser;
-    if (!user) return;
-    
-    document.getElementById('profile-name').value = user.displayName || '';
-    document.getElementById('profile-email').value = user.email || '';
-    document.getElementById('profile-userid').value = user.uid;
-    document.getElementById('profile-avatar').src = user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}&background=4361ee&color=fff`;
-    
-    const modal = new bootstrap.Modal(document.getElementById('profileModal'));
-    modal.show();
-}
-
-async function saveProfile() {
-    const name = document.getElementById('profile-name').value.trim();
-    
-    if (!name) {
-        showAlert('Please enter a display name', 'warning');
-        return;
-    }
-    
-    try {
-        document.getElementById('save-profile-btn').disabled = true;
-        document.getElementById('save-profile-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
-        
-        await auth.currentUser.updateProfile({
-            displayName: name
-        });
-        
-        // Update user document in Firestore
-        await db.collection('users').doc(auth.currentUser.uid).update({
-            name: name,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        
-        // Update UI
-        loadUserData();
-        
-        const modal = bootstrap.Modal.getInstance(document.getElementById('profileModal'));
-        modal.hide();
-        
-        showAlert('Profile updated successfully!', 'success');
-        
-    } catch (error) {
-        console.error('Error updating profile:', error);
-        showAlert('Error updating profile', 'danger');
-    } finally {
-        document.getElementById('save-profile-btn').disabled = false;
-        document.getElementById('save-profile-btn').innerHTML = 'Save Changes';
-    }
-}
-
-async function handleAvatarUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    // Note: Firebase Storage would be needed for full avatar upload functionality
-    // For now, we'll just show a message
-    showAlert('Avatar upload requires Firebase Storage setup. Display name updated successfully!', 'info');
-}
-
-async function leaveAllTrips() {
-    if (!confirm('Are you sure you want to leave all trips? This action cannot be undone.')) {
-        return;
-    }
-    
-    try {
-        document.getElementById('leave-all-trips-btn').disabled = true;
-        document.getElementById('leave-all-trips-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Leaving...';
-        
-        // Remove user from all trips
-        const batch = db.batch();
-        
-        for (const trip of userTrips) {
-            if (trip.createdBy !== auth.currentUser.uid) {
-                const tripRef = db.collection('trips').doc(trip.id);
-                batch.update(tripRef, {
-                    members: firebase.firestore.FieldValue.arrayRemove(auth.currentUser.uid),
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-            }
-        }
-        
-        await batch.commit();
-        
-        // Reload trips
-        await loadUserTrips();
-        
-        showAlert('Left all trips successfully!', 'success');
-        
-    } catch (error) {
-        console.error('Error leaving all trips:', error);
-        showAlert('Error leaving trips', 'danger');
-    } finally {
-        document.getElementById('leave-all-trips-btn').disabled = false;
-        document.getElementById('leave-all-trips-btn').innerHTML = '<i class="fas fa-sign-out-alt me-1"></i>Leave All Trips';
-    }
-}
-
-function initializeApp() {
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('start-date').min = today;
-    document.getElementById('end-date').min = today;
-    document.getElementById('edit-start-date').min = today;
-    document.getElementById('edit-end-date').min = today;
-}
-
-function checkAuthState() {
-    auth.onAuthStateChanged(user => {
+    // Initialize Firebase Auth
+    firebase.auth().onAuthStateChanged(function(user) {
         if (user) {
             currentUser = user;
-            loadUserData();
+            document.getElementById('user-name').textContent = user.displayName || 'User';
+            document.getElementById('user-avatar').src = user.photoURL || 'https://via.placeholder.com/40';
             loadUserTrips();
         } else {
-            navigateTo('auth.html');
+            window.location.href = 'index.html';
         }
     });
-}
 
-function loadUserData() {
-    if (!currentUser) return;
+    // Event Listeners
+    document.getElementById('create-trip-btn').addEventListener('click', showCreateTripModal);
+    document.getElementById('create-first-trip-btn').addEventListener('click', showCreateTripModal);
+    document.getElementById('save-trip-btn').addEventListener('click', saveTrip);
+    document.getElementById('join-trip-btn').addEventListener('click', showJoinTripModal);
+    document.getElementById('join-trip-confirm-btn').addEventListener('click', joinTrip);
+    document.getElementById('logout-btn').addEventListener('click', logout);
+    document.getElementById('nav-profile').addEventListener('click', showProfileModal);
+    document.getElementById('save-profile-btn').addEventListener('click', saveProfile);
+    document.getElementById('leave-all-trips-btn').addEventListener('click', leaveAllTrips);
+    document.getElementById('avatar-upload').addEventListener('change', handleAvatarUpload);
     
-    document.getElementById('user-name').textContent = currentUser.displayName || 'Traveler';
-    document.getElementById('user-avatar').src = currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || 'Traveler')}&background=4361ee&color=fff`;
-}
-
-async function loadUserTrips() {
-    try {
-        showLoadingState(true);
-        
-        const tripsSnapshot = await db.collection('trips')
-            .where('members', 'array-contains', currentUser.uid)
-            .get();
-        
-        userTrips = [];
-        tripsSnapshot.forEach(doc => {
-            const tripData = doc.data();
-            userTrips.push({
-                id: doc.id,
-                ...tripData
-            });
-        });
-        
-        userTrips.sort((a, b) => {
-            const dateA = a.createdAt ? (a.createdAt.toDate ? a.createdAt.toDate() : new Date(a.createdAt)) : new Date(0);
-            const dateB = b.createdAt ? (b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt)) : new Date(0);
-            return dateB - dateA;
-        });
-        
-        displayTrips();
-        
-    } catch (error) {
-        console.error('Error loading trips:', error);
-        showError('Failed to load trips. Please refresh the page.');
-    } finally {
-        showLoadingState(false);
-    }
-}
-
-function showLoadingState(show) {
-    const tripsContainer = document.getElementById('trips-container');
-    const emptyTrips = document.getElementById('empty-trips');
+    // Car type change handler
+    document.getElementById('car-type').addEventListener('change', function() {
+        const rentalDetails = document.getElementById('rental-details');
+        if (this.value === 'rental') {
+            rentalDetails.classList.remove('d-none');
+        } else {
+            rentalDetails.classList.add('d-none');
+        }
+    });
     
-    if (show) {
-        tripsContainer.innerHTML = `
-            <div class="col-12 text-center py-5">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                </div>
-                <p class="mt-2 text-muted">Loading your trips...</p>
-            </div>
-        `;
-        emptyTrips.classList.add('d-none');
-    }
+    // Add stop button handler
+    document.getElementById('add-stop-btn').addEventListener('click', addStop);
+    
+    // Initialize date fields
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('start-date').value = today;
+    document.getElementById('end-date').value = today;
+});
+
+function showCreateTripModal() {
+    const modal = new bootstrap.Modal(document.getElementById('createTripModal'));
+    modal.show();
+    
+    // Clear previous stops
+    document.getElementById('stops-container').innerHTML = '';
+    
+    // Add first stop
+    addStop();
 }
 
-function showError(message) {
-    const tripsContainer = document.getElementById('trips-container');
-    tripsContainer.innerHTML = `
-        <div class="col-12">
-            <div class="alert alert-danger d-flex align-items-center" role="alert">
-                <i class="fas fa-exclamation-triangle me-2"></i>
-                <div>
-                    <strong>Error loading trips</strong>
-                    <div class="small">${message}</div>
-                </div>
-            </div>
-            <div class="text-center mt-3">
-                <button class="btn btn-primary" onclick="loadUserTrips()">
-                    <i class="fas fa-redo me-2"></i>Try Again
+function addStop() {
+    const stopsContainer = document.getElementById('stops-container');
+    const stopIndex = stopsContainer.children.length + 1;
+    
+    const stopDiv = document.createElement('div');
+    stopDiv.className = 'stop-item card mb-3';
+    stopDiv.innerHTML = `
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0">Stop ${stopIndex}</h6>
+                <button type="button" class="btn btn-sm btn-outline-danger remove-stop" ${stopIndex === 1 ? 'disabled' : ''}>
+                    <i class="fas fa-times"></i>
                 </button>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-2">
+                    <label class="form-label">Stop Name</label>
+                    <input type="text" class="form-control stop-name" placeholder="Enter stop name" required>
+                </div>
+                <div class="col-md-6 mb-2">
+                    <label class="form-label">Meter Reading (km)</label>
+                    <input type="number" class="form-control meter-reading" min="0" step="0.1" placeholder="Optional">
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-12">
+                    <label class="form-label">Manual KMs from Previous Stop</label>
+                    <input type="number" class="form-control manual-kms" min="0" step="0.1" placeholder="Enter distance if not using meter readings">
+                </div>
             </div>
         </div>
     `;
+    
+    stopsContainer.appendChild(stopDiv);
+    
+    // Add event listener to remove button
+    const removeBtn = stopDiv.querySelector('.remove-stop');
+    if (removeBtn) {
+        removeBtn.addEventListener('click', function() {
+            if (stopsContainer.children.length > 1) {
+                stopDiv.remove();
+                // Renumber remaining stops
+                renumberStops();
+            }
+        });
+    }
 }
 
-function displayTrips() {
-    const tripsContainer = document.getElementById('trips-container');
-    const emptyTrips = document.getElementById('empty-trips');
+function renumberStops() {
+    const stopsContainer = document.getElementById('stops-container');
+    const stopItems = stopsContainer.querySelectorAll('.stop-item');
     
-    if (userTrips.length === 0) {
-        tripsContainer.innerHTML = '';
-        emptyTrips.classList.remove('d-none');
+    stopItems.forEach((item, index) => {
+        const header = item.querySelector('h6');
+        header.textContent = `Stop ${index + 1}`;
+        
+        const removeBtn = item.querySelector('.remove-stop');
+        if (removeBtn) {
+            removeBtn.disabled = index === 0;
+        }
+    });
+}
+
+function saveTrip() {
+    const tripName = document.getElementById('trip-name').value;
+    const startDate = document.getElementById('start-date').value;
+    const endDate = document.getElementById('end-date').value;
+    const startLocation = document.getElementById('start-location').value;
+    const startMeterReading = document.getElementById('start-meter-reading').value;
+    const endLocation = document.getElementById('end-location').value;
+    const endMeterReading = document.getElementById('end-meter-reading').value;
+    const manualKmsMode = document.getElementById('manual-kms-mode').checked;
+    const carType = document.getElementById('car-type').value;
+    const rentalPerDay = document.getElementById('rental-per-day').value;
+    const rentalDays = document.getElementById('rental-days').value;
+    const fuelType = document.getElementById('fuel-type').value;
+    const fuelPrice = document.getElementById('fuel-price').value;
+    const mileage = document.getElementById('mileage').value;
+    const autoCalcFuel = document.getElementById('auto-calc-fuel').checked;
+    const tripBudget = document.getElementById('trip-budget').value;
+    
+    // Validate dates
+    if (new Date(startDate) > new Date(endDate)) {
+        showToast('End date must be after start date', 'error');
         return;
     }
     
-    emptyTrips.classList.add('d-none');
-    tripsContainer.innerHTML = '';
+    // Collect stops
+    const stops = [];
+    const stopItems = document.querySelectorAll('.stop-item');
     
-    userTrips.forEach(trip => {
-        const tripCard = createTripCard(trip);
-        tripsContainer.appendChild(tripCard);
+    stopItems.forEach((item, index) => {
+        const stopName = item.querySelector('.stop-name').value;
+        const meterReading = item.querySelector('.meter-reading').value;
+        const manualKms = item.querySelector('.manual-kms').value;
+        
+        if (stopName) {
+            stops.push({
+                name: stopName,
+                meterReading: meterReading ? parseFloat(meterReading) : null,
+                manualKms: manualKms ? parseFloat(manualKms) : null,
+                order: index
+            });
+        }
     });
+    
+    // Generate trip code
+    const tripCode = generateTripCode();
+    
+    // Calculate rental days if not provided
+    const calculatedRentalDays = rentalDays || calculateDaysBetween(startDate, endDate);
+    
+    // Create trip object
+    const trip = {
+        name: tripName,
+        startDate: startDate,
+        endDate: endDate,
+        startLocation: startLocation,
+        startMeterReading: startMeterReading ? parseFloat(startMeterReading) : null,
+        endLocation: endLocation,
+        endMeterReading: endMeterReading ? parseFloat(endMeterReading) : null,
+        stops: stops,
+        manualKmsMode: manualKmsMode,
+        carType: carType,
+        rentalPerDay: rentalPerDay ? parseFloat(rentalPerDay) : null,
+        rentalDays: calculatedRentalDays,
+        fuelType: fuelType,
+        fuelPrice: parseFloat(fuelPrice),
+        mileage: parseFloat(mileage),
+        autoCalcFuel: autoCalcFuel,
+        budget: parseFloat(tripBudget),
+        code: tripCode,
+        createdBy: currentUser.uid,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        members: [currentUser.uid]
+    };
+    
+    // Save to Firestore
+    const db = firebase.firestore();
+    db.collection('trips').add(trip)
+        .then((docRef) => {
+            showToast('Trip created successfully!', 'success');
+            document.getElementById('createTripModal').querySelector('.btn-close').click();
+            loadUserTrips();
+        })
+        .catch((error) => {
+            console.error('Error creating trip: ', error);
+            showToast('Error creating trip. Please try again.', 'error');
+        });
+}
+
+function calculateDaysBetween(startDate, endDate) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const diffTime = Math.abs(end - start);
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end dates
+}
+
+function generateTripCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 6; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+}
+
+function showJoinTripModal() {
+    const modal = new bootstrap.Modal(document.getElementById('joinTripModal'));
+    modal.show();
+}
+
+function joinTrip() {
+    const tripCode = document.getElementById('trip-code').value.toUpperCase();
+    
+    if (tripCode.length !== 6) {
+        showToast('Please enter a valid 6-character trip code', 'error');
+        return;
+    }
+    
+    const db = firebase.firestore();
+    db.collection('trips').where('code', '==', tripCode).get()
+        .then((querySnapshot) => {
+            if (querySnapshot.empty) {
+                showToast('Trip not found. Please check the code.', 'error');
+                return;
+            }
+            
+            const tripDoc = querySnapshot.docs[0];
+            const trip = tripDoc.data();
+            
+            // Check if user is already a member
+            if (trip.members && trip.members.includes(currentUser.uid)) {
+                showToast('You are already a member of this trip', 'info');
+                document.getElementById('joinTripModal').querySelector('.btn-close').click();
+                return;
+            }
+            
+            // Add user to trip members
+            return db.collection('trips').doc(tripDoc.id).update({
+                members: firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
+            });
+        })
+        .then(() => {
+            showToast('Successfully joined the trip!', 'success');
+            document.getElementById('joinTripModal').querySelector('.btn-close').click();
+            loadUserTrips();
+        })
+        .catch((error) => {
+            console.error('Error joining trip: ', error);
+            showToast('Error joining trip. Please try again.', 'error');
+        });
+}
+
+function loadUserTrips() {
+    const db = firebase.firestore();
+    const tripsContainer = document.getElementById('trips-container');
+    const emptyTrips = document.getElementById('empty-trips');
+    
+    db.collection('trips').where('members', 'array-contains', currentUser.uid).get()
+        .then((querySnapshot) => {
+            userTrips = [];
+            tripsContainer.innerHTML = '';
+            
+            if (querySnapshot.empty) {
+                emptyTrips.style.display = 'block';
+                return;
+            }
+            
+            emptyTrips.style.display = 'none';
+            
+            querySnapshot.forEach((doc) => {
+                const trip = { id: doc.id, ...doc.data() };
+                userTrips.push(trip);
+                
+                const tripCard = createTripCard(trip);
+                tripsContainer.appendChild(tripCard);
+            });
+        })
+        .catch((error) => {
+            console.error('Error loading trips: ', error);
+            showToast('Error loading trips', 'error');
+        });
 }
 
 function createTripCard(trip) {
     const col = document.createElement('div');
-    col.className = 'col-md-6 col-lg-4';
+    col.className = 'col-md-6 col-lg-4 mb-4';
     
-    const startDate = new Date(trip.startDate).toLocaleDateString();
-    const endDate = new Date(trip.endDate).toLocaleDateString();
-    
-    const totalSpent = trip.expenses ? trip.expenses.reduce((sum, expense) => sum + expense.amount, 0) : 0;
-    const progressPercent = Math.min((totalSpent / trip.budget) * 100, 100);
-    const remaining = trip.budget - totalSpent;
-    
-    let progressBarClass = 'bg-success';
-    if (remaining < 0) progressBarClass = 'bg-danger';
-    else if (remaining < trip.budget * 0.2) progressBarClass = 'bg-warning';
-    
-    // Fix for createdAt date handling
-    let createdDate = 'Recently';
-    if (trip.createdAt) {
-        if (typeof trip.createdAt.toDate === 'function') {
-            createdDate = trip.createdAt.toDate().toLocaleDateString();
-        } else if (trip.createdAt instanceof Date) {
-            createdDate = trip.createdAt.toLocaleDateString();
-        } else if (trip.createdAt.seconds) {
-            createdDate = new Date(trip.createdAt.seconds * 1000).toLocaleDateString();
-        } else {
-            createdDate = new Date(trip.createdAt).toLocaleDateString();
-        }
-    }
-    
-    const isCreator = trip.createdBy === currentUser.uid;
+    const startDate = formatDate(trip.startDate);
+    const endDate = formatDate(trip.endDate);
+    const totalKms = calculateTotalKms(trip);
+    const fuelCost = calculateFuelCost(trip, totalKms);
+    const rentalCost = calculateRentalCost(trip);
     
     col.innerHTML = `
-        <div class="card trip-card" data-trip-id="${trip.id}">
-            <div class="trip-card-header">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div class="flex-grow-1">
-                        <h5 class="card-title mb-1">${trip.name}</h5>
-                        <p class="card-text mb-0">${startDate} - ${endDate}</p>
-                    </div>
-                    ${isCreator ? `
-                        <div class="dropdown">
-                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                <i class="fas fa-ellipsis-v"></i>
-                            </button>
-                            <ul class="dropdown-menu">
-                                <li><a class="dropdown-item edit-trip-btn" href="#" data-trip-id="${trip.id}">
-                                    <i class="fas fa-edit me-2"></i>Edit Trip
-                                </a></li>
-                                <li><a class="dropdown-item text-danger delete-trip-btn" href="#" data-trip-id="${trip.id}" data-trip-name="${trip.name}">
-                                    <i class="fas fa-trash me-2"></i>Delete Trip
-                                </a></li>
-                            </ul>
-                        </div>
-                    ` : ''}
-                </div>
-            </div>
+        <div class="card trip-card h-100">
             <div class="card-body">
-                <p class="card-text">
-                    <i class="fas fa-map-marker-alt me-2"></i>${trip.startLocation} → ${trip.destination}
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h5 class="card-title">${trip.name}</h5>
+                    <span class="trip-code">${trip.code}</span>
+                </div>
+                <p class="card-text text-muted mb-2">
+                    <i class="fas fa-map-marker-alt me-1"></i>${trip.startLocation} to ${trip.endLocation}
                 </p>
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span>Budget: <span class="rupee-symbol">₹</span>${trip.budget.toFixed(2)}</span>
-                    <span>Spent: <span class="rupee-symbol">₹</span>${totalSpent.toFixed(2)}</span>
-                </div>
-                <div class="progress mb-3" style="height: 10px;">
-                    <div class="progress-bar ${progressBarClass}" role="progressbar" style="width: ${progressPercent}%"></div>
-                </div>
-                <div class="d-flex justify-content-between align-items-center">
-                    <button class="btn btn-outline-primary btn-sm view-trip-btn">
-                        <i class="fas fa-eye me-1"></i>View Details
-                    </button>
-                    <div class="d-flex align-items-center">
-                        <div class="member-avatar me-2" title="${trip.members.length} members">
-                            <i class="fas fa-users"></i>
-                            <small class="ms-1">${trip.members.length}</small>
-                        </div>
-                        <span class="trip-code">${trip.code}</span>
+                <p class="card-text text-muted mb-2">
+                    <i class="fas fa-calendar-alt me-1"></i>${startDate} - ${endDate}
+                </p>
+                <div class="trip-stats mb-3">
+                    <div class="stat-item">
+                        <span class="stat-value">${totalKms.toFixed(1)}</span>
+                        <span class="stat-label">km</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value"><span class="rupee-symbol">₹</span>${fuelCost.toFixed(0)}</span>
+                        <span class="stat-label">fuel</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value"><span class="rupee-symbol">₹</span>${rentalCost.toFixed(0)}</span>
+                        <span class="stat-label">rental</span>
                     </div>
                 </div>
-                <div class="mt-2">
-                    <small class="text-muted">Created: ${createdDate}</small>
-                    ${isCreator ? '<span class="badge bg-primary ms-2"><i class="fas fa-crown me-1"></i>Creator</span>' : ''}
+                <div class="d-flex justify-content-between">
+                    <button class="btn btn-outline-primary btn-sm view-trip-btn" data-trip-id="${trip.id}">
+                        <i class="fas fa-eye me-1"></i>View
+                    </button>
+                    <div>
+                        <button class="btn btn-outline-secondary btn-sm edit-trip-btn" data-trip-id="${trip.id}">
+                            <i class="fas fa-edit me-1"></i>Edit
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm leave-trip-btn" data-trip-id="${trip.id}">
+                            <i class="fas fa-sign-out-alt me-1"></i>Leave
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
     `;
     
-    col.querySelector('.view-trip-btn').addEventListener('click', () => {
-        setCurrentTrip(trip);
-        navigateTo('trip-details.html');
+    // Add event listeners
+    col.querySelector('.view-trip-btn').addEventListener('click', function() {
+        window.location.href = `trip-details.html?id=${trip.id}`;
     });
     
-    // Add event listeners for edit and delete buttons
-    if (isCreator) {
-        col.querySelector('.edit-trip-btn').addEventListener('click', (e) => {
-            e.preventDefault();
-            showEditTripModal(trip);
-        });
-        
-        col.querySelector('.delete-trip-btn').addEventListener('click', (e) => {
-            e.preventDefault();
-            showDeleteTripModal(trip);
-        });
-    }
+    col.querySelector('.edit-trip-btn').addEventListener('click', function() {
+        editTrip(trip.id);
+    });
+    
+    col.querySelector('.leave-trip-btn').addEventListener('click', function() {
+        leaveTrip(trip.id);
+    });
     
     return col;
 }
 
-function showCreateTripModal() {
-    document.getElementById('create-trip-form').reset();
-    document.getElementById('distance-results').classList.add('d-none');
-    document.getElementById('calculate-distance').checked = false;
+function calculateTotalKms(trip) {
+    // If we have meter readings, use them
+    if (trip.endMeterReading && trip.startMeterReading) {
+        return trip.endMeterReading - trip.startMeterReading;
+    }
     
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    // Otherwise, try to calculate from stops with meter readings
+    let totalKms = 0;
+    let lastMeterReading = trip.startMeterReading;
     
-    document.getElementById('start-date').value = today.toISOString().split('T')[0];
-    document.getElementById('end-date').value = tomorrow.toISOString().split('T')[0];
+    if (trip.stops && trip.stops.length > 0) {
+        for (let stop of trip.stops) {
+            if (stop.meterReading && lastMeterReading !== null) {
+                totalKms += stop.meterReading - lastMeterReading;
+                lastMeterReading = stop.meterReading;
+            } else if (stop.manualKms) {
+                totalKms += stop.manualKms;
+            }
+        }
+        
+        // Add distance from last stop to end
+        if (trip.endMeterReading && lastMeterReading !== null) {
+            totalKms += trip.endMeterReading - lastMeterReading;
+        }
+    }
     
-    const modal = new bootstrap.Modal(document.getElementById('createTripModal'));
-    modal.show();
+    return totalKms > 0 ? totalKms : 0;
 }
 
-function showEditTripModal(trip) {
-    document.getElementById('edit-trip-id').value = trip.id;
+function calculateFuelCost(trip, totalKms) {
+    if (!trip.fuelPrice || !trip.mileage) return 0;
+    const fuelConsumed = totalKms / trip.mileage;
+    return fuelConsumed * trip.fuelPrice;
+}
+
+function calculateRentalCost(trip) {
+    if (trip.carType !== 'rental' || !trip.rentalPerDay || !trip.rentalDays) return 0;
+    return trip.rentalPerDay * trip.rentalDays;
+}
+
+function editTrip(tripId) {
+    const trip = userTrips.find(t => t.id === tripId);
+    if (!trip) return;
+    
+    document.getElementById('edit-trip-id').value = tripId;
     document.getElementById('edit-trip-name').value = trip.name;
     document.getElementById('edit-start-location').value = trip.startLocation;
-    document.getElementById('edit-trip-destination').value = trip.destination;
+    document.getElementById('edit-trip-destination').value = trip.endLocation;
     document.getElementById('edit-start-date').value = trip.startDate;
     document.getElementById('edit-end-date').value = trip.endDate;
     document.getElementById('edit-trip-budget').value = trip.budget;
-    
-    document.getElementById('edit-distance-results').classList.add('d-none');
-    document.getElementById('edit-calculate-distance').checked = false;
-    
-    // If route already exists, show it
-    if (trip.route) {
-        document.getElementById('edit-distance-results').classList.remove('d-none');
-        document.getElementById('edit-distance-details').innerHTML = `
-            <p><strong>Current Distance:</strong> ${trip.route.distance}</p>
-            <p><strong>Current Travel Time:</strong> ${trip.route.duration}</p>
-            <div class="alert alert-info mt-2">
-                <small><i class="fas fa-info-circle me-1"></i>Check the box above to recalculate with updated locations</small>
-            </div>
-        `;
-    }
     
     const modal = new bootstrap.Modal(document.getElementById('editTripModal'));
     modal.show();
 }
 
-function showDeleteTripModal(trip) {
-    document.getElementById('delete-trip-id').value = trip.id;
-    document.getElementById('delete-trip-name').textContent = trip.name;
-    
-    const modal = new bootstrap.Modal(document.getElementById('deleteTripModal'));
-    modal.show();
-}
-
-function showJoinTripModal() {
-    document.getElementById('join-trip-message').classList.add('d-none');
-    document.getElementById('trip-code').value = '';
-    
-    const modal = new bootstrap.Modal(document.getElementById('joinTripModal'));
-    modal.show();
-}
-
-async function calculateDistance() {
-    const startLocation = document.getElementById('start-location').value;
-    const destination = document.getElementById('trip-destination').value;
-    
-    if (!validateLocation(startLocation) || !validateLocation(destination)) {
-        showAlert('Please enter valid locations', 'warning');
-        return;
-    }
-    
-    try {
-        document.getElementById('distance-details').innerHTML = `
-            <div class="text-center">
-                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-                Calculating distance...
-            </div>
-        `;
-        document.getElementById('distance-results').classList.remove('d-none');
-        
-        const routeData = await calculateRealDistance(startLocation, destination);
-        
-        displayDistanceResults(routeData.distance, routeData.duration);
-        
-    } catch (error) {
-        console.error('Error calculating distance:', error);
-        const errorMessage = handleRouteCalculationError(error);
-        document.getElementById('distance-details').innerHTML = `
-            <div class="alert alert-danger">
-                <i class="fas fa-exclamation-triangle me-2"></i>
-                ${errorMessage}
-            </div>
-        `;
-    }
-}
-
-async function calculateEditDistance() {
-    const startLocation = document.getElementById('edit-start-location').value;
-    const destination = document.getElementById('edit-trip-destination').value;
-    
-    if (!validateLocation(startLocation) || !validateLocation(destination)) {
-        showAlert('Please enter valid locations', 'warning');
-        return;
-    }
-    
-    try {
-        document.getElementById('edit-distance-details').innerHTML = `
-            <div class="text-center">
-                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-                Calculating distance...
-            </div>
-        `;
-        document.getElementById('edit-distance-results').classList.remove('d-none');
-        
-        const routeData = await calculateRealDistance(startLocation, destination);
-        
-        document.getElementById('edit-distance-details').innerHTML = `
-            <p><strong>Distance:</strong> ${routeData.distance}</p>
-            <p><strong>Estimated Travel Time:</strong> ${routeData.duration}</p>
-            <div class="alert alert-success mt-2">
-                <small><i class="fas fa-check-circle me-1"></i>Distance calculated using OpenRouteService API</small>
-            </div>
-        `;
-        
-    } catch (error) {
-        console.error('Error calculating distance:', error);
-        const errorMessage = handleRouteCalculationError(error);
-        document.getElementById('edit-distance-details').innerHTML = `
-            <div class="alert alert-danger">
-                <i class="fas fa-exclamation-triangle me-2"></i>
-                ${errorMessage}
-            </div>
-        `;
-    }
-}
-
-function displayDistanceResults(distance, duration) {
-    const distanceDetails = document.getElementById('distance-details');
-    
-    distanceDetails.innerHTML = `
-        <p><strong>Distance:</strong> ${distance}</p>
-        <p><strong>Estimated Travel Time:</strong> ${duration}</p>
-        <div class="alert alert-success mt-2">
-            <small><i class="fas fa-check-circle me-1"></i>Distance calculated using OpenRouteService API</small>
-        </div>
-    `;
-}
-
-async function saveTrip() {
-    const name = document.getElementById('trip-name').value;
-    const startLocation = document.getElementById('start-location').value;
-    const destination = document.getElementById('trip-destination').value;
-    const startDate = document.getElementById('start-date').value;
-    const endDate = document.getElementById('end-date').value;
-    const budget = parseFloat(document.getElementById('trip-budget').value);
-    const calculateDistance = document.getElementById('calculate-distance').checked;
-    
-    if (!name || !validateLocation(startLocation) || !validateLocation(destination) || !startDate || !endDate || !budget) {
-        showAlert('Please fill in all fields with valid data', 'warning');
-        return;
-    }
-    
-    if (!validateDates(startDate, endDate)) {
-        showAlert('End date must be after start date', 'warning');
-        return;
-    }
-    
-    if (budget <= 0) {
-        showAlert('Budget must be greater than 0', 'warning');
-        return;
-    }
-    
-    const code = generateTripCode();
-    
-    const tripData = {
-        name: name.trim(),
-        startLocation: startLocation.trim(),
-        destination: destination.trim(),
-        startDate,
-        endDate,
-        budget,
-        code,
-        createdBy: currentUser.uid,
-        members: [currentUser.uid],
-        expenses: [],
-        itinerary: [],
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    };
-    
-    // Calculate route if requested
-    if (calculateDistance) {
-        try {
-            document.getElementById('save-trip-btn').disabled = true;
-            document.getElementById('save-trip-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Calculating Route...';
-            
-            const routeData = await calculateRealDistance(startLocation, destination);
-            tripData.route = {
-                ...routeData,
-                calculatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            };
-            
-            console.log('Route calculated during trip creation:', routeData);
-            
-        } catch (error) {
-            console.error('Error calculating route during trip creation:', error);
-            // Continue without route data if calculation fails
-            showAlert('Trip created but route calculation failed. You can calculate it later.', 'warning');
-        }
-    }
-    
-    try {
-        document.getElementById('save-trip-btn').disabled = true;
-        document.getElementById('save-trip-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Creating...';
-        
-        const docRef = await db.collection('trips').add(tripData);
-        tripData.id = docRef.id;
-        
-        // Add the new trip to the local array with proper date handling
-        const newTrip = {
-            ...tripData,
-            createdAt: new Date() // Use current date for local display
-        };
-        userTrips.unshift(newTrip);
-        displayTrips();
-        
-        const modal = bootstrap.Modal.getInstance(document.getElementById('createTripModal'));
-        modal.hide();
-        
-        document.getElementById('share-trip-code').textContent = code;
-        const shareModal = new bootstrap.Modal(document.getElementById('shareTripModal'));
-        shareModal.show();
-        
-    } catch (error) {
-        console.error('Error creating trip:', error);
-        showAlert('Error creating trip. Please try again.', 'danger');
-    } finally {
-        document.getElementById('save-trip-btn').disabled = false;
-        document.getElementById('save-trip-btn').innerHTML = 'Create Trip';
-    }
-}
-
-async function updateTrip() {
+// Add event listener for update trip button
+document.getElementById('update-trip-btn').addEventListener('click', function() {
     const tripId = document.getElementById('edit-trip-id').value;
-    const name = document.getElementById('edit-trip-name').value;
+    const tripName = document.getElementById('edit-trip-name').value;
     const startLocation = document.getElementById('edit-start-location').value;
     const destination = document.getElementById('edit-trip-destination').value;
     const startDate = document.getElementById('edit-start-date').value;
     const endDate = document.getElementById('edit-end-date').value;
-    const budget = parseFloat(document.getElementById('edit-trip-budget').value);
-    const recalculateDistance = document.getElementById('edit-calculate-distance').checked;
+    const budget = document.getElementById('edit-trip-budget').value;
     
-    if (!name || !validateLocation(startLocation) || !validateLocation(destination) || !startDate || !endDate || !budget) {
-        showAlert('Please fill in all fields with valid data', 'warning');
-        return;
-    }
-    
-    if (!validateDates(startDate, endDate)) {
-        showAlert('End date must be after start date', 'warning');
-        return;
-    }
-    
-    if (budget <= 0) {
-        showAlert('Budget must be greater than 0', 'warning');
-        return;
-    }
-    
-    try {
-        document.getElementById('update-trip-btn').disabled = true;
-        document.getElementById('update-trip-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Updating...';
-        
-        const updateData = {
-            name: name.trim(),
-            startLocation: startLocation.trim(),
-            destination: destination.trim(),
-            startDate,
-            endDate,
-            budget,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        };
-        
-        // Recalculate route if requested
-        if (recalculateDistance) {
-            try {
-                const routeData = await calculateRealDistance(startLocation, destination);
-                updateData.route = {
-                    ...routeData,
-                    calculatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                };
-            } catch (error) {
-                console.error('Error recalculating route:', error);
-                // Continue without route data if calculation fails
-            }
-        }
-        
-        await db.collection('trips').doc(tripId).update(updateData);
-        
-        // Update local trip data
-        const tripIndex = userTrips.findIndex(trip => trip.id === tripId);
-        if (tripIndex !== -1) {
-            userTrips[tripIndex] = {
-                ...userTrips[tripIndex],
-                ...updateData
-            };
-        }
-        
-        displayTrips();
-        
-        const modal = bootstrap.Modal.getInstance(document.getElementById('editTripModal'));
-        modal.hide();
-        
-        showAlert('Trip updated successfully!', 'success');
-        
-    } catch (error) {
-        console.error('Error updating trip:', error);
-        showAlert('Error updating trip. Please try again.', 'danger');
-    } finally {
-        document.getElementById('update-trip-btn').disabled = false;
-        document.getElementById('update-trip-btn').innerHTML = 'Update Trip';
-    }
-}
+    const db = firebase.firestore();
+    db.collection('trips').doc(tripId).update({
+        name: tripName,
+        startLocation: startLocation,
+        endLocation: destination,
+        startDate: startDate,
+        endDate: endDate,
+        budget: parseFloat(budget)
+    })
+    .then(() => {
+        showToast('Trip updated successfully!', 'success');
+        document.getElementById('editTripModal').querySelector('.btn-close').click();
+        loadUserTrips();
+    })
+    .catch((error) => {
+        console.error('Error updating trip: ', error);
+        showToast('Error updating trip. Please try again.', 'error');
+    });
+});
 
-async function deleteTrip() {
-    const tripId = document.getElementById('delete-trip-id').value;
+function leaveTrip(tripId) {
+    if (!confirm('Are you sure you want to leave this trip?')) return;
     
-    try {
-        document.getElementById('confirm-delete-trip-btn').disabled = true;
-        document.getElementById('confirm-delete-trip-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Deleting...';
-        
-        await db.collection('trips').doc(tripId).delete();
-        
-        // Remove from local array
-        userTrips = userTrips.filter(trip => trip.id !== tripId);
-        displayTrips();
-        
-        const modal = bootstrap.Modal.getInstance(document.getElementById('deleteTripModal'));
-        modal.hide();
-        
-        showAlert('Trip deleted successfully!', 'success');
-        
-    } catch (error) {
-        console.error('Error deleting trip:', error);
-        showAlert('Error deleting trip. Please try again.', 'danger');
-    } finally {
-        document.getElementById('confirm-delete-trip-btn').disabled = false;
-        document.getElementById('confirm-delete-trip-btn').innerHTML = '<i class="fas fa-trash me-1"></i>Delete Trip';
-    }
-}
-
-async function joinTripWithCode() {
-    const code = document.getElementById('trip-code').value.trim().toUpperCase();
-    const messageEl = document.getElementById('join-trip-message');
-    
-    if (!code || code.length < 6 || code.length > 8) {
-        showMessage(messageEl, 'Please enter a valid 6-8 character trip code', 'warning');
-        return;
-    }
-    
-    try {
-        document.getElementById('join-trip-code-btn').disabled = true;
-        document.getElementById('join-trip-code-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Joining...';
-        
-        const tripsSnapshot = await db.collection('trips')
-            .where('code', '==', code)
-            .get();
-        
-        if (tripsSnapshot.empty) {
-            showMessage(messageEl, 'Invalid trip code. Please check the code and try again.', 'warning');
-            return;
-        }
-        
-        const tripDoc = tripsSnapshot.docs[0];
-        const trip = tripDoc.data();
-        const tripId = tripDoc.id;
-        
-        if (trip.members.includes(currentUser.uid)) {
-            showMessage(messageEl, 'You are already a member of this trip.', 'info');
-            return;
-        }
-        
-        await db.collection('trips').doc(tripId).update({
-            members: firebase.firestore.FieldValue.arrayUnion(currentUser.uid),
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        
-        const joinedTrip = { id: tripId, ...trip };
-        userTrips.unshift(joinedTrip);
-        displayTrips();
-        
-        showMessage(messageEl, 'Successfully joined the trip! Redirecting...', 'success');
-        
-        setTimeout(() => {
-            const modal = bootstrap.Modal.getInstance(document.getElementById('joinTripModal'));
-            modal.hide();
-            setCurrentTrip(joinedTrip);
-            navigateTo('trip-details.html');
-        }, 2000);
-        
-    } catch (error) {
-        console.error('Error joining trip:', error);
-        showMessage(messageEl, 'Error joining trip. Please try again.', 'danger');
-    } finally {
-        document.getElementById('join-trip-code-btn').disabled = false;
-        document.getElementById('join-trip-code-btn').innerHTML = 'Join Trip';
-    }
-}
-
-function showMessage(messageEl, message, type) {
-    messageEl.textContent = message;
-    messageEl.className = `alert alert-${type} mt-3`;
-    messageEl.classList.remove('d-none');
-}
-
-function showAlert(message, type) {
-    const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
-    alertDiv.style.zIndex = '9999';
-    alertDiv.innerHTML = `
-        <div class="d-flex align-items-center">
-            <i class="fas fa-${getAlertIcon(type)} me-2"></i>
-            <div>${message}</div>
-            <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
-        </div>
-    `;
-    
-    document.body.appendChild(alertDiv);
-    
-    setTimeout(() => {
-        if (alertDiv.parentNode) alertDiv.remove();
-    }, 5000);
-}
-
-function getAlertIcon(type) {
-    switch(type) {
-        case 'success': return 'check-circle';
-        case 'danger': return 'exclamation-triangle';
-        case 'warning': return 'exclamation-circle';
-        case 'info': return 'info-circle';
-        default: return 'info-circle';
-    }
-}
-
-function copyTripCode() {
-    const code = document.getElementById('share-trip-code').textContent;
-    navigator.clipboard.writeText(code).then(() => {
-        const copySuccess = document.getElementById('copy-success');
-        copySuccess.classList.remove('d-none');
-        setTimeout(() => copySuccess.classList.add('d-none'), 3000);
-    }).catch(err => {
-        console.error('Failed to copy code: ', err);
-        showAlert('Failed to copy code. Please copy it manually.', 'warning');
+    const db = firebase.firestore();
+    db.collection('trips').doc(tripId).update({
+        members: firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
+    })
+    .then(() => {
+        showToast('You have left the trip', 'success');
+        loadUserTrips();
+    })
+    .catch((error) => {
+        console.error('Error leaving trip: ', error);
+        showToast('Error leaving trip. Please try again.', 'error');
     });
 }
 
-async function handleLogout() {
-    try {
-        await auth.signOut();
-        navigateTo('auth.html');
-    } catch (error) {
-        console.error('Logout error:', error);
-        showAlert('Error during logout. Please try again.', 'danger');
-    }
-}
-
-// Simple test function that shows results in alert
-function testRouteCalculation() {
-    const testStart = "New Delhi";
-    const testDest = "Mumbai";
-    
-    console.log("Testing route calculation...");
-    
-    calculateRealDistance(testStart, testDest)
-        .then(result => {
-            console.log("Test result:", result);
-            showAlert(`Test: ${testStart} to ${testDest} - ${result.distance} in ${result.duration}`, 'info');
+function logout() {
+    firebase.auth().signOut()
+        .then(() => {
+            window.location.href = 'index.html';
         })
-        .catch(error => {
-            console.error("Test failed:", error);
-            showAlert('Test failed: ' + error.message, 'danger');
+        .catch((error) => {
+            console.error('Error signing out: ', error);
         });
 }
 
-function validateDates(startDate, endDate) {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+function showProfileModal() {
+    const modal = new bootstrap.Modal(document.getElementById('profileModal'));
     
-    if (start < today) {
-        showAlert('Start date cannot be in the past', 'warning');
-        return false;
-    }
-    if (end <= start) {
-        showAlert('End date must be after start date', 'warning');
-        return false;
-    }
-    return true;
+    // Populate profile data
+    document.getElementById('profile-name').value = currentUser.displayName || '';
+    document.getElementById('profile-email').value = currentUser.email || '';
+    document.getElementById('profile-userid').value = currentUser.uid;
+    document.getElementById('profile-avatar').src = currentUser.photoURL || 'https://via.placeholder.com/100';
+    
+    modal.show();
+}
+
+function saveProfile() {
+    const displayName = document.getElementById('profile-name').value;
+    
+    currentUser.updateProfile({
+        displayName: displayName
+    })
+    .then(() => {
+        showToast('Profile updated successfully!', 'success');
+        document.getElementById('user-name').textContent = displayName;
+        document.getElementById('profileModal').querySelector('.btn-close').click();
+    })
+    .catch((error) => {
+        console.error('Error updating profile: ', error);
+        showToast('Error updating profile. Please try again.', 'error');
+    });
+}
+
+function handleAvatarUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    // In a real app, you would upload this to Firebase Storage
+    // For now, we'll just show a preview
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        document.getElementById('profile-avatar').src = e.target.result;
+        document.getElementById('user-avatar').src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+function leaveAllTrips() {
+    if (!confirm('Are you sure you want to leave all trips? This action cannot be undone.')) return;
+    
+    const db = firebase.firestore();
+    const batch = db.batch();
+    
+    userTrips.forEach(trip => {
+        const tripRef = db.collection('trips').doc(trip.id);
+        batch.update(tripRef, {
+            members: firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
+        });
+    });
+    
+    batch.commit()
+        .then(() => {
+            showToast('You have left all trips', 'success');
+            loadUserTrips();
+            document.getElementById('profileModal').querySelector('.btn-close').click();
+        })
+        .catch((error) => {
+            console.error('Error leaving all trips: ', error);
+            showToast('Error leaving trips. Please try again.', 'error');
+        });
 }
