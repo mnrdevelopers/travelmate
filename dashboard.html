@@ -101,50 +101,6 @@
                 </button>
             </div>
         </div>
-
-        <!-- Add this after the My Trips section -->
-<div class="container mt-5">
-    <div class="row">
-        <div class="col-12">
-            <h3>Travel Statistics</h3>
-        </div>
-    </div>
-    <div class="row" id="travel-stats">
-        <!-- Stats will be loaded here -->
-        <div class="col-md-3 col-6 mb-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h4 id="total-trips">0</h4>
-                    <p class="text-muted mb-0">Total Trips</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 col-6 mb-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h4 id="total-distance">0 km</h4>
-                    <p class="text-muted mb-0">Distance Traveled</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 col-6 mb-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h4 id="total-fuel-cost">₹0</h4>
-                    <p class="text-muted mb-0">Fuel Cost</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 col-6 mb-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h4 id="favorite-destination">-</h4>
-                    <p class="text-muted mb-0">Top Destination</p>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
         
         <div id="trips-container" class="row">
             <!-- Trips will be loaded here -->
@@ -162,25 +118,29 @@
 </div>
     </div>
 
-   <!-- Enhanced Create Trip Modal -->
-<div class="modal fade" id="createTripModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Create New Trip - Step 1: Basic Info</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="progress mb-4">
-                    <div class="progress-bar" role="progressbar" style="width: 25%" id="create-trip-progress"></div>
+    <!-- Create Trip Modal -->
+    <div class="modal fade" id="createTripModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create New Trip</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                
-                <!-- Step 1: Basic Info -->
-                <div id="step-basic-info">
+                <div class="modal-body">
                     <form id="create-trip-form">
                         <div class="mb-3">
                             <label for="trip-name" class="form-label">Trip Name</label>
                             <input type="text" class="form-control" id="trip-name" required>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="start-location" class="form-label">Start Location</label>
+                                <input type="text" class="form-control" id="start-location" placeholder="City, Country" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="trip-destination" class="form-label">Destination</label>
+                                <input type="text" class="form-control" id="trip-destination" placeholder="City, Country" required>
+                            </div>
                         </div>
                         <div class="row">
                             <div class="col-md-6 mb-3">
@@ -193,129 +153,30 @@
                             </div>
                         </div>
                         <div class="mb-3">
-                            <label for="trip-budget" class="form-label">Total Budget (₹)</label>
+                            <label for="trip-budget" class="form-label">Total Budget (<span class="rupee-symbol">₹</span>)</label>
                             <input type="number" class="form-control" id="trip-budget" min="0" step="0.01" required>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="calculate-distance">
+                            <label class="form-check-label" for="calculate-distance">
+                                Calculate travel distance and time
+                            </label>
+                        </div>
+                        <div id="distance-results" class="distance-info d-none">
+                            <h6><i class="fas fa-route me-2"></i>Travel Information</h6>
+                            <div id="distance-details">
+                                <!-- Distance results will appear here -->
+                            </div>
                         </div>
                     </form>
                 </div>
-                
-                <!-- Step 2: Route Planning -->
-                <div id="step-route-planning" class="d-none">
-                    <h6>Route Planning</h6>
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label for="start-location" class="form-label">Start Location</label>
-                            <input type="text" class="form-control" id="start-location" placeholder="City, Location" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="start-odometer" class="form-label">Starting Odometer (km)</label>
-                            <input type="number" class="form-control" id="start-odometer" placeholder="Enter km reading" min="0">
-                        </div>
-                    </div>
-                    
-                    <div id="trip-stops-container">
-                        <!-- Stops will be added here dynamically -->
-                    </div>
-                    
-                    <button type="button" class="btn btn-outline-primary btn-sm mb-3" id="add-stop-btn">
-                        <i class="fas fa-plus me-1"></i>Add Stop
-                    </button>
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <label for="trip-destination" class="form-label">Final Destination</label>
-                            <input type="text" class="form-control" id="trip-destination" placeholder="City, Location" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="end-odometer" class="form-label">Final Odometer (km)</label>
-                            <input type="number" class="form-control" id="end-odometer" placeholder="Enter km reading" min="0">
-                        </div>
-                    </div>
-                    
-                    <div class="row mt-3">
-                        <div class="col-md-6">
-                            <button type="button" class="btn btn-outline-secondary" id="calculate-total-distance">
-                                <i class="fas fa-calculator me-1"></i>Calculate Total Distance
-                            </button>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="total-distance-display" class="form-label">Total Distance (km)</label>
-                            <input type="number" class="form-control" id="total-distance-display" readonly>
-                            <input type="hidden" id="trip-total-distance">
-                        </div>
-                    </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="save-trip-btn">Create Trip</button>
                 </div>
-                
-                <!-- Step 3: Vehicle Information -->
-                <div id="step-vehicle-info" class="d-none">
-                    <h6>Vehicle Information</h6>
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label for="vehicle-type" class="form-label">Vehicle Type</label>
-                            <select class="form-select" id="vehicle-type" required>
-                                <option value="self">Self-owned</option>
-                                <option value="rental">Rental</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="vehicle-name" class="form-label">Vehicle Name/Model</label>
-                            <input type="text" class="form-control" id="vehicle-name" placeholder="e.g., Honda City, Maruti Swift">
-                        </div>
-                    </div>
-                    
-                    <div class="row mb-3">
-                        <div class="col-md-4">
-                            <label for="fuel-type" class="form-label">Fuel Type</label>
-                            <select class="form-select" id="fuel-type" required>
-                                <option value="petrol">Petrol</option>
-                                <option value="diesel">Diesel</option>
-                                <option value="cng">CNG</option>
-                                <option value="electric">Electric</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label for="vehicle-mileage" class="form-label">Mileage (km/liter)</label>
-                            <input type="number" class="form-control" id="vehicle-mileage" placeholder="e.g., 15" step="0.1" min="0">
-                        </div>
-                        <div class="col-md-4">
-                            <label for="fuel-price" class="form-label">Fuel Price (₹/liter)</label>
-                            <input type="number" class="form-control" id="fuel-price" placeholder="Current price" step="0.01" min="0">
-                        </div>
-                    </div>
-                    
-                    <div id="rental-section" class="d-none">
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label for="rental-daily-rate" class="form-label">Daily Rental Rate (₹)</label>
-                                <input type="number" class="form-control" id="rental-daily-rate" placeholder="Per day rate" step="0.01" min="0">
-                            </div>
-                            <div class="col-md-6">
-                                <label for="rental-days" class="form-label">Rental Days</label>
-                                <input type="number" class="form-control" id="rental-days" placeholder="Number of days" min="1">
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <label for="estimated-fuel-cost" class="form-label">Estimated Fuel Cost (₹)</label>
-                            <input type="number" class="form-control" id="estimated-fuel-cost" readonly>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="estimated-rental-cost" class="form-label">Estimated Rental Cost (₹)</label>
-                            <input type="number" class="form-control" id="estimated-rental-cost" readonly>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" id="prev-step-btn" style="display: none;">Previous</button>
-                <button type="button" class="btn btn-primary" id="next-step-btn">Next</button>
-                <button type="button" class="btn btn-success" id="save-trip-btn" style="display: none;">Create Trip</button>
             </div>
         </div>
     </div>
-</div>
 
     <!-- Edit Trip Modal -->
     <div class="modal fade" id="editTripModal" tabindex="-1">
