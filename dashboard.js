@@ -549,6 +549,7 @@ async function saveTrip() {
     
     const code = generateTripCode();
     
+    // Create trip data with proper structure
     const tripData = {
         name: name.trim(),
         startLocation: startLocation.trim(),
@@ -559,8 +560,9 @@ async function saveTrip() {
         code,
         createdBy: currentUser.uid,
         members: [currentUser.uid],
-        expenses: [],
-        itinerary: [],
+        // Initialize as empty objects instead of arrays, or omit them entirely
+        expenses: [], // This should work as it's a top-level array
+        itinerary: [], // This should work as it's a top-level array
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
@@ -573,7 +575,8 @@ async function saveTrip() {
             
             const routeData = await calculateRealDistance(startLocation, destination);
             tripData.route = {
-                ...routeData,
+                distance: routeData.distance,
+                duration: routeData.duration,
                 calculatedAt: firebase.firestore.FieldValue.serverTimestamp()
             };
             
@@ -611,6 +614,10 @@ async function saveTrip() {
     } catch (error) {
         console.error('Error creating trip:', error);
         showAlert('Error creating trip. Please try again.', 'danger');
+        
+        // Log the exact error and trip data for debugging
+        console.error('Full error details:', error);
+        console.error('Trip data that caused error:', tripData);
     } finally {
         document.getElementById('save-trip-btn').disabled = false;
         document.getElementById('save-trip-btn').innerHTML = 'Create Trip';
