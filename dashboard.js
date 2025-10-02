@@ -525,15 +525,22 @@ function displayDistanceResults(distance, duration) {
 
 async function saveTrip() {
     const name = document.getElementById('trip-name').value;
+    const transportType = document.getElementById('transport-type').value;
+    const fuelType = document.getElementById('fuel-type').value;
+    const vehicleMileage = parseFloat(document.getElementById('vehicle-mileage').value) || 0;
     const startLocation = document.getElementById('start-location').value;
     const destination = document.getElementById('trip-destination').value;
+    const stops = getStops();
     const startDate = document.getElementById('start-date').value;
     const endDate = document.getElementById('end-date').value;
     const budget = parseFloat(document.getElementById('trip-budget').value);
+    const drivingCharges = parseFloat(document.getElementById('driving-charges').value) || 0;
     const calculateDistance = document.getElementById('calculate-distance').checked;
     
-    if (!name || !validateLocation(startLocation) || !validateLocation(destination) || !startDate || !endDate || !budget) {
-        showAlert('Please fill in all fields with valid data', 'warning');
+    // Validation
+    if (!name || !validateLocation(startLocation) || !validateLocation(destination) || 
+        !startDate || !endDate || !budget) {
+        showAlert('Please fill in all required fields', 'warning');
         return;
     }
     
@@ -542,17 +549,14 @@ async function saveTrip() {
         return;
     }
     
-    if (budget <= 0) {
-        showAlert('Budget must be greater than 0', 'warning');
-        return;
-    }
-    
     const code = generateTripCode();
     
     const tripData = {
         name: name.trim(),
+        transportType: transportType,
         startLocation: startLocation.trim(),
         destination: destination.trim(),
+        stops: stops,
         startDate,
         endDate,
         budget,
@@ -565,23 +569,30 @@ async function saveTrip() {
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
     
-    // Calculate route if requested
+    // Add vehicle details if applicable
+    if (transportType === 'self-driving' || transportType === 'rental-car') {
+        tripData.vehicleDetails = {
+            fuelType: fuelType,
+            mileage: vehicleMileage,
+            drivingCharges: drivingCharges
+        };
+    }
+    
+    // Calculate route with stops if requested
     if (calculateDistance) {
         try {
             document.getElementById('save-trip-btn').disabled = true;
             document.getElementById('save-trip-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Calculating Route...';
             
-            const routeData = await calculateRealDistance(startLocation, destination);
+            const allLocations = [startLocation, ...stops, destination];
+            const routeData = await calculateRouteWithStops(allLocations);
             tripData.route = {
                 ...routeData,
                 calculatedAt: firebase.firestore.FieldValue.serverTimestamp()
             };
             
-            console.log('Route calculated during trip creation:', routeData);
-            
         } catch (error) {
             console.error('Error calculating route during trip creation:', error);
-            // Continue without route data if calculation fails
             showAlert('Trip created but route calculation failed. You can calculate it later.', 'warning');
         }
     }
@@ -593,12 +604,10 @@ async function saveTrip() {
         const docRef = await db.collection('trips').add(tripData);
         tripData.id = docRef.id;
         
-        // Add the new trip to the local array with proper date handling
-        const newTrip = {
+        userTrips.unshift({
             ...tripData,
-            createdAt: new Date() // Use current date for local display
-        };
-        userTrips.unshift(newTrip);
+            createdAt: new Date()
+        });
         displayTrips();
         
         const modal = bootstrap.Modal.getInstance(document.getElementById('createTripModal'));
@@ -615,6 +624,133 @@ async function saveTrip() {
         document.getElementById('save-trip-btn').disabled = false;
         document.getElementById('save-trip-btn').innerHTML = 'Create Trip';
     }
+}
+
+async function calculateRouteWithStops(locations) {
+    if (locations.length < 2) {
+        throw new Error('At least two locations required');
+    }
+    
+    try {
+        let totalDistance = 0;
+        let totalDuration = 0;
+        const segments = [];
+        
+        // Calculate route for each segment
+        for (let i = 0; i < locations.length - 1; i++) {
+            const segment = await calculateRealDistance(locations[i], locations[i + 1]);
+            
+            // Extract numeric distance (remove " km")
+            const distanceKm = parseFloat(segment.distance);
+            totalDistance += distanceKm;
+            
+            // Extract duration in minutes
+            const durationMinutes = parseDurationToMinutes(segment.duration);
+            totalDuration += durationMinutes;
+            
+            segments.push({
+                from: locations[i],
+                to: locations[i + 1],
+                distance: segment.distance,
+                duration: segment.duration,
+                distanceKm: distanceKm,
+                durationMinutes: durationMinutes
+            });
+        }
+        
+        return {
+            distance: `${totalDistance.toFixed(1)} km`,
+            duration: formatMinutesToDuration(totalDuration),
+            totalDistance: totalDistance,
+            totalDuration: totalDuration,
+            segments: segments,
+            stops: locations.slice(1, -1) // All locations except start and end
+        };
+        
+    } catch (error) {
+        console.error('Error calculating route with stops:', error);
+        throw error;
+    }
+}
+
+// Fuel cost calculation
+function calculateFuelCost(distanceKm, fuelType, mileage, currentFuelPrice) {
+    if (!mileage || mileage <= 0) return 0;
+    
+    const fuelConsumed = distanceKm / mileage;
+    let fuelPricePerLiter = currentFuelPrice || getDefaultFuelPrice(fuelType);
+    
+    return fuelConsumed * fuelPricePerLiter;
+}
+
+function getDefaultFuelPrice(fuelType) {
+    const defaultPrices = {
+        'petrol': 100,
+        'diesel': 90,
+        'cng': 70,
+        'electric': 8 // per kWh
+    };
+    return defaultPrices[fuelType] || 0;
+}
+
+// Initialize enhanced features
+document.addEventListener('DOMContentLoaded', function() {
+    setupEnhancedTripFeatures();
+});
+
+// Enhanced trip creation with new features
+function setupEnhancedTripFeatures() {
+    // Transport type change handler
+    document.getElementById('transport-type').addEventListener('change', function() {
+        const isCarType = this.value === 'self-driving' || this.value === 'rental-car';
+        document.getElementById('vehicle-details').classList.toggle('d-none', !isCarType);
+        document.getElementById('self-driving-charges').classList.toggle('d-none', this.value !== 'self-driving');
+    });
+    
+    // Add stop functionality
+    document.getElementById('add-stop-btn').addEventListener('click', addStopField);
+}
+
+function addStopField() {
+    const stopsContainer = document.getElementById('stops-container');
+    const stopIndex = stopsContainer.children.length;
+    
+    const stopDiv = document.createElement('div');
+    stopDiv.className = 'stop-item input-group mb-2';
+    stopDiv.innerHTML = `
+        <input type="text" class="form-control stop-location" placeholder="Stop location" data-stop-index="${stopIndex}">
+        <button type="button" class="btn btn-outline-danger remove-stop-btn" data-stop-index="${stopIndex}">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+    
+    stopsContainer.appendChild(stopDiv);
+    
+    // Add remove event listener
+    stopDiv.querySelector('.remove-stop-btn').addEventListener('click', function() {
+        this.parentElement.remove();
+        reindexStops();
+    });
+}
+
+function reindexStops() {
+    const stops = document.querySelectorAll('.stop-item');
+    stops.forEach((stop, index) => {
+        const input = stop.querySelector('.stop-location');
+        const btn = stop.querySelector('.remove-stop-btn');
+        input.dataset.stopIndex = index;
+        btn.dataset.stopIndex = index;
+    });
+}
+
+function getStops() {
+    const stops = [];
+    document.querySelectorAll('.stop-location').forEach(input => {
+        if (input.value.trim()) {
+            stops.push(input.value.trim());
+        }
+    });
+    return stops;
 }
 
 async function updateTrip() {
