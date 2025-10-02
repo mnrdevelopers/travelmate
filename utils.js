@@ -74,7 +74,10 @@ async function calculateRealDistance(startLocation, destination) {
     }
 }
 
+// Utility functions for duration conversion
 function parseDurationToMinutes(durationString) {
+    if (!durationString) return 0;
+    
     // Convert "X hours Y minutes" to total minutes
     const hoursMatch = durationString.match(/(\d+)\s*hour/);
     const minutesMatch = durationString.match(/(\d+)\s*minute/);
