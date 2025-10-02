@@ -118,118 +118,65 @@
 </div>
     </div>
 
-  <!-- Enhanced Create Trip Modal -->
-<div class="modal fade" id="createTripModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Create New Trip</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <form id="create-trip-form">
-                    <div class="mb-3">
-                        <label for="trip-name" class="form-label">Trip Name</label>
-                        <input type="text" class="form-control" id="trip-name" required>
-                    </div>
-                    
-                    <!-- Transport Type -->
-                    <div class="mb-3">
-                        <label for="transport-type" class="form-label">Transport Type</label>
-                        <select class="form-select" id="transport-type" required>
-                            <option value="self-driving">Self Driving (Own Car)</option>
-                            <option value="rental-car">Rental Car</option>
-                            <option value="public-transport">Public Transport</option>
-                            <option value="flight">Flight</option>
-                            <option value="train">Train</option>
-                            <option value="other">Other</option>
-                        </select>
-                    </div>
-                    
-                    <!-- Vehicle Details (shown only for car types) -->
-                    <div id="vehicle-details" class="row d-none">
-                        <div class="col-md-6 mb-3">
-                            <label for="fuel-type" class="form-label">Fuel Type</label>
-                            <select class="form-select" id="fuel-type">
-                                <option value="petrol">Petrol</option>
-                                <option value="diesel">Diesel</option>
-                                <option value="cng">CNG</option>
-                                <option value="electric">Electric</option>
-                            </select>
+    <!-- Create Trip Modal -->
+    <div class="modal fade" id="createTripModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create New Trip</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="create-trip-form">
+                        <div class="mb-3">
+                            <label for="trip-name" class="form-label">Trip Name</label>
+                            <input type="text" class="form-control" id="trip-name" required>
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="vehicle-mileage" class="form-label">Mileage (km/l)</label>
-                            <input type="number" class="form-control" id="vehicle-mileage" min="0" step="0.1" placeholder="e.g., 15">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="start-location" class="form-label">Start Location</label>
+                                <input type="text" class="form-control" id="start-location" placeholder="City, Country" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="trip-destination" class="form-label">Destination</label>
+                                <input type="text" class="form-control" id="trip-destination" placeholder="City, Country" required>
+                            </div>
                         </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="start-location" class="form-label">Start Location</label>
-                            <input type="text" class="form-control" id="start-location" placeholder="City, Country" required>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="start-date" class="form-label">Start Date</label>
+                                <input type="date" class="form-control" id="start-date" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="end-date" class="form-label">End Date</label>
+                                <input type="date" class="form-control" id="end-date" required>
+                            </div>
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="trip-destination" class="form-label">Destination</label>
-                            <input type="text" class="form-control" id="trip-destination" placeholder="City, Country" required>
+                        <div class="mb-3">
+                            <label for="trip-budget" class="form-label">Total Budget (<span class="rupee-symbol">₹</span>)</label>
+                            <input type="number" class="form-control" id="trip-budget" min="0" step="0.01" required>
                         </div>
-                    </div>
-                    
-                    <!-- Intermediate Stops -->
-                    <div class="mb-3">
-                        <label class="form-label">Intermediate Stops</label>
-                        <div id="stops-container">
-                            <!-- Stops will be added here dynamically -->
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="calculate-distance">
+                            <label class="form-check-label" for="calculate-distance">
+                                Calculate travel distance and time
+                            </label>
                         </div>
-                        <button type="button" class="btn btn-outline-primary btn-sm mt-2" id="add-stop-btn">
-                            <i class="fas fa-plus me-1"></i>Add Stop
-                        </button>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="start-date" class="form-label">Start Date</label>
-                            <input type="date" class="form-control" id="start-date" required>
+                        <div id="distance-results" class="distance-info d-none">
+                            <h6><i class="fas fa-route me-2"></i>Travel Information</h6>
+                            <div id="distance-details">
+                                <!-- Distance results will appear here -->
+                            </div>
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="end-date" class="form-label">End Date</label>
-                            <input type="date" class="form-control" id="end-date" required>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="trip-budget" class="form-label">Total Budget (<span class="rupee-symbol">₹</span>)</label>
-                        <input type="number" class="form-control" id="trip-budget" min="0" step="0.01" required>
-                    </div>
-                    
-                    <!-- Self Driving Charges -->
-                    <div id="self-driving-charges" class="mb-3 d-none">
-                        <label for="driving-charges" class="form-label">Self Driving Charges (<span class="rupee-symbol">₹</span>/km)</label>
-                        <input type="number" class="form-control" id="driving-charges" min="0" step="0.01" placeholder="e.g., 8 (for fuel + maintenance)">
-                        <small class="text-muted">Enter per km cost including fuel, maintenance, and depreciation</small>
-                    </div>
-                    
-                    <div class="form-check mb-3">
-                        <input class="form-check-input" type="checkbox" id="calculate-distance">
-                        <label class="form-check-label" for="calculate-distance">
-                            Calculate travel distance and time
-                        </label>
-                    </div>
-                    
-                    <div id="distance-results" class="distance-info d-none">
-                        <h6><i class="fas fa-route me-2"></i>Travel Information</h6>
-                        <div id="distance-details">
-                            <!-- Distance results will appear here -->
-                        </div>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="save-trip-btn">Create Trip</button>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="save-trip-btn">Create Trip</button>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
     <!-- Edit Trip Modal -->
     <div class="modal fade" id="editTripModal" tabindex="-1">
@@ -368,30 +315,6 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Done</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-    <!-- Meter Reading Modal -->
-<div class="modal fade" id="meterReadingModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Car Meter Reading</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body text-center">
-                <div class="reading-display" id="current-reading">0 km</div>
-                <div class="btn-group mb-3">
-                    <button class="btn btn-outline-primary" id="increment-reading">+1 km</button>
-                    <button class="btn btn-outline-secondary" id="reset-reading">Reset</button>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Set Custom Reading</label>
-                    <input type="number" class="form-control" id="custom-reading" placeholder="Enter km reading">
-                </div>
-                <button class="btn btn-success" id="save-reading">Save Reading</button>
             </div>
         </div>
     </div>
