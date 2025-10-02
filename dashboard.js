@@ -668,12 +668,12 @@ async function updateTrip() {
             try {
                 const routeData = await calculateRealDistance(startLocation, destination);
                 updateData.route = {
-                    ...routeData,
+                    distance: routeData.distance,
+                    duration: routeData.duration,
                     calculatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
             } catch (error) {
                 console.error('Error recalculating route:', error);
-                // Continue without route data if calculation fails
             }
         }
         
