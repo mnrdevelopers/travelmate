@@ -21,7 +21,7 @@ function setupTripDetailsEventListeners() {
     // Add event listener for update trip button in trip details page
     document.getElementById('update-trip-btn-trip-details').addEventListener('click', updateTripFromDetails);
     
-   // Profile navigation
+    // Profile navigation - check if element exists first
     const navProfile = document.getElementById('nav-profile');
     if (navProfile) {
         navProfile.addEventListener('click', showProfileModal);
@@ -166,95 +166,12 @@ async function loadTripOverview(trip) {
     } else {
         document.getElementById('overview-distance').textContent = 'Not calculated';
     }
-
-     // Display transport type and vehicle details
-    if (trip.transportType) {
-        const transportInfo = document.createElement('div');
-        transportInfo.className = 'col-sm-6 mb-3';
-        transportInfo.innerHTML = `
-            <strong><i class="fas fa-car me-2 text-primary"></i>Transport:</strong>
-            <span>${getTransportTypeDisplay(trip.transportType)}</span>
-        `;
-        document.querySelector('#overview .row').appendChild(transportInfo);
-    }
-    
-    // Display stops if any
-    if (trip.stops && trip.stops.length > 0) {
-        const stopsInfo = document.createElement('div');
-        stopsInfo.className = 'col-12 mb-3';
-        stopsInfo.innerHTML = `
-            <strong><i class="fas fa-map-pin me-2 text-primary"></i>Stops:</strong>
-            <span>${trip.stops.join(' → ')}</span>
-        `;
-        document.querySelector('#overview .row').appendChild(stopsInfo);
-    }
-    
-    // Display detailed route information
-    if (trip.route && trip.route.segments) {
-        const routeDetails = document.createElement('div');
-        routeDetails.className = 'col-12 mb-3';
-        routeDetails.innerHTML = `
-            <strong><i class="fas fa-route me-2 text-primary"></i>Route Details:</strong>
-            <div class="mt-2">
-                ${trip.route.segments.map(segment => `
-                    <div class="route-segment small">
-                        ${segment.from} → ${segment.to}: ${segment.distance} (${segment.duration})
-                    </div>
-                `).join('')}
-            </div>
-        `;
-        document.querySelector('#overview .row').appendChild(routeDetails);
-    }
     
     // Load members
     await loadTripMembers(trip);
 
     // Add trip actions (edit/delete/leave buttons)
     addTripActions(trip);
-}
-
-function getTransportTypeDisplay(transportType) {
-    const types = {
-        'self-driving': 'Self Driving',
-        'rental-car': 'Rental Car',
-        'public-transport': 'Public Transport',
-        'flight': 'Flight',
-        'train': 'Train',
-        'other': 'Other'
-    };
-    return types[transportType] || transportType;
-}
-
-// Enhanced expense tracking for fuel
-function addFuelExpenseAutomatically(trip, segment) {
-    if (trip.transportType !== 'self-driving' && trip.transportType !== 'rental-car') return;
-    
-    if (!trip.vehicleDetails || !trip.vehicleDetails.mileage) return;
-    
-    const fuelCost = calculateFuelCost(
-        segment.distanceKm,
-        trip.vehicleDetails.fuelType,
-        trip.vehicleDetails.mileage
-    );
-    
-    if (fuelCost > 0) {
-        const fuelExpense = {
-            description: `Fuel: ${segment.from} to ${segment.to}`,
-            amount: fuelCost,
-            category: 'fuel',
-            date: new Date().toISOString().split('T')[0],
-            paymentMode: 'cash',
-            addedBy: auth.currentUser.uid,
-            addedAt: new Date().toISOString(),
-            autoCalculated: true,
-            distance: segment.distance,
-            fuelConsumed: segment.distanceKm / trip.vehicleDetails.mileage
-        };
-        
-        // Add to expenses
-        if (!trip.expenses) trip.expenses = [];
-        trip.expenses.push(fuelExpense);
-    }
 }
 
 async function loadTripMembers(trip) {
@@ -798,30 +715,6 @@ function loadTripRoute(trip) {
     
     if (trip.route) {
         emptyRoute.classList.add('d-none');
-        
-        let calculatedDate = 'Unknown date';
-        try {
-            // Handle both Firestore Timestamp and regular Date objects
-            if (trip.route.calculatedAt) {
-                if (typeof trip.route.calculatedAt.toDate === 'function') {
-                    // It's a Firestore Timestamp
-                    calculatedDate = new Date(trip.route.calculatedAt.toDate()).toLocaleDateString();
-                } else if (trip.route.calculatedAt instanceof Date) {
-                    // It's already a Date object
-                    calculatedDate = trip.route.calculatedAt.toLocaleDateString();
-                } else if (trip.route.calculatedAt.seconds) {
-                    // It's a Firestore Timestamp in object format
-                    calculatedDate = new Date(trip.route.calculatedAt.seconds * 1000).toLocaleDateString();
-                } else {
-                    // It's a string or other format
-                    calculatedDate = new Date(trip.route.calculatedAt).toLocaleDateString();
-                }
-            }
-        } catch (error) {
-            console.warn('Error parsing calculatedAt date:', error);
-            calculatedDate = 'Unknown date';
-        }
-        
         routeDetails.innerHTML = `
             <div class="distance-info">
                 <h5><i class="fas fa-route me-2"></i>Route Information</h5>
@@ -829,50 +722,20 @@ function loadTripRoute(trip) {
                     <div class="col-md-6">
                         <p><strong>From:</strong> ${trip.startLocation}</p>
                         <p><strong>To:</strong> ${trip.destination}</p>
-                        ${trip.stops && trip.stops.length > 0 ? `
-                            <p><strong>Stops:</strong> ${trip.stops.join(' → ')}</p>
-                        ` : ''}
                     </div>
                     <div class="col-md-6">
                         <p><strong>Distance:</strong> ${trip.route.distance}</p>
                         <p><strong>Travel Time:</strong> ${trip.route.duration}</p>
-                        ${trip.route.totalDistance ? `
-                            <p><strong>Total Distance:</strong> ${trip.route.totalDistance.toFixed(1)} km</p>
-                        ` : ''}
                     </div>
                 </div>
-                
-                <!-- Display route segments if available -->
-                ${trip.route.segments && trip.route.segments.length > 0 ? `
-                    <div class="mt-4">
-                        <h6>Route Segments</h6>
-                        <div class="segments-container">
-                            ${trip.route.segments.map((segment, index) => `
-                                <div class="route-segment card mb-2">
-                                    <div class="card-body py-2">
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <div>
-                                                <strong>${index + 1}.</strong> 
-                                                ${segment.from} → ${segment.to}
-                                            </div>
-                                            <div class="text-end">
-                                                <small class="text-muted">${segment.distance}</small><br>
-                                                <small class="text-muted">${segment.duration}</small>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
+                ${trip.route.calculatedAt ? `
+                    <div class="mt-2">
+                        <small class="text-muted">
+                            <i class="fas fa-clock me-1"></i>
+                            Calculated on ${new Date(trip.route.calculatedAt.toDate()).toLocaleDateString()}
+                        </small>
                     </div>
                 ` : ''}
-                
-                <div class="mt-2">
-                    <small class="text-muted">
-                        <i class="fas fa-clock me-1"></i>
-                        Calculated on ${calculatedDate}
-                    </small>
-                </div>
             </div>
         `;
     } else {
@@ -1162,36 +1025,21 @@ async function calculateRoute() {
         document.getElementById('calculate-route-btn').disabled = true;
         document.getElementById('calculate-route-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Calculating...';
         
-        // Prepare locations array including stops
-        const allLocations = [currentTrip.startLocation];
-        if (currentTrip.stops && currentTrip.stops.length > 0) {
-            allLocations.push(...currentTrip.stops);
-        }
-        allLocations.push(currentTrip.destination);
-        
-        // Use enhanced route calculation with stops
-        const routeData = await calculateRouteWithStops(allLocations);
+        // Use the utility function from utils.js
+        const routeData = await calculateRealDistance(currentTrip.startLocation, currentTrip.destination);
         
         console.log('Route calculated in trip details:', routeData);
-
-        // After calculating route, add auto fuel expenses
-        if (currentTrip.transportType === 'self-driving' || currentTrip.transportType === 'rental-car') {
-            await addAutoFuelExpenses(currentTrip, routeData);
-        }
-        
-        // Prepare update data with proper timestamp
-        const updateData = {
-            route: {
-                ...routeData,
-                calculatedAt: new Date() // Use regular Date object instead of Firestore timestamp
-            },
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        };
         
         // Update Firestore
-        await db.collection('trips').doc(currentTrip.id).update(updateData);
+        await db.collection('trips').doc(currentTrip.id).update({
+            route: {
+                ...routeData,
+                calculatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            },
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
         
-        // Update local trip data immediately with proper date handling
+        // Update local trip data immediately
         currentTrip.route = {
             ...routeData,
             calculatedAt: new Date()
@@ -1216,72 +1064,6 @@ async function calculateRoute() {
     } finally {
         document.getElementById('calculate-route-btn').disabled = false;
         document.getElementById('calculate-route-btn').innerHTML = '<i class="fas fa-route me-1"></i>Calculate Route';
-    }
-}
-
-// Enhanced route calculation with stops
-async function calculateRouteWithStops(locations) {
-    if (locations.length < 2) {
-        throw new Error('At least two locations required');
-    }
-    
-    try {
-        let totalDistance = 0;
-        let totalDuration = 0;
-        const segments = [];
-        
-        // Calculate route for each segment
-        for (let i = 0; i < locations.length - 1; i++) {
-            const segment = await calculateRealDistance(locations[i], locations[i + 1]);
-            
-            // Extract numeric distance (remove " km")
-            const distanceKm = parseFloat(segment.distance) || 0;
-            totalDistance += distanceKm;
-            
-            // Extract duration in minutes
-            const durationMinutes = parseDurationToMinutes(segment.duration);
-            totalDuration += durationMinutes;
-            
-            segments.push({
-                from: locations[i],
-                to: locations[i + 1],
-                distance: segment.distance,
-                duration: segment.duration,
-                distanceKm: distanceKm,
-                durationMinutes: durationMinutes
-            });
-        }
-        
-        return {
-            distance: `${totalDistance.toFixed(1)} km`,
-            duration: formatMinutesToDuration(totalDuration),
-            totalDistance: totalDistance,
-            totalDuration: totalDuration,
-            segments: segments,
-            stops: locations.slice(1, -1) // All locations except start and end
-        };
-        
-    } catch (error) {
-        console.error('Error calculating route with stops:', error);
-        
-        // Fallback: calculate direct route without stops
-        console.log('Falling back to direct route calculation');
-        const directRoute = await calculateRealDistance(locations[0], locations[locations.length - 1]);
-        
-        return {
-            ...directRoute,
-            totalDistance: parseFloat(directRoute.distance) || 0,
-            totalDuration: parseDurationToMinutes(directRoute.duration),
-            segments: [{
-                from: locations[0],
-                to: locations[locations.length - 1],
-                distance: directRoute.distance,
-                duration: directRoute.duration,
-                distanceKm: parseFloat(directRoute.distance) || 0,
-                durationMinutes: parseDurationToMinutes(directRoute.duration)
-            }],
-            stops: locations.slice(1, -1)
-        };
     }
 }
 
@@ -1623,7 +1405,7 @@ function showProfileModal() {
     const user = auth.currentUser;
     if (!user) return;
     
-    // Create profile modal HTML
+    // Create profile modal HTML dynamically since it doesn't exist in trip-details.html
     const modalHtml = `
         <div class="modal fade" id="profileModal" tabindex="-1">
             <div class="modal-dialog">
@@ -1635,9 +1417,7 @@ function showProfileModal() {
                     <div class="modal-body">
                         <form id="profile-form">
                             <div class="text-center mb-4">
-                                <img id="profile-avatar" class="user-avatar mb-3" style="width: 100px; height: 100px;" 
-                                     src="${user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}&background=4361ee&color=fff`}" 
-                                     alt="Profile">
+                                <img id="profile-avatar" class="user-avatar mb-3" style="width: 100px; height: 100px;" src="${user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}&background=4361ee&color=fff`}" alt="Profile">
                             </div>
                             <div class="mb-3">
                                 <label for="profile-name" class="form-label">Display Name</label>
@@ -1656,7 +1436,7 @@ function showProfileModal() {
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <button type="button" class="btn btn-primary" id="save-profile-trip-details">Save Changes</button>
+                        <button type="button" class="btn btn-primary" onclick="updateProfile()">Save Changes</button>
                     </div>
                 </div>
             </div>
@@ -1672,107 +1452,9 @@ function showProfileModal() {
     // Add modal to DOM
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     
-    // Add event listener for save button
-    document.getElementById('save-profile-trip-details').addEventListener('click', updateProfileFromTripDetails);
-    
     // Show the modal
     const modal = new bootstrap.Modal(document.getElementById('profileModal'));
     modal.show();
-}
-
-async function updateProfileFromTripDetails() {
-    const name = document.getElementById('profile-name').value.trim();
-    
-    if (!name) {
-        showToast('Please enter a display name', 'warning');
-        return;
-    }
-    
-    try {
-        const saveBtn = document.getElementById('save-profile-trip-details');
-        saveBtn.disabled = true;
-        saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
-        
-        await auth.currentUser.updateProfile({
-            displayName: name
-        });
-        
-        // Update user document in Firestore
-        await db.collection('users').doc(auth.currentUser.uid).update({
-            name: name,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        
-        // Update UI
-        loadUserData();
-        
-        const modal = bootstrap.Modal.getInstance(document.getElementById('profileModal'));
-        modal.hide();
-        
-        showToast('Profile updated successfully!', 'success');
-        
-    } catch (error) {
-        console.error('Error updating profile:', error);
-        showToast('Error updating profile', 'danger');
-    } finally {
-        const saveBtn = document.getElementById('save-profile-trip-details');
-        if (saveBtn) {
-            saveBtn.disabled = false;
-            saveBtn.innerHTML = 'Save Changes';
-        }
-    }
-}
-
-// Add this function to automatically create fuel expenses when route is calculated
-async function addAutoFuelExpenses(trip, routeData) {
-    if (trip.transportType !== 'self-driving' && trip.transportType !== 'rental-car') return;
-    
-    if (!trip.vehicleDetails || !trip.vehicleDetails.mileage) return;
-    
-    try {
-        const fuelExpenses = [];
-        
-        if (routeData.segments) {
-            for (const segment of routeData.segments) {
-                const fuelCost = await calculateFuelCost(
-                    segment.distanceKm,
-                    trip.vehicleDetails.fuelType,
-                    trip.vehicleDetails.mileage
-                );
-                
-                if (fuelCost > 0) {
-                    fuelExpenses.push({
-                        description: `Fuel: ${segment.from} to ${segment.to}`,
-                        amount: parseFloat(fuelCost.toFixed(2)),
-                        category: 'fuel',
-                        date: new Date().toISOString().split('T')[0],
-                        paymentMode: 'cash',
-                        addedBy: auth.currentUser.uid,
-                        addedAt: new Date().toISOString(),
-                        autoCalculated: true,
-                        distance: segment.distance,
-                        segment: `${segment.from} → ${segment.to}`
-                    });
-                }
-            }
-        }
-        
-        if (fuelExpenses.length > 0) {
-            // Add to existing expenses
-            const updatedExpenses = [...(trip.expenses || []), ...fuelExpenses];
-            
-            await db.collection('trips').doc(trip.id).update({
-                expenses: updatedExpenses,
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            
-            currentTrip.expenses = updatedExpenses;
-            showToast(`Added ${fuelExpenses.length} fuel expense(s) automatically!`, 'success');
-        }
-        
-    } catch (error) {
-        console.error('Error adding auto fuel expenses:', error);
-    }
 }
 
 // Add profile update function
@@ -1892,59 +1574,4 @@ async function updateTripFromDetails() {
         updateBtn.disabled = false;
         updateBtn.innerHTML = '<i class="fas fa-save me-1"></i>Update Trip';
     }
-}
-
-// Meter reading functionality
-let currentMeterReading = 0;
-
-function setupMeterReading() {
-    document.getElementById('increment-reading').addEventListener('click', function() {
-        currentMeterReading++;
-        updateMeterDisplay();
-    });
-    
-    document.getElementById('reset-reading').addEventListener('click', function() {
-        currentMeterReading = 0;
-        updateMeterDisplay();
-    });
-    
-    document.getElementById('custom-reading').addEventListener('input', function() {
-        currentMeterReading = parseInt(this.value) || 0;
-        updateMeterDisplay();
-    });
-    
-    document.getElementById('save-reading').addEventListener('click', function() {
-        saveMeterReading(currentMeterReading);
-    });
-}
-
-function updateMeterDisplay() {
-    document.getElementById('current-reading').textContent = `${currentMeterReading} km`;
-}
-
-function saveMeterReading(reading) {
-    // Save to current trip or global storage
-    if (currentTrip) {
-        if (!currentTrip.meterReadings) currentTrip.meterReadings = [];
-        currentTrip.meterReadings.push({
-            reading: reading,
-            timestamp: new Date().toISOString(),
-            location: 'Current Location' // Could use geolocation API
-        });
-        
-        // Update Firestore
-        db.collection('trips').doc(currentTrip.id).update({
-            meterReadings: currentTrip.meterReadings,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        
-        showToast('Meter reading saved!', 'success');
-    }
-}
-
-function showMeterReadingModal() {
-    currentMeterReading = 0;
-    updateMeterDisplay();
-    const modal = new bootstrap.Modal(document.getElementById('meterReadingModal'));
-    modal.show();
 }
