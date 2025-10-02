@@ -10,429 +10,37 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function setupDashboardEventListeners() {
-    // Trip management - with null checks
-    const createTripBtn = document.getElementById('create-trip-btn');
-    const createFirstTripBtn = document.getElementById('create-first-trip-btn');
-    const joinTripBtn = document.getElementById('join-trip-btn');
-    const saveTripBtn = document.getElementById('save-trip-btn');
-    const updateTripBtn = document.getElementById('update-trip-btn');
-    const confirmDeleteTripBtn = document.getElementById('confirm-delete-trip-btn');
-    const joinTripCodeBtn = document.getElementById('join-trip-code-btn');
-    const logoutBtn = document.getElementById('logout-btn');
-    const copyCodeBtn = document.getElementById('copy-code-btn');
-    const navProfile = document.getElementById('nav-profile');
+    // Trip management
+    document.getElementById('create-trip-btn').addEventListener('click', showCreateTripModal);
+    document.getElementById('create-first-trip-btn').addEventListener('click', showCreateTripModal);
+    document.getElementById('join-trip-btn').addEventListener('click', showJoinTripModal);
+    document.getElementById('save-trip-btn').addEventListener('click', saveTrip);
+    document.getElementById('update-trip-btn').addEventListener('click', updateTrip);
+    document.getElementById('confirm-delete-trip-btn').addEventListener('click', deleteTrip);
+    document.getElementById('join-trip-code-btn').addEventListener('click', joinTripWithCode);
+    document.getElementById('logout-btn').addEventListener('click', handleLogout);
+    document.getElementById('copy-code-btn').addEventListener('click', copyTripCode);
+    document.getElementById('nav-profile').addEventListener('click', showProfileModal);
     
-    if (createTripBtn) createTripBtn.addEventListener('click', showCreateTripModal);
-    if (createFirstTripBtn) createFirstTripBtn.addEventListener('click', showCreateTripModal);
-    if (joinTripBtn) joinTripBtn.addEventListener('click', showJoinTripModal);
-    if (saveTripBtn) saveTripBtn.addEventListener('click', saveTrip);
-    if (updateTripBtn) updateTripBtn.addEventListener('click', updateTrip);
-    if (confirmDeleteTripBtn) confirmDeleteTripBtn.addEventListener('click', deleteTrip);
-    if (joinTripCodeBtn) joinTripCodeBtn.addEventListener('click', joinTripWithCode);
-    if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
-    if (copyCodeBtn) copyCodeBtn.addEventListener('click', copyTripCode);
-    if (navProfile) navProfile.addEventListener('click', showProfileModal);
+    // Distance calculation
+    document.getElementById('calculate-distance').addEventListener('change', function() {
+        if (this.checked) {
+            calculateDistance();
+        } else {
+            document.getElementById('distance-results').classList.add('d-none');
+        }
+    });
     
-    // Distance calculation - updated for multiple stops
-    const calculateDistance = document.getElementById('calculate-distance');
-    const editCalculateDistance = document.getElementById('edit-calculate-distance');
-    
-    if (calculateDistance) {
-        calculateDistance.addEventListener('change', function() {
-            if (this.checked) {
-                calculateDistanceWithStops();
-            } else {
-                const distanceResults = document.getElementById('distance-results');
-                if (distanceResults) distanceResults.classList.add('d-none');
-            }
-        });
-    }
-    
-    if (editCalculateDistance) {
-        editCalculateDistance.addEventListener('change', function() {
-            if (this.checked) {
-                calculateEditDistanceWithStops();
-            } else {
-                const editDistanceResults = document.getElementById('edit-distance-results');
-                if (editDistanceResults) editDistanceResults.classList.add('d-none');
-            }
-        });
-    }
+    document.getElementById('edit-calculate-distance').addEventListener('change', function() {
+        if (this.checked) {
+            calculateEditDistance();
+        } else {
+            document.getElementById('edit-distance-results').classList.add('d-none');
+        }
+    });
     
     // Profile operations
     setupProfileEventListeners();
-    
-    // Setup multiple stops functionality
-    setupMultipleStops();
-}
-
-// Multiple stops functionality
-function setupMultipleStops() {
-    // Add stop button for create modal
-    const addStopBtn = document.getElementById('add-stop-btn');
-    const editAddStopBtn = document.getElementById('edit-add-stop-btn');
-    
-    if (addStopBtn) {
-        addStopBtn.addEventListener('click', addIntermediateStop);
-    }
-    
-    if (editAddStopBtn) {
-        editAddStopBtn.addEventListener('click', addEditIntermediateStop);
-    }
-}
-
-function addIntermediateStop() {
-    const container = document.getElementById('intermediate-stops-container');
-    if (!container) return;
-    
-    const stopIndex = container.children.length;
-    
-    const stopDiv = document.createElement('div');
-    stopDiv.className = 'route-stop mb-2 intermediate-stop';
-    stopDiv.innerHTML = `
-        <div class="input-group">
-            <span class="input-group-text bg-warning text-dark">
-                <i class="fas fa-map-marker-alt"></i>
-            </span>
-            <input type="text" class="form-control intermediate-location" placeholder="Stop ${stopIndex + 1} (City, Country)">
-            <button type="button" class="btn btn-outline-danger remove-stop-btn" title="Remove stop">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-    `;
-    
-    container.appendChild(stopDiv);
-    
-    // Add event listener to remove button
-    stopDiv.querySelector('.remove-stop-btn').addEventListener('click', function() {
-        stopDiv.remove();
-        renumberStops();
-    });
-}
-
-function addEditIntermediateStop() {
-    const container = document.getElementById('edit-intermediate-stops-container');
-    if (!container) return;
-    
-    const stopIndex = container.children.length;
-    
-    const stopDiv = document.createElement('div');
-    stopDiv.className = 'route-stop mb-2 edit-intermediate-stop';
-    stopDiv.innerHTML = `
-        <div class="input-group">
-            <span class="input-group-text bg-warning text-dark">
-                <i class="fas fa-map-marker-alt"></i>
-            </span>
-            <input type="text" class="form-control edit-intermediate-location" placeholder="Stop ${stopIndex + 1} (City, Country)">
-            <button type="button" class="btn btn-outline-danger remove-stop-btn" title="Remove stop">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-    `;
-    
-    container.appendChild(stopDiv);
-    
-    // Add event listener to remove button
-    stopDiv.querySelector('.remove-stop-btn').addEventListener('click', function() {
-        stopDiv.remove();
-        renumberEditStops();
-    });
-}
-
-function renumberStops() {
-    const stops = document.querySelectorAll('.intermediate-stop');
-    stops.forEach((stop, index) => {
-        const input = stop.querySelector('.intermediate-location');
-        if (input) {
-            input.placeholder = `Stop ${index + 1} (City, Country)`;
-        }
-    });
-}
-
-function renumberEditStops() {
-    const stops = document.querySelectorAll('.edit-intermediate-stop');
-    stops.forEach((stop, index) => {
-        const input = stop.querySelector('.edit-intermediate-location');
-        if (input) {
-            input.placeholder = `Stop ${index + 1} (City, Country)`;
-        }
-    });
-}
-
-function getStopsFromCreateForm() {
-    const startLocation = document.getElementById('start-location');
-    const destination = document.getElementById('trip-destination');
-    
-    const intermediateInputs = document.querySelectorAll('.intermediate-location');
-    const intermediateStops = Array.from(intermediateInputs)
-        .map(input => input.value.trim())
-        .filter(stop => stop.length > 0);
-    
-    return {
-        startLocation: startLocation ? startLocation.value : '',
-        intermediateStops,
-        destination: destination ? destination.value : ''
-    };
-}
-
-function getStopsFromEditForm() {
-    const startLocation = document.getElementById('edit-start-location');
-    const destination = document.getElementById('edit-trip-destination');
-    
-    const intermediateInputs = document.querySelectorAll('.edit-intermediate-location');
-    const intermediateStops = Array.from(intermediateInputs)
-        .map(input => input.value.trim())
-        .filter(stop => stop.length > 0);
-    
-    return {
-        startLocation: startLocation ? startLocation.value : '',
-        intermediateStops,
-        destination: destination ? destination.value : ''
-    };
-}
-
-function populateEditStops(trip) {
-    const container = document.getElementById('edit-intermediate-stops-container');
-    if (!container) return;
-    
-    container.innerHTML = '';
-    
-    if (trip.intermediateStops && trip.intermediateStops.length > 0) {
-        trip.intermediateStops.forEach((stop, index) => {
-            addEditIntermediateStop();
-            const stops = document.querySelectorAll('.edit-intermediate-location');
-            if (stops[index]) {
-                stops[index].value = stop;
-            }
-        });
-    }
-}
-
-// Enhanced distance calculation for multiple stops
-async function calculateDistanceWithStops() {
-    const stopsData = getStopsFromCreateForm();
-    
-    if (!validateLocation(stopsData.startLocation) || !validateLocation(stopsData.destination)) {
-        showAlert('Please enter valid start and destination locations', 'warning');
-        return;
-    }
-    
-    try {
-        const distanceDetails = document.getElementById('distance-details');
-        if (distanceDetails) {
-            distanceDetails.innerHTML = `
-                <div class="text-center">
-                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-                    Calculating route with ${stopsData.intermediateStops.length + 1} segments...
-                </div>
-            `;
-        }
-        
-        const distanceResults = document.getElementById('distance-results');
-        if (distanceResults) distanceResults.classList.remove('d-none');
-        
-        const allStops = [stopsData.startLocation, ...stopsData.intermediateStops, stopsData.destination];
-        const routeSegments = [];
-        let totalDistance = 0;
-        let totalDuration = 0;
-        
-        // Calculate distance for each segment
-        for (let i = 0; i < allStops.length - 1; i++) {
-            const from = allStops[i];
-            const to = allStops[i + 1];
-            
-            try {
-                const segmentData = await calculateRealDistance(from, to);
-                routeSegments.push({
-                    from,
-                    to,
-                    distance: segmentData.distance,
-                    duration: segmentData.duration,
-                    durationMinutes: parseDurationToMinutes(segmentData.duration)
-                });
-                
-                totalDistance += parseFloat(segmentData.distance);
-                totalDuration += segmentData.durationMinutes || parseDurationToMinutes(segmentData.duration);
-                
-            } catch (error) {
-                console.error(`Error calculating segment ${i + 1}:`, error);
-                routeSegments.push({
-                    from,
-                    to,
-                    distance: 'Unknown',
-                    duration: 'Unknown',
-                    error: true
-                });
-            }
-        }
-        
-        displayDistanceResultsWithStops(routeSegments, totalDistance, totalDuration);
-        
-    } catch (error) {
-        console.error('Error calculating route with stops:', error);
-        const distanceDetails = document.getElementById('distance-details');
-        if (distanceDetails) {
-            distanceDetails.innerHTML = `
-                <div class="alert alert-danger">
-                    <i class="fas fa-exclamation-triangle me-2"></i>
-                    Error calculating route. Please try again.
-                </div>
-            `;
-        }
-    }
-}
-
-async function calculateEditDistanceWithStops() {
-    const stopsData = getStopsFromEditForm();
-    
-    if (!validateLocation(stopsData.startLocation) || !validateLocation(stopsData.destination)) {
-        showAlert('Please enter valid start and destination locations', 'warning');
-        return;
-    }
-    
-    try {
-        const editDistanceDetails = document.getElementById('edit-distance-details');
-        if (editDistanceDetails) {
-            editDistanceDetails.innerHTML = `
-                <div class="text-center">
-                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-                    Calculating route with ${stopsData.intermediateStops.length + 1} segments...
-                </div>
-            `;
-        }
-        
-        const editDistanceResults = document.getElementById('edit-distance-results');
-        if (editDistanceResults) editDistanceResults.classList.remove('d-none');
-        
-        const allStops = [stopsData.startLocation, ...stopsData.intermediateStops, stopsData.destination];
-        const routeSegments = [];
-        let totalDistance = 0;
-        let totalDuration = 0;
-        
-        // Calculate distance for each segment
-        for (let i = 0; i < allStops.length - 1; i++) {
-            const from = allStops[i];
-            const to = allStops[i + 1];
-            
-            try {
-                const segmentData = await calculateRealDistance(from, to);
-                routeSegments.push({
-                    from,
-                    to,
-                    distance: segmentData.distance,
-                    duration: segmentData.duration,
-                    durationMinutes: parseDurationToMinutes(segmentData.duration)
-                });
-                
-                totalDistance += parseFloat(segmentData.distance);
-                totalDuration += segmentData.durationMinutes || parseDurationToMinutes(segmentData.duration);
-                
-            } catch (error) {
-                console.error(`Error calculating segment ${i + 1}:`, error);
-                routeSegments.push({
-                    from,
-                    to,
-                    distance: 'Unknown',
-                    duration: 'Unknown',
-                    error: true
-                });
-            }
-        }
-        
-        displayEditDistanceResultsWithStops(routeSegments, totalDistance, totalDuration);
-        
-    } catch (error) {
-        console.error('Error calculating route with stops:', error);
-        const editDistanceDetails = document.getElementById('edit-distance-details');
-        if (editDistanceDetails) {
-            editDistanceDetails.innerHTML = `
-                <div class="alert alert-danger">
-                    <i class="fas fa-exclamation-triangle me-2"></i>
-                    Error calculating route. Please try again.
-                </div>
-            `;
-        }
-    }
-}
-
-function displayDistanceResultsWithStops(segments, totalDistance, totalDuration) {
-    const distanceDetails = document.getElementById('distance-details');
-    if (!distanceDetails) return;
-    
-    let html = `
-        <div class="route-summary mb-3 p-3 bg-light rounded">
-            <h6 class="mb-2">Route Summary</h6>
-            <p class="mb-1"><strong>Total Distance:</strong> ${totalDistance.toFixed(1)} km</p>
-            <p class="mb-0"><strong>Total Travel Time:</strong> ${formatMinutesToDuration(totalDuration)}</p>
-        </div>
-        <h6 class="mb-2">Route Segments:</h6>
-    `;
-    
-    segments.forEach((segment, index) => {
-        html += `
-            <div class="route-segment mb-2 p-2 border rounded ${segment.error ? 'bg-warning' : ''}">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <small class="text-muted">Segment ${index + 1}</small>
-                        <div class="small">${segment.from} → ${segment.to}</div>
-                    </div>
-                    <div class="text-end">
-                        <div class="small">${segment.distance}</div>
-                        <div class="small text-muted">${segment.duration}</div>
-                    </div>
-                </div>
-                ${segment.error ? '<small class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>Calculation failed</small>' : ''}
-            </div>
-        `;
-    });
-    
-    html += `
-        <div class="alert alert-success mt-2">
-            <small><i class="fas fa-check-circle me-1"></i>Route calculated with ${segments.length} segments using OpenRouteService API</small>
-        </div>
-    `;
-    
-    distanceDetails.innerHTML = html;
-}
-
-function displayEditDistanceResultsWithStops(segments, totalDistance, totalDuration) {
-    const distanceDetails = document.getElementById('edit-distance-details');
-    if (!distanceDetails) return;
-    
-    let html = `
-        <div class="route-summary mb-3 p-3 bg-light rounded">
-            <h6 class="mb-2">Route Summary</h6>
-            <p class="mb-1"><strong>Total Distance:</strong> ${totalDistance.toFixed(1)} km</p>
-            <p class="mb-0"><strong>Total Travel Time:</strong> ${formatMinutesToDuration(totalDuration)}</p>
-        </div>
-        <h6 class="mb-2">Route Segments:</h6>
-    `;
-    
-    segments.forEach((segment, index) => {
-        html += `
-            <div class="route-segment mb-2 p-2 border rounded ${segment.error ? 'bg-warning' : ''}">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <small class="text-muted">Segment ${index + 1}</small>
-                        <div class="small">${segment.from} → ${segment.to}</div>
-                    </div>
-                    <div class="text-end">
-                        <div class="small">${segment.distance}</div>
-                        <div class="small text-muted">${segment.duration}</div>
-                    </div>
-                </div>
-                ${segment.error ? '<small class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>Calculation failed</small>' : ''}
-            </div>
-        `;
-    });
-    
-    html += `
-        <div class="alert alert-success mt-2">
-            <small><i class="fas fa-check-circle me-1"></i>Route calculated with ${segments.length} segments using OpenRouteService API</small>
-        </div>
-    `;
-    
-    distanceDetails.innerHTML = html;
 }
 
 function setupProfileEventListeners() {
@@ -452,28 +60,17 @@ function showProfileModal() {
     const user = auth.currentUser;
     if (!user) return;
     
-    const profileName = document.getElementById('profile-name');
-    const profileEmail = document.getElementById('profile-email');
-    const profileUserId = document.getElementById('profile-userid');
-    const profileAvatar = document.getElementById('profile-avatar');
+    document.getElementById('profile-name').value = user.displayName || '';
+    document.getElementById('profile-email').value = user.email || '';
+    document.getElementById('profile-userid').value = user.uid;
+    document.getElementById('profile-avatar').src = user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}&background=4361ee&color=fff`;
     
-    if (profileName) profileName.value = user.displayName || '';
-    if (profileEmail) profileEmail.value = user.email || '';
-    if (profileUserId) profileUserId.value = user.uid;
-    if (profileAvatar) profileAvatar.src = user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}&background=4361ee&color=fff`;
-    
-    const profileModal = document.getElementById('profileModal');
-    if (profileModal) {
-        const modal = new bootstrap.Modal(profileModal);
-        modal.show();
-    }
+    const modal = new bootstrap.Modal(document.getElementById('profileModal'));
+    modal.show();
 }
 
 async function saveProfile() {
-    const nameInput = document.getElementById('profile-name');
-    if (!nameInput) return;
-    
-    const name = nameInput.value.trim();
+    const name = document.getElementById('profile-name').value.trim();
     
     if (!name) {
         showAlert('Please enter a display name', 'warning');
@@ -481,11 +78,8 @@ async function saveProfile() {
     }
     
     try {
-        const saveProfileBtn = document.getElementById('save-profile-btn');
-        if (saveProfileBtn) {
-            saveProfileBtn.disabled = true;
-            saveProfileBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
-        }
+        document.getElementById('save-profile-btn').disabled = true;
+        document.getElementById('save-profile-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
         
         await auth.currentUser.updateProfile({
             displayName: name
@@ -500,11 +94,8 @@ async function saveProfile() {
         // Update UI
         loadUserData();
         
-        const profileModal = document.getElementById('profileModal');
-        if (profileModal) {
-            const modal = bootstrap.Modal.getInstance(profileModal);
-            if (modal) modal.hide();
-        }
+        const modal = bootstrap.Modal.getInstance(document.getElementById('profileModal'));
+        modal.hide();
         
         showAlert('Profile updated successfully!', 'success');
         
@@ -512,11 +103,8 @@ async function saveProfile() {
         console.error('Error updating profile:', error);
         showAlert('Error updating profile', 'danger');
     } finally {
-        const saveProfileBtn = document.getElementById('save-profile-btn');
-        if (saveProfileBtn) {
-            saveProfileBtn.disabled = false;
-            saveProfileBtn.innerHTML = 'Save Changes';
-        }
+        document.getElementById('save-profile-btn').disabled = false;
+        document.getElementById('save-profile-btn').innerHTML = 'Save Changes';
     }
 }
 
@@ -549,11 +137,8 @@ async function leaveAllTrips() {
     }
     
     try {
-        const leaveAllTripsBtn = document.getElementById('leave-all-trips-btn');
-        if (leaveAllTripsBtn) {
-            leaveAllTripsBtn.disabled = true;
-            leaveAllTripsBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Leaving...';
-        }
+        document.getElementById('leave-all-trips-btn').disabled = true;
+        document.getElementById('leave-all-trips-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Leaving...';
         
         // Remove user from all trips
         const batch = db.batch();
@@ -579,26 +164,17 @@ async function leaveAllTrips() {
         console.error('Error leaving all trips:', error);
         showAlert('Error leaving trips', 'danger');
     } finally {
-        const leaveAllTripsBtn = document.getElementById('leave-all-trips-btn');
-        if (leaveAllTripsBtn) {
-            leaveAllTripsBtn.disabled = false;
-            leaveAllTripsBtn.innerHTML = '<i class="fas fa-sign-out-alt me-1"></i>Leave All Trips';
-        }
+        document.getElementById('leave-all-trips-btn').disabled = false;
+        document.getElementById('leave-all-trips-btn').innerHTML = '<i class="fas fa-sign-out-alt me-1"></i>Leave All Trips';
     }
 }
 
 function initializeApp() {
     const today = new Date().toISOString().split('T')[0];
-    
-    const startDate = document.getElementById('start-date');
-    const endDate = document.getElementById('end-date');
-    const editStartDate = document.getElementById('edit-start-date');
-    const editEndDate = document.getElementById('edit-end-date');
-    
-    if (startDate) startDate.min = today;
-    if (endDate) endDate.min = today;
-    if (editStartDate) editStartDate.min = today;
-    if (editEndDate) editEndDate.min = today;
+    document.getElementById('start-date').min = today;
+    document.getElementById('end-date').min = today;
+    document.getElementById('edit-start-date').min = today;
+    document.getElementById('edit-end-date').min = today;
 }
 
 function checkAuthState() {
@@ -606,7 +182,7 @@ function checkAuthState() {
         if (user) {
             currentUser = user;
             loadUserData();
-            await loadCustomCategories();
+            await loadCustomCategories(); // Add this line
             loadUserTrips();
         } else {
             navigateTo('auth.html');
@@ -617,11 +193,8 @@ function checkAuthState() {
 function loadUserData() {
     if (!currentUser) return;
     
-    const userName = document.getElementById('user-name');
-    const userAvatar = document.getElementById('user-avatar');
-    
-    if (userName) userName.textContent = currentUser.displayName || 'Traveler';
-    if (userAvatar) userAvatar.src = currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || 'Traveler')}&background=4361ee&color=fff`;
+    document.getElementById('user-name').textContent = currentUser.displayName || 'Traveler';
+    document.getElementById('user-avatar').src = currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || 'Traveler')}&background=4361ee&color=fff`;
 }
 
 async function loadUserTrips() {
@@ -662,7 +235,6 @@ async function loadUserTrips() {
 
 async function loadRecentCalculations() {
     const recentCalculationsList = document.getElementById('recent-calculations-list');
-    if (!recentCalculationsList) return;
     
     try {
         // Load from localStorage (you can modify this to use Firestore)
@@ -719,10 +291,10 @@ async function loadRecentCalculations() {
     }
 }
 
+
+
 function loadUpcomingTrips() {
     const upcomingTripsList = document.getElementById('upcoming-trips-list');
-    if (!upcomingTripsList) return;
-    
     const today = new Date();
     
     const upcomingTrips = userTrips.filter(trip => {
@@ -741,10 +313,7 @@ function loadUpcomingTrips() {
             </div>
         `;
         
-        const createTripBtn = document.getElementById('create-trip-from-upcoming');
-        if (createTripBtn) {
-            createTripBtn.addEventListener('click', showCreateTripModal);
-        }
+        document.getElementById('create-trip-from-upcoming').addEventListener('click', showCreateTripModal);
         return;
     }
     
@@ -780,13 +349,6 @@ function loadUpcomingTrips() {
 }
 
 function updateDashboardStats() {
-    const totalTripsCount = document.getElementById('total-trips-count');
-    const activeTripsCount = document.getElementById('active-trips-count');
-    const totalSpentAmount = document.getElementById('total-spent-amount');
-    const carExpensesAmount = document.getElementById('car-expenses-amount');
-    
-    if (!totalTripsCount || !activeTripsCount || !totalSpentAmount || !carExpensesAmount) return;
-    
     const totalTrips = userTrips.length;
     const today = new Date();
     
@@ -821,10 +383,10 @@ function updateDashboardStats() {
     }, 0);
     
     // Update DOM elements
-    totalTripsCount.textContent = totalTrips;
-    activeTripsCount.textContent = activeTrips;
-    totalSpentAmount.textContent = totalSpent.toFixed(2);
-    carExpensesAmount.textContent = carExpenses.toFixed(2);
+    document.getElementById('total-trips-count').textContent = totalTrips;
+    document.getElementById('active-trips-count').textContent = activeTrips;
+    document.getElementById('total-spent-amount').textContent = totalSpent.toFixed(2);
+    document.getElementById('car-expenses-amount').textContent = carExpenses.toFixed(2);
     
     // Update car expense chart
     updateCarExpenseChart(userTrips);
@@ -832,11 +394,7 @@ function updateDashboardStats() {
 
 // Update car expense chart
 function updateCarExpenseChart(trips) {
-    const ctx = document.getElementById('carExpenseChart');
-    if (!ctx) return;
-    
-    const ctx2d = ctx.getContext('2d');
-    if (!ctx2d) return;
+    const ctx = document.getElementById('carExpenseChart').getContext('2d');
     
     // Destroy previous chart if it exists
     if (carExpenseChart) {
@@ -895,24 +453,21 @@ function updateCarExpenseChart(trips) {
         }
     });
     
-    const carExpenseDetails = document.getElementById('car-expense-details');
-    if (carExpenseDetails) {
-        if (data.length === 0) {
-            carExpenseDetails.innerHTML = `
-                <div class="text-center text-muted py-4">
-                    <i class="fas fa-car fa-3x mb-3"></i>
-                    <p>No car expenses recorded yet</p>
-                    <a href="car-calculations.html" class="btn btn-primary btn-sm">
-                        <i class="fas fa-calculator me-1"></i>Calculate Car Expenses
-                    </a>
-                </div>
-            `;
-            return;
-        }
+    if (data.length === 0) {
+        document.getElementById('car-expense-details').innerHTML = `
+            <div class="text-center text-muted py-4">
+                <i class="fas fa-car fa-3x mb-3"></i>
+                <p>No car expenses recorded yet</p>
+                <a href="car-calculations.html" class="btn btn-primary btn-sm">
+                    <i class="fas fa-calculator me-1"></i>Calculate Car Expenses
+                </a>
+            </div>
+        `;
+        return;
     }
     
     // Create chart
-    carExpenseChart = new Chart(ctx2d, {
+    carExpenseChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
             labels: labels,
@@ -951,23 +506,21 @@ function updateCarExpenseChart(trips) {
     
     // Update expense details
     const totalCarExpenses = data.reduce((sum, value) => sum + value, 0);
-    if (carExpenseDetails) {
-        carExpenseDetails.innerHTML = `
-            <div class="text-center">
-                <h4 class="text-primary"><span class="rupee-symbol">₹</span>${totalCarExpenses.toFixed(2)}</h4>
-                <p class="text-muted mb-3">Total Car Expenses</p>
-                ${labels.map((label, index) => `
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="small">${label}:</span>
-                        <span class="fw-bold"><span class="rupee-symbol">₹</span>${data[index].toFixed(2)}</span>
-                    </div>
-                `).join('')}
-                <a href="car-calculations.html" class="btn btn-primary btn-sm mt-3">
-                    <i class="fas fa-calculator me-1"></i>New Calculation
-                </a>
-            </div>
-        `;
-    }
+    document.getElementById('car-expense-details').innerHTML = `
+        <div class="text-center">
+            <h4 class="text-primary"><span class="rupee-symbol">₹</span>${totalCarExpenses.toFixed(2)}</h4>
+            <p class="text-muted mb-3">Total Car Expenses</p>
+            ${labels.map((label, index) => `
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="small">${label}:</span>
+                    <span class="fw-bold"><span class="rupee-symbol">₹</span>${data[index].toFixed(2)}</span>
+                </div>
+            `).join('')}
+            <a href="car-calculations.html" class="btn btn-primary btn-sm mt-3">
+                <i class="fas fa-calculator me-1"></i>New Calculation
+            </a>
+        </div>
+    `;
 }
 
 function showLoadingState(show) {
@@ -975,24 +528,20 @@ function showLoadingState(show) {
     const emptyTrips = document.getElementById('empty-trips');
     
     if (show) {
-        if (tripsContainer) {
-            tripsContainer.innerHTML = `
-                <div class="col-12 text-center py-5">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <p class="mt-2 text-muted">Loading your trips...</p>
+        tripsContainer.innerHTML = `
+            <div class="col-12 text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
                 </div>
-            `;
-        }
-        if (emptyTrips) emptyTrips.classList.add('d-none');
+                <p class="mt-2 text-muted">Loading your trips...</p>
+            </div>
+        `;
+        emptyTrips.classList.add('d-none');
     }
 }
 
 function showError(message) {
     const tripsContainer = document.getElementById('trips-container');
-    if (!tripsContainer) return;
-    
     tripsContainer.innerHTML = `
         <div class="col-12">
             <div class="alert alert-danger d-flex align-items-center" role="alert">
@@ -1014,8 +563,6 @@ function showError(message) {
 function displayTrips() {
     const tripsContainer = document.getElementById('trips-container');
     const emptyTrips = document.getElementById('empty-trips');
-    
-    if (!tripsContainer || !emptyTrips) return;
     
     if (userTrips.length === 0) {
         tripsContainer.innerHTML = '';
@@ -1073,68 +620,52 @@ function createTripCard(trip) {
     
     col.innerHTML = `
         <div class="card trip-card h-100" data-trip-id="${trip.id}">
-            <div class="card-header bg-primary text-white">
+            <div class="trip-card-header">
                 <div class="d-flex justify-content-between align-items-start">
                     <div class="flex-grow-1">
                         <h5 class="card-title mb-1">${trip.name}</h5>
-                        <div class="d-flex align-items-center">
-                            <small class="text-light-opacity trip-code">${trip.code}</small>
-                            ${isCreator ? '<span class="badge bg-warning text-dark ms-2">Owner</span>' : ''}
-                        </div>
+                        <p class="card-text mb-1">${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}</p>
+                        ${statusBadge}
                     </div>
-                    ${statusBadge}
-                </div>
-            </div>
-            <div class="card-body">
-                <div class="route-info mb-3">
-                    <div class="d-flex align-items-center text-muted small mb-2">
-                        <i class="fas fa-map-marker-alt text-danger me-1"></i>
-                        <span>${trip.startLocation}</span>
-                        <i class="fas fa-arrow-right mx-2 text-muted"></i>
-                        <i class="fas fa-map-marker-alt text-success me-1"></i>
-                        <span>${trip.destination}</span>
-                    </div>
-                    ${trip.intermediateStops && trip.intermediateStops.length > 0 ? `
-                        <div class="mt-1">
-                            <small class="text-muted">
-                                <i class="fas fa-dot-circle text-warning me-1"></i>
-                                ${trip.intermediateStops.length} stop${trip.intermediateStops.length > 1 ? 's' : ''}
-                            </small>
+                    ${isCreator ? `
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                <i class="fas fa-ellipsis-v"></i>
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item edit-trip-btn" href="#" data-trip-id="${trip.id}">
+                                    <i class="fas fa-edit me-2"></i>Edit Trip
+                                </a></li>
+                                <li><a class="dropdown-item text-danger delete-trip-btn" href="#" data-trip-id="${trip.id}" data-trip-name="${trip.name}">
+                                    <i class="fas fa-trash me-2"></i>Delete Trip
+                                </a></li>
+                            </ul>
                         </div>
                     ` : ''}
                 </div>
+            </div>
+            <div class="card-body">
+                <p class="card-text">
+                    <i class="fas fa-map-marker-alt me-2"></i>${trip.startLocation} → ${trip.destination}
+                </p>
                 
-                <div class="trip-dates mb-3">
-                    <div class="d-flex justify-content-between text-muted small">
-                        <span><i class="fas fa-calendar me-1"></i>${startDate.toLocaleDateString()}</span>
-                        <span><i class="fas fa-arrow-right mx-1 text-muted"></i></span>
-                        <span><i class="fas fa-calendar me-1"></i>${endDate.toLocaleDateString()}</span>
+                <!-- Budget Progress -->
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span>Budget: <span class="rupee-symbol">₹</span>${trip.budget.toFixed(2)}</span>
+                        <span>Spent: <span class="rupee-symbol">₹</span>${totalSpent.toFixed(2)}</span>
+                    </div>
+                    <div class="progress mb-2" style="height: 10px;">
+                        <div class="progress-bar ${progressBarClass}" role="progressbar" style="width: ${progressPercent}%"></div>
                     </div>
                 </div>
                 
-                <div class="budget-progress mb-3">
-                    <div class="d-flex justify-content-between align-items-center mb-1">
-                        <small class="text-muted">Budget Progress</small>
-                        <small class="text-muted"><span class="rupee-symbol">₹</span>${totalSpent.toFixed(2)} / <span class="rupee-symbol">₹</span>${trip.budget.toFixed(2)}</small>
-                    </div>
-                    <div class="progress" style="height: 6px;">
-                        <div class="progress-bar ${progressBarClass}" role="progressbar" style="width: ${progressPercent}%;" 
-                             aria-valuenow="${progressPercent}" aria-valuemin="0" aria-valuemax="100"></div>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center mt-1">
-                        <small class="${remaining >= 0 ? 'text-success' : 'text-danger'}">
-                            ${remaining >= 0 ? 'Remaining: ' : 'Overspent: '}
-                            <span class="rupee-symbol">₹</span>${Math.abs(remaining).toFixed(2)}
-                        </small>
-                        <small class="text-muted">${progressPercent.toFixed(1)}%</small>
-                    </div>
-                </div>
-                
+                <!-- Car Expense Info -->
                 ${carExpenses > 0 ? `
-                <div class="car-expenses mb-3">
+                <div class="mb-3 p-2 bg-light rounded">
                     <div class="d-flex justify-content-between align-items-center">
                         <small class="text-muted">
-                            <i class="fas fa-car me-1"></i>Car Expenses
+                            <i class="fas fa-car me-1"></i>Car Expenses:
                         </small>
                         <small class="fw-bold text-primary">
                             <span class="rupee-symbol">₹</span>${carExpenses.toFixed(2)}
@@ -1143,453 +674,358 @@ function createTripCard(trip) {
                 </div>
                 ` : ''}
                 
-                ${trip.route ? `
-                    <div class="route-info mb-3">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <small class="text-muted">
-                                <i class="fas fa-route me-1"></i>Distance
-                            </small>
-                            <small class="fw-bold">
-                                ${trip.route.totalDistance || trip.route.distance || 'N/A'}
-                            </small>
-                        </div>
-                    </div>
-                ` : ''}
-            </div>
-            
-            <div class="card-footer bg-transparent">
-                <div class="d-flex gap-2">
-                    <button class="btn btn-primary btn-sm flex-fill view-trip-btn">
-                        <i class="fas fa-eye me-1"></i>View
+                <div class="d-flex justify-content-between align-items-center">
+                    <button class="btn btn-outline-primary btn-sm view-trip-btn">
+                        <i class="fas fa-eye me-1"></i>View Details
                     </button>
-                    ${isCreator ? `
-                        <button class="btn btn-outline-secondary btn-sm edit-trip-btn">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="btn btn-outline-danger btn-sm delete-trip-btn">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    ` : `
-                        <button class="btn btn-outline-danger btn-sm leave-trip-btn">
-                            <i class="fas fa-sign-out-alt"></i>
-                        </button>
-                    `}
+                    <div class="d-flex align-items-center">
+                        <div class="member-avatar me-2" title="${trip.members.length} members">
+                            <i class="fas fa-users"></i>
+                            <small class="ms-1">${trip.members.length}</small>
+                        </div>
+                        <span class="trip-code">${trip.code}</span>
+                    </div>
                 </div>
             </div>
         </div>
     `;
     
-    // Add event listeners
-    const viewBtn = col.querySelector('.view-trip-btn');
-    if (viewBtn) {
-        viewBtn.addEventListener('click', () => viewTrip(trip.id));
-    }
+    col.querySelector('.view-trip-btn').addEventListener('click', () => {
+        setCurrentTrip(trip);
+        navigateTo('trip-details.html');
+    });
     
+    // Add event listeners for edit and delete buttons
     if (isCreator) {
-        const editBtn = col.querySelector('.edit-trip-btn');
-        const deleteBtn = col.querySelector('.delete-trip-btn');
+        col.querySelector('.edit-trip-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            showEditTripModal(trip);
+        });
         
-        if (editBtn) {
-            editBtn.addEventListener('click', () => showEditTripModal(trip));
-        }
-        if (deleteBtn) {
-            deleteBtn.addEventListener('click', () => showDeleteConfirmation(trip));
-        }
-    } else {
-        const leaveBtn = col.querySelector('.leave-trip-btn');
-        if (leaveBtn) {
-            leaveBtn.addEventListener('click', () => leaveTrip(trip.id));
-        }
+        col.querySelector('.delete-trip-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            showDeleteTripModal(trip);
+        });
     }
     
     return col;
 }
 
 function showCreateTripModal() {
-    const createTripForm = document.getElementById('create-trip-form');
-    const distanceResults = document.getElementById('distance-results');
-    const calculateDistance = document.getElementById('calculate-distance');
-    const intermediateStopsContainer = document.getElementById('intermediate-stops-container');
-    const startDate = document.getElementById('start-date');
-    const endDate = document.getElementById('end-date');
-    
-    if (createTripForm) createTripForm.reset();
-    if (distanceResults) distanceResults.classList.add('d-none');
-    if (calculateDistance) calculateDistance.checked = false;
-    if (intermediateStopsContainer) intermediateStopsContainer.innerHTML = '';
+    document.getElementById('create-trip-form').reset();
+    document.getElementById('distance-results').classList.add('d-none');
+    document.getElementById('calculate-distance').checked = false;
     
     const today = new Date();
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     
-    if (startDate) startDate.value = today.toISOString().split('T')[0];
-    if (endDate) endDate.value = tomorrow.toISOString().split('T')[0];
+    document.getElementById('start-date').value = today.toISOString().split('T')[0];
+    document.getElementById('end-date').value = tomorrow.toISOString().split('T')[0];
     
-    const createTripModal = document.getElementById('createTripModal');
-    if (createTripModal) {
-        const modal = new bootstrap.Modal(createTripModal);
-        modal.show();
-    }
+    const modal = new bootstrap.Modal(document.getElementById('createTripModal'));
+    modal.show();
 }
 
 function showEditTripModal(trip) {
-    const editTripId = document.getElementById('edit-trip-id');
-    const editTripName = document.getElementById('edit-trip-name');
-    const editStartLocation = document.getElementById('edit-start-location');
-    const editTripDestination = document.getElementById('edit-trip-destination');
-    const editStartDate = document.getElementById('edit-start-date');
-    const editEndDate = document.getElementById('edit-end-date');
-    const editTripBudget = document.getElementById('edit-trip-budget');
-    const editDistanceResults = document.getElementById('edit-distance-results');
-    const editCalculateDistance = document.getElementById('edit-calculate-distance');
+    document.getElementById('edit-trip-id').value = trip.id;
+    document.getElementById('edit-trip-name').value = trip.name;
+    document.getElementById('edit-start-location').value = trip.startLocation;
+    document.getElementById('edit-trip-destination').value = trip.destination;
+    document.getElementById('edit-start-date').value = trip.startDate;
+    document.getElementById('edit-end-date').value = trip.endDate;
+    document.getElementById('edit-trip-budget').value = trip.budget;
     
-    // Only set values if elements exist
-    if (editTripId) editTripId.value = trip.id;
-    if (editTripName) editTripName.value = trip.name || '';
-    if (editStartLocation) editStartLocation.value = trip.startLocation || '';
-    if (editTripDestination) editTripDestination.value = trip.destination || '';
-    if (editStartDate) editStartDate.value = trip.startDate || '';
-    if (editEndDate) editEndDate.value = trip.endDate || '';
-    if (editTripBudget) editTripBudget.value = trip.budget || '';
-    
-    // Populate intermediate stops
-    populateEditStops(trip);
-    
-    if (editDistanceResults) editDistanceResults.classList.add('d-none');
-    if (editCalculateDistance) editCalculateDistance.checked = false;
+    document.getElementById('edit-distance-results').classList.add('d-none');
+    document.getElementById('edit-calculate-distance').checked = false;
     
     // If route already exists, show it
-    if (trip.route && editDistanceResults) {
-        editDistanceResults.classList.remove('d-none');
-        const editDistanceDetails = document.getElementById('edit-distance-details');
-        if (editDistanceDetails) {
-            editDistanceDetails.innerHTML = `
-                <p><strong>Current Distance:</strong> ${trip.route.totalDistance || trip.route.distance || 'N/A'}</p>
-                <p><strong>Current Travel Time:</strong> ${trip.route.totalDuration || trip.route.duration || 'N/A'}</p>
-                ${trip.route.segments ? `
-                    <div class="mt-2">
-                        <small><strong>Route with ${trip.route.segments.length} segments</strong></small>
-                    </div>
-                ` : ''}
-                <div class="alert alert-info mt-2">
-                    <small><i class="fas fa-info-circle me-1"></i>Check the box above to recalculate with updated locations</small>
-                </div>
-            `;
-        }
+    if (trip.route) {
+        document.getElementById('edit-distance-results').classList.remove('d-none');
+        document.getElementById('edit-distance-details').innerHTML = `
+            <p><strong>Current Distance:</strong> ${trip.route.distance}</p>
+            <p><strong>Current Travel Time:</strong> ${trip.route.duration}</p>
+            <div class="alert alert-info mt-2">
+                <small><i class="fas fa-info-circle me-1"></i>Check the box above to recalculate with updated locations</small>
+            </div>
+        `;
     }
     
-    const editTripModal = document.getElementById('editTripModal');
-    if (editTripModal) {
-        const modal = new bootstrap.Modal(editTripModal);
-        modal.show();
-    }
+    const modal = new bootstrap.Modal(document.getElementById('editTripModal'));
+    modal.show();
 }
 
-function showDeleteConfirmation(trip) {
-    const deleteTripName = document.getElementById('delete-trip-name');
-    const deleteTripId = document.getElementById('delete-trip-id');
+function showDeleteTripModal(trip) {
+    document.getElementById('delete-trip-id').value = trip.id;
+    document.getElementById('delete-trip-name').textContent = trip.name;
     
-    if (deleteTripName) deleteTripName.textContent = trip.name;
-    if (deleteTripId) deleteTripId.value = trip.id;
-    
-    const deleteTripModal = document.getElementById('deleteTripModal');
-    if (deleteTripModal) {
-        const modal = new bootstrap.Modal(deleteTripModal);
-        modal.show();
-    }
+    const modal = new bootstrap.Modal(document.getElementById('deleteTripModal'));
+    modal.show();
 }
 
 function showJoinTripModal() {
-    const joinTripForm = document.getElementById('join-trip-form');
-    if (joinTripForm) joinTripForm.reset();
+    document.getElementById('join-trip-message').classList.add('d-none');
+    document.getElementById('trip-code').value = '';
     
-    const joinTripModal = document.getElementById('joinTripModal');
-    if (joinTripModal) {
-        const modal = new bootstrap.Modal(joinTripModal);
-        modal.show();
-    }
+    const modal = new bootstrap.Modal(document.getElementById('joinTripModal'));
+    modal.show();
 }
 
-// Update the saveTrip function to handle multiple stops:
-async function saveTrip() {
-    const name = document.getElementById('trip-name');
-    const startDate = document.getElementById('start-date');
-    const endDate = document.getElementById('end-date');
-    const budget = document.getElementById('trip-budget');
-    const calculateDistance = document.getElementById('calculate-distance');
+async function calculateDistance() {
+    const startLocation = document.getElementById('start-location').value;
+    const destination = document.getElementById('trip-destination').value;
     
-    if (!name || !startDate || !endDate || !budget || !calculateDistance) {
-        showAlert('Please fill in all required fields', 'warning');
+    if (!validateLocation(startLocation) || !validateLocation(destination)) {
+        showAlert('Please enter valid locations', 'warning');
         return;
     }
     
-    // Get stops data
-    const stopsData = getStopsFromCreateForm();
+    try {
+        document.getElementById('distance-details').innerHTML = `
+            <div class="text-center">
+                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                Calculating distance...
+            </div>
+        `;
+        document.getElementById('distance-results').classList.remove('d-none');
+        
+        const routeData = await calculateRealDistance(startLocation, destination);
+        
+        displayDistanceResults(routeData.distance, routeData.duration);
+        
+    } catch (error) {
+        console.error('Error calculating distance:', error);
+        const errorMessage = handleRouteCalculationError(error);
+        document.getElementById('distance-details').innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                ${errorMessage}
+            </div>
+        `;
+    }
+}
+
+async function calculateEditDistance() {
+    const startLocation = document.getElementById('edit-start-location').value;
+    const destination = document.getElementById('edit-trip-destination').value;
     
-    if (!name.value || !validateLocation(stopsData.startLocation) || !validateLocation(stopsData.destination) || !startDate.value || !endDate.value || !budget.value) {
+    if (!validateLocation(startLocation) || !validateLocation(destination)) {
+        showAlert('Please enter valid locations', 'warning');
+        return;
+    }
+    
+    try {
+        document.getElementById('edit-distance-details').innerHTML = `
+            <div class="text-center">
+                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                Calculating distance...
+            </div>
+        `;
+        document.getElementById('edit-distance-results').classList.remove('d-none');
+        
+        const routeData = await calculateRealDistance(startLocation, destination);
+        
+        document.getElementById('edit-distance-details').innerHTML = `
+            <p><strong>Distance:</strong> ${routeData.distance}</p>
+            <p><strong>Estimated Travel Time:</strong> ${routeData.duration}</p>
+            <div class="alert alert-success mt-2">
+                <small><i class="fas fa-check-circle me-1"></i>Distance calculated using OpenRouteService API</small>
+            </div>
+        `;
+        
+    } catch (error) {
+        console.error('Error calculating distance:', error);
+        const errorMessage = handleRouteCalculationError(error);
+        document.getElementById('edit-distance-details').innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                ${errorMessage}
+            </div>
+        `;
+    }
+}
+
+function displayDistanceResults(distance, duration) {
+    const distanceDetails = document.getElementById('distance-details');
+    
+    distanceDetails.innerHTML = `
+        <p><strong>Distance:</strong> ${distance}</p>
+        <p><strong>Estimated Travel Time:</strong> ${duration}</p>
+        <div class="alert alert-success mt-2">
+            <small><i class="fas fa-check-circle me-1"></i>Distance calculated using OpenRouteService API</small>
+        </div>
+    `;
+}
+
+async function saveTrip() {
+    const name = document.getElementById('trip-name').value;
+    const startLocation = document.getElementById('start-location').value;
+    const destination = document.getElementById('trip-destination').value;
+    const startDate = document.getElementById('start-date').value;
+    const endDate = document.getElementById('end-date').value;
+    const budget = parseFloat(document.getElementById('trip-budget').value);
+    const calculateDistance = document.getElementById('calculate-distance').checked;
+    
+    if (!name || !validateLocation(startLocation) || !validateLocation(destination) || !startDate || !endDate || !budget) {
         showAlert('Please fill in all fields with valid data', 'warning');
         return;
     }
     
-    const budgetValue = parseFloat(budget.value);
-    if (isNaN(budgetValue) || budgetValue <= 0) {
-        showAlert('Budget must be a number greater than 0', 'warning');
+    if (!validateDates(startDate, endDate)) {
+        showAlert('End date must be after start date', 'warning');
         return;
     }
     
-    if (!validateDates(startDate.value, endDate.value)) {
-        showAlert('End date must be after start date', 'warning');
+    if (budget <= 0) {
+        showAlert('Budget must be greater than 0', 'warning');
         return;
     }
     
     const code = generateTripCode();
     
-    // Create trip data with multiple stops
+    // Create trip data with proper structure
     const tripData = {
-        name: name.value.trim(),
-        startLocation: stopsData.startLocation.trim(),
-        destination: stopsData.destination.trim(),
-        intermediateStops: stopsData.intermediateStops,
-        startDate: startDate.value,
-        endDate: endDate.value,
-        budget: budgetValue,
+        name: name.trim(),
+        startLocation: startLocation.trim(),
+        destination: destination.trim(),
+        startDate,
+        endDate,
+        budget,
         code,
         createdBy: currentUser.uid,
         members: [currentUser.uid],
-        expenses: [],
-        itinerary: [],
+        // Initialize as empty objects instead of arrays, or omit them entirely
+        expenses: [], // This should work as it's a top-level array
+        itinerary: [], // This should work as it's a top-level array
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
     
     // Calculate route if requested
-    if (calculateDistance.checked) {
+    if (calculateDistance) {
         try {
-            const saveTripBtn = document.getElementById('save-trip-btn');
-            if (saveTripBtn) {
-                saveTripBtn.disabled = true;
-                saveTripBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Calculating Route...';
-            }
+            document.getElementById('save-trip-btn').disabled = true;
+            document.getElementById('save-trip-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Calculating Route...';
             
-            const allStops = [stopsData.startLocation, ...stopsData.intermediateStops, stopsData.destination];
-            const routeSegments = [];
-            let totalDistance = 0;
-            let totalDuration = 0;
-            
-            // Calculate distance for each segment
-            for (let i = 0; i < allStops.length - 1; i++) {
-                const from = allStops[i];
-                const to = allStops[i + 1];
-                
-                try {
-                    const segmentData = await calculateRealDistance(from, to);
-                    routeSegments.push({
-                        from,
-                        to,
-                        distance: segmentData.distance,
-                        duration: segmentData.duration,
-                        durationMinutes: parseDurationToMinutes(segmentData.duration)
-                    });
-                    
-                    totalDistance += parseFloat(segmentData.distance);
-                    totalDuration += segmentData.durationMinutes || parseDurationToMinutes(segmentData.duration);
-                    
-                } catch (error) {
-                    console.error(`Error calculating segment ${i + 1}:`, error);
-                    routeSegments.push({
-                        from,
-                        to,
-                        distance: 'Unknown',
-                        duration: 'Unknown',
-                        error: true
-                    });
-                }
-            }
-            
+            const routeData = await calculateRealDistance(startLocation, destination);
             tripData.route = {
-                segments: routeSegments,
-                totalDistance: `${totalDistance.toFixed(1)} km`,
-                totalDuration: formatMinutesToDuration(totalDuration),
-                totalDurationMinutes: totalDuration,
+                distance: routeData.distance,
+                duration: routeData.duration,
                 calculatedAt: firebase.firestore.FieldValue.serverTimestamp()
             };
             
+            console.log('Route calculated during trip creation:', routeData);
+            
         } catch (error) {
             console.error('Error calculating route during trip creation:', error);
+            // Continue without route data if calculation fails
             showAlert('Trip created but route calculation failed. You can calculate it later.', 'warning');
         }
     }
     
     try {
-        const saveTripBtn = document.getElementById('save-trip-btn');
-        if (saveTripBtn) {
-            saveTripBtn.disabled = true;
-            saveTripBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Creating...';
-        }
+        document.getElementById('save-trip-btn').disabled = true;
+        document.getElementById('save-trip-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Creating...';
         
         const docRef = await db.collection('trips').add(tripData);
         tripData.id = docRef.id;
         
-        // Add the new trip to the local array
+        // Add the new trip to the local array with proper date handling
         const newTrip = {
             ...tripData,
-            createdAt: new Date()
+            createdAt: new Date() // Use current date for local display
         };
         userTrips.unshift(newTrip);
         displayTrips();
         
-        const createTripModal = document.getElementById('createTripModal');
-        if (createTripModal) {
-            const modal = bootstrap.Modal.getInstance(createTripModal);
-            if (modal) modal.hide();
-        }
+        const modal = bootstrap.Modal.getInstance(document.getElementById('createTripModal'));
+        modal.hide();
         
-        const shareTripCode = document.getElementById('share-trip-code');
-        if (shareTripCode) shareTripCode.textContent = code;
-        
-        const shareTripModal = document.getElementById('shareTripModal');
-        if (shareTripModal) {
-            const modal = new bootstrap.Modal(shareTripModal);
-            modal.show();
-        }
+        document.getElementById('share-trip-code').textContent = code;
+        const shareModal = new bootstrap.Modal(document.getElementById('shareTripModal'));
+        shareModal.show();
         
     } catch (error) {
         console.error('Error creating trip:', error);
         showAlert('Error creating trip. Please try again.', 'danger');
+        
+        // Log the exact error and trip data for debugging
+        console.error('Full error details:', error);
+        console.error('Trip data that caused error:', tripData);
     } finally {
-        const saveTripBtn = document.getElementById('save-trip-btn');
-        if (saveTripBtn) {
-            saveTripBtn.disabled = false;
-            saveTripBtn.innerHTML = 'Create Trip';
-        }
+        document.getElementById('save-trip-btn').disabled = false;
+        document.getElementById('save-trip-btn').innerHTML = 'Create Trip';
     }
 }
 
 async function updateTrip() {
-    const tripId = document.getElementById('edit-trip-id');
-    const name = document.getElementById('edit-trip-name');
-    const startDate = document.getElementById('edit-start-date');
-    const endDate = document.getElementById('edit-end-date');
-    const budget = document.getElementById('edit-trip-budget');
-    const calculateDistance = document.getElementById('edit-calculate-distance');
+    const tripId = document.getElementById('edit-trip-id').value;
+    const name = document.getElementById('edit-trip-name').value;
+    const startLocation = document.getElementById('edit-start-location').value;
+    const destination = document.getElementById('edit-trip-destination').value;
+    const startDate = document.getElementById('edit-start-date').value;
+    const endDate = document.getElementById('edit-end-date').value;
+    const budget = parseFloat(document.getElementById('edit-trip-budget').value);
+    const recalculateDistance = document.getElementById('edit-calculate-distance').checked;
     
-    if (!tripId || !name || !startDate || !endDate || !budget || !calculateDistance) {
-        showAlert('Please fill in all required fields', 'warning');
-        return;
-    }
-    
-    // Get stops data
-    const stopsData = getStopsFromEditForm();
-    
-    if (!name.value || !validateLocation(stopsData.startLocation) || !validateLocation(stopsData.destination) || !startDate.value || !endDate.value || !budget.value) {
+    if (!name || !validateLocation(startLocation) || !validateLocation(destination) || !startDate || !endDate || !budget) {
         showAlert('Please fill in all fields with valid data', 'warning');
         return;
     }
     
-    const budgetValue = parseFloat(budget.value);
-    if (isNaN(budgetValue) || budgetValue <= 0) {
-        showAlert('Budget must be a number greater than 0', 'warning');
-        return;
-    }
-    
-    if (!validateDates(startDate.value, endDate.value)) {
+    if (!validateDates(startDate, endDate)) {
         showAlert('End date must be after start date', 'warning');
         return;
     }
     
-    const updateData = {
-        name: name.value.trim(),
-        startLocation: stopsData.startLocation.trim(),
-        destination: stopsData.destination.trim(),
-        intermediateStops: stopsData.intermediateStops,
-        startDate: startDate.value,
-        endDate: endDate.value,
-        budget: budgetValue,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    };
-    
-    // Calculate route if requested
-    if (calculateDistance.checked) {
-        try {
-            const updateTripBtn = document.getElementById('update-trip-btn');
-            if (updateTripBtn) {
-                updateTripBtn.disabled = true;
-                updateTripBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Calculating Route...';
-            }
-            
-            const allStops = [stopsData.startLocation, ...stopsData.intermediateStops, stopsData.destination];
-            const routeSegments = [];
-            let totalDistance = 0;
-            let totalDuration = 0;
-            
-            // Calculate distance for each segment
-            for (let i = 0; i < allStops.length - 1; i++) {
-                const from = allStops[i];
-                const to = allStops[i + 1];
-                
-                try {
-                    const segmentData = await calculateRealDistance(from, to);
-                    routeSegments.push({
-                        from,
-                        to,
-                        distance: segmentData.distance,
-                        duration: segmentData.duration,
-                        durationMinutes: parseDurationToMinutes(segmentData.duration)
-                    });
-                    
-                    totalDistance += parseFloat(segmentData.distance);
-                    totalDuration += segmentData.durationMinutes || parseDurationToMinutes(segmentData.duration);
-                    
-                } catch (error) {
-                    console.error(`Error calculating segment ${i + 1}:`, error);
-                    routeSegments.push({
-                        from,
-                        to,
-                        distance: 'Unknown',
-                        duration: 'Unknown',
-                        error: true
-                    });
-                }
-            }
-            
-            updateData.route = {
-                segments: routeSegments,
-                totalDistance: `${totalDistance.toFixed(1)} km`,
-                totalDuration: formatMinutesToDuration(totalDuration),
-                totalDurationMinutes: totalDuration,
-                calculatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            };
-            
-        } catch (error) {
-            console.error('Error calculating route during trip update:', error);
-            showAlert('Trip updated but route calculation failed. You can calculate it later.', 'warning');
-        }
+    if (budget <= 0) {
+        showAlert('Budget must be greater than 0', 'warning');
+        return;
     }
     
     try {
-        const updateTripBtn = document.getElementById('update-trip-btn');
-        if (updateTripBtn) {
-            updateTripBtn.disabled = true;
-            updateTripBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Updating...';
+        document.getElementById('update-trip-btn').disabled = true;
+        document.getElementById('update-trip-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Updating...';
+        
+        const updateData = {
+            name: name.trim(),
+            startLocation: startLocation.trim(),
+            destination: destination.trim(),
+            startDate,
+            endDate,
+            budget,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        
+        // Recalculate route if requested
+        if (recalculateDistance) {
+            try {
+                const routeData = await calculateRealDistance(startLocation, destination);
+                updateData.route = {
+                    distance: routeData.distance,
+                    duration: routeData.duration,
+                    calculatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+            } catch (error) {
+                console.error('Error recalculating route:', error);
+            }
         }
         
-        await db.collection('trips').doc(tripId.value).update(updateData);
+        await db.collection('trips').doc(tripId).update(updateData);
         
-        // Update the local trip data
-        const tripIndex = userTrips.findIndex(trip => trip.id === tripId.value);
+        // Update local trip data
+        const tripIndex = userTrips.findIndex(trip => trip.id === tripId);
         if (tripIndex !== -1) {
             userTrips[tripIndex] = {
                 ...userTrips[tripIndex],
                 ...updateData
             };
-            displayTrips();
         }
         
-        const editTripModal = document.getElementById('editTripModal');
-        if (editTripModal) {
-            const modal = bootstrap.Modal.getInstance(editTripModal);
-            if (modal) modal.hide();
-        }
+        displayTrips();
+        
+        const modal = bootstrap.Modal.getInstance(document.getElementById('editTripModal'));
+        modal.hide();
         
         showAlert('Trip updated successfully!', 'success');
         
@@ -1597,36 +1033,26 @@ async function updateTrip() {
         console.error('Error updating trip:', error);
         showAlert('Error updating trip. Please try again.', 'danger');
     } finally {
-        const updateTripBtn = document.getElementById('update-trip-btn');
-        if (updateTripBtn) {
-            updateTripBtn.disabled = false;
-            updateTripBtn.innerHTML = 'Update Trip';
-        }
+        document.getElementById('update-trip-btn').disabled = false;
+        document.getElementById('update-trip-btn').innerHTML = 'Update Trip';
     }
 }
 
 async function deleteTrip() {
-    const tripId = document.getElementById('delete-trip-id');
-    if (!tripId) return;
+    const tripId = document.getElementById('delete-trip-id').value;
     
     try {
-        const confirmDeleteTripBtn = document.getElementById('confirm-delete-trip-btn');
-        if (confirmDeleteTripBtn) {
-            confirmDeleteTripBtn.disabled = true;
-            confirmDeleteTripBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Deleting...';
-        }
+        document.getElementById('confirm-delete-trip-btn').disabled = true;
+        document.getElementById('confirm-delete-trip-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Deleting...';
         
-        await db.collection('trips').doc(tripId.value).delete();
+        await db.collection('trips').doc(tripId).delete();
         
         // Remove from local array
-        userTrips = userTrips.filter(trip => trip.id !== tripId.value);
+        userTrips = userTrips.filter(trip => trip.id !== tripId);
         displayTrips();
         
-        const deleteTripModal = document.getElementById('deleteTripModal');
-        if (deleteTripModal) {
-            const modal = bootstrap.Modal.getInstance(deleteTripModal);
-            if (modal) modal.hide();
-        }
+        const modal = bootstrap.Modal.getInstance(document.getElementById('deleteTripModal'));
+        modal.hide();
         
         showAlert('Trip deleted successfully!', 'success');
         
@@ -1634,242 +1060,157 @@ async function deleteTrip() {
         console.error('Error deleting trip:', error);
         showAlert('Error deleting trip. Please try again.', 'danger');
     } finally {
-        const confirmDeleteTripBtn = document.getElementById('confirm-delete-trip-btn');
-        if (confirmDeleteTripBtn) {
-            confirmDeleteTripBtn.disabled = false;
-            confirmDeleteTripBtn.innerHTML = 'Delete Trip';
-        }
+        document.getElementById('confirm-delete-trip-btn').disabled = false;
+        document.getElementById('confirm-delete-trip-btn').innerHTML = '<i class="fas fa-trash me-1"></i>Delete Trip';
     }
 }
 
 async function joinTripWithCode() {
-    const tripCode = document.getElementById('trip-code');
-    if (!tripCode) return;
+    const code = document.getElementById('trip-code').value.trim().toUpperCase();
+    const messageEl = document.getElementById('join-trip-message');
     
-    const code = tripCode.value.trim().toUpperCase();
-    
-    if (!code) {
-        showAlert('Please enter a trip code', 'warning');
+    if (!code || code.length < 6 || code.length > 8) {
+        showMessage(messageEl, 'Please enter a valid 6-8 character trip code', 'warning');
         return;
     }
     
     try {
-        const joinTripCodeBtn = document.getElementById('join-trip-code-btn');
-        if (joinTripCodeBtn) {
-            joinTripCodeBtn.disabled = true;
-            joinTripCodeBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Joining...';
-        }
+        document.getElementById('join-trip-code-btn').disabled = true;
+        document.getElementById('join-trip-code-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Joining...';
         
-        // Find trip by code
         const tripsSnapshot = await db.collection('trips')
             .where('code', '==', code)
             .get();
         
         if (tripsSnapshot.empty) {
-            showAlert('Invalid trip code. Please check and try again.', 'warning');
+            showMessage(messageEl, 'Invalid trip code. Please check the code and try again.', 'warning');
             return;
         }
         
         const tripDoc = tripsSnapshot.docs[0];
-        const tripData = tripDoc.data();
+        const trip = tripDoc.data();
+        const tripId = tripDoc.id;
         
-        // Check if user is already a member
-        if (tripData.members.includes(currentUser.uid)) {
-            showAlert('You are already a member of this trip', 'info');
+        if (trip.members.includes(currentUser.uid)) {
+            showMessage(messageEl, 'You are already a member of this trip.', 'info');
             return;
         }
         
-        // Add user to trip members
-        await db.collection('trips').doc(tripDoc.id).update({
+        await db.collection('trips').doc(tripId).update({
             members: firebase.firestore.FieldValue.arrayUnion(currentUser.uid),
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         
-        // Reload trips
-        await loadUserTrips();
+        const joinedTrip = { id: tripId, ...trip };
+        userTrips.unshift(joinedTrip);
+        displayTrips();
         
-        const joinTripModal = document.getElementById('joinTripModal');
-        if (joinTripModal) {
-            const modal = bootstrap.Modal.getInstance(joinTripModal);
-            if (modal) modal.hide();
-        }
+        showMessage(messageEl, 'Successfully joined the trip! Redirecting...', 'success');
         
-        showAlert(`Successfully joined trip: ${tripData.name}`, 'success');
+        setTimeout(() => {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('joinTripModal'));
+            modal.hide();
+            setCurrentTrip(joinedTrip);
+            navigateTo('trip-details.html');
+        }, 2000);
         
     } catch (error) {
         console.error('Error joining trip:', error);
-        showAlert('Error joining trip. Please try again.', 'danger');
+        showMessage(messageEl, 'Error joining trip. Please try again.', 'danger');
     } finally {
-        const joinTripCodeBtn = document.getElementById('join-trip-code-btn');
-        if (joinTripCodeBtn) {
-            joinTripCodeBtn.disabled = false;
-            joinTripCodeBtn.innerHTML = 'Join Trip';
-        }
+        document.getElementById('join-trip-code-btn').disabled = false;
+        document.getElementById('join-trip-code-btn').innerHTML = 'Join Trip';
     }
 }
 
-async function leaveTrip(tripId) {
-    const trip = userTrips.find(t => t.id === tripId);
-    
-    if (!trip) return;
-    
-    if (!confirm(`Are you sure you want to leave the trip "${trip.name}"?`)) {
-        return;
-    }
-    
-    try {
-        // Remove user from trip members
-        await db.collection('trips').doc(tripId).update({
-            members: firebase.firestore.FieldValue.arrayRemove(currentUser.uid),
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        
-        // Remove from local array
-        userTrips = userTrips.filter(t => t.id !== tripId);
-        displayTrips();
-        
-        showAlert(`Successfully left trip: ${trip.name}`, 'success');
-        
-    } catch (error) {
-        console.error('Error leaving trip:', error);
-        showAlert('Error leaving trip. Please try again.', 'danger');
-    }
-}
-
-function viewTrip(tripId) {
-    // Store the trip ID in localStorage and navigate to trip details page
-    localStorage.setItem('currentTripId', tripId);
-    navigateTo('trip-details.html');
-}
-
-function copyTripCode() {
-    const shareTripCode = document.getElementById('share-trip-code');
-    if (!shareTripCode) return;
-    
-    const code = shareTripCode.textContent;
-    navigator.clipboard.writeText(code).then(() => {
-        const copyBtn = document.getElementById('copy-code-btn');
-        if (copyBtn) {
-            const originalHtml = copyBtn.innerHTML;
-            
-            copyBtn.innerHTML = '<i class="fas fa-check me-1"></i>Copied!';
-            copyBtn.classList.remove('btn-outline-primary');
-            copyBtn.classList.add('btn-success');
-            
-            setTimeout(() => {
-                copyBtn.innerHTML = originalHtml;
-                copyBtn.classList.remove('btn-success');
-                copyBtn.classList.add('btn-outline-primary');
-            }, 2000);
-        }
-    });
-}
-
-function generateTripCode() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let code = '';
-    for (let i = 0; i < 6; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
-}
-
-function validateDates(startDate, endDate) {
-    return new Date(endDate) > new Date(startDate);
-}
-
-function validateLocation(location) {
-    return location && location.trim().length > 0;
+function showMessage(messageEl, message, type) {
+    messageEl.textContent = message;
+    messageEl.className = `alert alert-${type} mt-3`;
+    messageEl.classList.remove('d-none');
 }
 
 function showAlert(message, type) {
-    // Create alerts container if it doesn't exist
-    let alertsContainer = document.getElementById('alerts-container');
-    if (!alertsContainer) {
-        alertsContainer = document.createElement('div');
-        alertsContainer.id = 'alerts-container';
-        alertsContainer.className = 'position-fixed top-0 end-0 p-3';
-        alertsContainer.style.zIndex = '9999';
-        document.body.appendChild(alertsContainer);
-    }
-    
     const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
+    alertDiv.style.zIndex = '9999';
     alertDiv.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <div class="d-flex align-items-center">
+            <i class="fas fa-${getAlertIcon(type)} me-2"></i>
+            <div>${message}</div>
+            <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+        </div>
     `;
     
-    alertsContainer.appendChild(alertDiv);
+    document.body.appendChild(alertDiv);
     
-    // Auto remove after 5 seconds
     setTimeout(() => {
-        if (alertDiv.parentElement) {
-            alertDiv.remove();
-        }
+        if (alertDiv.parentNode) alertDiv.remove();
     }, 5000);
 }
 
-function navigateTo(page) {
-    window.location.href = page;
+function getAlertIcon(type) {
+    switch(type) {
+        case 'success': return 'check-circle';
+        case 'danger': return 'exclamation-triangle';
+        case 'warning': return 'exclamation-circle';
+        case 'info': return 'info-circle';
+        default: return 'info-circle';
+    }
 }
 
-function handleLogout() {
-    auth.signOut().then(() => {
+function copyTripCode() {
+    const code = document.getElementById('share-trip-code').textContent;
+    navigator.clipboard.writeText(code).then(() => {
+        const copySuccess = document.getElementById('copy-success');
+        copySuccess.classList.remove('d-none');
+        setTimeout(() => copySuccess.classList.add('d-none'), 3000);
+    }).catch(err => {
+        console.error('Failed to copy code: ', err);
+        showAlert('Failed to copy code. Please copy it manually.', 'warning');
+    });
+}
+
+async function handleLogout() {
+    try {
+        await auth.signOut();
         navigateTo('auth.html');
-    }).catch((error) => {
-        console.error('Error signing out:', error);
-        showAlert('Error signing out. Please try again.', 'danger');
-    });
-}
-
-// Utility functions for distance calculation
-function parseDurationToMinutes(duration) {
-    if (!duration) return 0;
-    
-    if (typeof duration === 'number') {
-        return duration;
-    }
-    
-    // Handle "X hours Y mins" format
-    const hoursMatch = duration.match(/(\d+)\s*hours?/);
-    const minsMatch = duration.match(/(\d+)\s*mins?/);
-    
-    const hours = hoursMatch ? parseInt(hoursMatch[1]) : 0;
-    const mins = minsMatch ? parseInt(minsMatch[1]) : 0;
-    
-    return hours * 60 + mins;
-}
-
-function formatMinutesToDuration(minutes) {
-    const hours = Math.floor(minutes / 60);
-    const mins = Math.round(minutes % 60);
-    
-    if (hours === 0) {
-        return `${mins} mins`;
-    } else if (mins === 0) {
-        return `${hours} hours`;
-    } else {
-        return `${hours} hours ${mins} mins`;
+    } catch (error) {
+        console.error('Logout error:', error);
+        showAlert('Error during logout. Please try again.', 'danger');
     }
 }
 
-// Add favicon to prevent 404 error
-function addFavicon() {
-    const link = document.createElement('link');
-    link.rel = 'icon';
-    link.type = 'image/x-icon';
-    link.href = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚗</text></svg>';
-    document.head.appendChild(link);
+// Simple test function that shows results in alert
+function testRouteCalculation() {
+    const testStart = "New Delhi";
+    const testDest = "Mumbai";
+    
+    console.log("Testing route calculation...");
+    
+    calculateRealDistance(testStart, testDest)
+        .then(result => {
+            console.log("Test result:", result);
+            showAlert(`Test: ${testStart} to ${testDest} - ${result.distance} in ${result.duration}`, 'info');
+        })
+        .catch(error => {
+            console.error("Test failed:", error);
+            showAlert('Test failed: ' + error.message, 'danger');
+        });
 }
 
-// Add rupee symbol support
-document.addEventListener('DOMContentLoaded', function() {
-    // Add favicon
-    addFavicon();
+function validateDates(startDate, endDate) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     
-    // Add rupee symbol to elements with rupee-symbol class
-    document.querySelectorAll('.rupee-symbol').forEach(element => {
-        element.innerHTML = '₹';
-    });
-});
+    if (start < today) {
+        showAlert('Start date cannot be in the past', 'warning');
+        return false;
+    }
+    if (end <= start) {
+        showAlert('End date must be after start date', 'warning');
+        return false;
+    }
+    return true;
+}
