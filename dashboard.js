@@ -210,6 +210,7 @@ async function loadUserTrips() {
         showError('Failed to load trips. Please refresh the page.');
     } finally {
         showLoadingState(false);
+        loadTravelStatistics();
     }
 }
 
@@ -820,4 +821,136 @@ function validateDates(startDate, endDate) {
         return false;
     }
     return true;
+}
+
+function setupManualDistanceCalculation() {
+    document.getElementById('add-stop-btn').addEventListener('click', addStopField);
+    document.getElementById('calculate-total-distance').addEventListener('click', calculateTotalDistance);
+}
+
+function addStopField() {
+    const stopsContainer = document.getElementById('trip-stops-container');
+    const stopCount = stopsContainer.children.length + 1;
+    
+    const stopDiv = document.createElement('div');
+    stopDiv.className = 'stop-item row mb-3';
+    stopDiv.innerHTML = `
+        <div class="col-md-5">
+            <label class="form-label">Stop ${stopCount}</label>
+            <input type="text" class="form-control stop-location" placeholder="Enter location" required>
+        </div>
+        <div class="col-md-5">
+            <label class="form-label">Odometer Reading at Stop ${stopCount}</label>
+            <input type="number" class="form-control stop-odometer" placeholder="Enter km reading" min="0">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Distance (km)</label>
+            <input type="number" class="form-control segment-distance" placeholder="Auto" readonly>
+        </div>
+    `;
+    
+    stopsContainer.appendChild(stopDiv);
+    
+    // Add event listeners for auto-calculation
+    const odometerInput = stopDiv.querySelector('.stop-odometer');
+    const prevOdometerInput = stopCount > 1 ? 
+        stopsContainer.children[stopCount-2].querySelector('.stop-odometer') : 
+        document.getElementById('start-odometer');
+    
+    if (prevOdometerInput) {
+        odometerInput.addEventListener('input', () => calculateSegmentDistance(prevOdometerInput, odometerInput, stopDiv.querySelector('.segment-distance')));
+    }
+}
+
+function calculateSegmentDistance(fromInput, toInput, distanceInput) {
+    if (fromInput.value && toInput.value) {
+        const distance = parseInt(toInput.value) - parseInt(fromInput.value);
+        if (distance > 0) {
+            distanceInput.value = distance;
+            calculateTotalDistance();
+        }
+    }
+}
+
+function calculateTotalDistance() {
+    const segmentInputs = document.querySelectorAll('.segment-distance');
+    let totalDistance = 0;
+    
+    segmentInputs.forEach(input => {
+        if (input.value) {
+            totalDistance += parseInt(input.value);
+        }
+    });
+    
+    document.getElementById('total-distance-display').value = totalDistance;
+    document.getElementById('trip-total-distance').value = totalDistance;
+    
+    // Auto-calculate fuel cost if vehicle info is provided
+    calculateEstimatedFuelCost();
+}
+
+function calculateEstimatedFuelCost() {
+    const totalDistance = document.getElementById('trip-total-distance').value;
+    const mileage = document.getElementById('vehicle-mileage').value;
+    const fuelPrice = document.getElementById('fuel-price').value;
+    
+    if (totalDistance && mileage && fuelPrice) {
+        const fuelConsumed = totalDistance / mileage;
+        const estimatedCost = fuelConsumed * fuelPrice;
+        document.getElementById('estimated-fuel-cost').value = estimatedCost.toFixed(2);
+    }
+}
+
+// New function to load travel statistics
+async function loadTravelStatistics() {
+    try {
+        const tripsSnapshot = await db.collection('trips')
+            .where('members', 'array-contains', currentUser.uid)
+            .get();
+        
+        let totalTrips = 0;
+        let totalDistance = 0;
+        let totalFuelCost = 0;
+        const destinations = {};
+        
+        tripsSnapshot.forEach(doc => {
+            const trip = doc.data();
+            totalTrips++;
+            
+            // Sum distance
+            if (trip.totalDistance) {
+                totalDistance += trip.totalDistance;
+            }
+            
+            // Sum fuel costs from expenses
+            if (trip.expenses) {
+                const fuelExpenses = trip.expenses.filter(exp => exp.category === 'fuel');
+                fuelExpenses.forEach(exp => totalFuelCost += exp.amount);
+            }
+            
+            // Count destinations
+            if (trip.destination) {
+                destinations[trip.destination] = (destinations[trip.destination] || 0) + 1;
+            }
+        });
+        
+        // Find favorite destination
+        let favoriteDestination = '-';
+        let maxVisits = 0;
+        Object.keys(destinations).forEach(dest => {
+            if (destinations[dest] > maxVisits) {
+                maxVisits = destinations[dest];
+                favoriteDestination = dest;
+            }
+        });
+        
+        // Update UI
+        document.getElementById('total-trips').textContent = totalTrips;
+        document.getElementById('total-distance').textContent = `${totalDistance} km`;
+        document.getElementById('total-fuel-cost').textContent = `₹${totalFuelCost.toFixed(2)}`;
+        document.getElementById('favorite-destination').textContent = favoriteDestination;
+        
+    } catch (error) {
+        console.error('Error loading travel statistics:', error);
+    }
 }
