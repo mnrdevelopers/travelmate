@@ -3,6 +3,8 @@ let currentUser = null;
 let currentTrip = null;
 let tripExpenses = [];
 let tripItinerary = [];
+let expenseChart = null;
+let paymentChart = null;
 
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize Firebase Auth
@@ -27,26 +29,102 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Event Listeners
+    // Event Listeners - only attach if elements exist
     document.getElementById('logout-btn').addEventListener('click', logout);
-    document.getElementById('nav-profile').addEventListener('click', showProfileModal);
-    document.getElementById('save-profile-btn').addEventListener('click', saveProfile);
-    document.getElementById('leave-all-trips-btn').addEventListener('click', leaveAllTrips);
-    document.getElementById('avatar-upload').addEventListener('change', handleAvatarUpload);
     
-    // Trip actions
-    document.getElementById('add-expense-btn').addEventListener('click', showAddExpenseModal);
-    document.getElementById('save-expense-btn').addEventListener('click', saveExpense);
-    document.getElementById('add-activity-btn').addEventListener('click', showAddActivityModal);
-    document.getElementById('save-activity-btn').addEventListener('click', saveActivity);
+    // Check if elements exist before adding event listeners
+    const navProfile = document.getElementById('nav-profile');
+    if (navProfile) {
+        navProfile.addEventListener('click', showProfileModal);
+    }
     
-    // Edit trip
-    document.getElementById('update-trip-btn-trip-details').addEventListener('click', updateTrip);
+    const addExpenseBtn = document.getElementById('add-expense-btn');
+    if (addExpenseBtn) {
+        addExpenseBtn.addEventListener('click', showAddExpenseModal);
+    }
     
-    // Custom category
-    document.getElementById('expense-category').addEventListener('change', handleCategoryChange);
-    document.getElementById('save-category-btn').addEventListener('click', saveCustomCategory);
+    const saveExpenseBtn = document.getElementById('save-expense-btn');
+    if (saveExpenseBtn) {
+        saveExpenseBtn.addEventListener('click', saveExpense);
+    }
+    
+    const addActivityBtn = document.getElementById('add-activity-btn');
+    if (addActivityBtn) {
+        addActivityBtn.addEventListener('click', showAddActivityModal);
+    }
+    
+    const saveActivityBtn = document.getElementById('save-activity-btn');
+    if (saveActivityBtn) {
+        saveActivityBtn.addEventListener('click', saveActivity);
+    }
+    
+    const updateTripBtn = document.getElementById('update-trip-btn-trip-details');
+    if (updateTripBtn) {
+        updateTripBtn.addEventListener('click', updateTrip);
+    }
+    
+    const expenseCategory = document.getElementById('expense-category');
+    if (expenseCategory) {
+        expenseCategory.addEventListener('change', handleCategoryChange);
+    }
+    
+    const saveCategoryBtn = document.getElementById('save-category-btn');
+    if (saveCategoryBtn) {
+        saveCategoryBtn.addEventListener('click', saveCustomCategory);
+    }
 });
+
+// Utility Functions
+function showToast(message, type = 'info') {
+    const toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        console.log(`Toast (${type}): ${message}`);
+        return;
+    }
+    
+    const toastId = 'toast-' + Date.now();
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-bg-${type === 'error' ? 'danger' : type} border-0`;
+    toast.id = toastId;
+    
+    const icon = type === 'success' ? 'fa-check-circle' : 
+                 type === 'error' ? 'fa-exclamation-triangle' : 
+                 type === 'warning' ? 'fa-exclamation-circle' : 'fa-info-circle';
+    
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">
+                <i class="fas ${icon} me-2"></i>${message}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    `;
+    
+    toastContainer.appendChild(toast);
+    const bsToast = new bootstrap.Toast(toast, { delay: 3000 });
+    bsToast.show();
+    
+    toast.addEventListener('hidden.bs.toast', () => {
+        if (toast.parentNode) {
+            toast.remove();
+        }
+    });
+}
+
+function formatDate(dateString) {
+    if (!dateString) return '-';
+    const options = { year: 'numeric', month: 'short', day: 'numeric' };
+    return new Date(dateString).toLocaleDateString(undefined, options);
+}
+
+function formatTime(timeString) {
+    if (!timeString) return '-';
+    return new Date(`2000-01-01T${timeString}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function navigateTo(page) {
+    window.location.href = page;
+}
 
 function loadTripDetails(tripId) {
     const db = firebase.firestore();
@@ -63,6 +141,7 @@ function loadTripDetails(tripId) {
             displayTripDetails();
             loadTripExpenses();
             loadTripItinerary();
+            loadTripMembers();
         })
         .catch((error) => {
             console.error('Error loading trip: ', error);
@@ -71,13 +150,15 @@ function loadTripDetails(tripId) {
 }
 
 function displayTripDetails() {
+    if (!currentTrip) return;
+    
     // Basic trip info
-    document.getElementById('trip-details-name').textContent = currentTrip.name;
-    document.getElementById('trip-details-code').textContent = currentTrip.code;
+    document.getElementById('trip-details-name').textContent = currentTrip.name || 'Unnamed Trip';
+    document.getElementById('trip-details-code').textContent = currentTrip.code || 'N/A';
     
     // Overview tab
-    document.getElementById('overview-start-location').textContent = currentTrip.startLocation;
-    document.getElementById('overview-destination').textContent = currentTrip.endLocation;
+    document.getElementById('overview-start-location').textContent = currentTrip.startLocation || 'Not specified';
+    document.getElementById('overview-destination').textContent = currentTrip.endLocation || 'Not specified';
     document.getElementById('overview-dates').textContent = `${formatDate(currentTrip.startDate)} - ${formatDate(currentTrip.endDate)}`;
     
     // Calculate trip stats
@@ -86,60 +167,145 @@ function displayTripDetails() {
     const rentalCost = calculateRentalCost(currentTrip);
     
     document.getElementById('overview-distance').textContent = `${totalKms.toFixed(1)} km`;
-    document.getElementById('overview-budget').innerHTML = `<span class="rupee-symbol">₹</span>${currentTrip.budget.toFixed(2)}`;
+    document.getElementById('overview-budget').innerHTML = `<span class="rupee-symbol">₹</span>${(currentTrip.budget || 0).toFixed(2)}`;
     
     // Calculate total spent (will be updated when expenses are loaded)
     const totalSpent = fuelCost + rentalCost; // Will add expenses later
-    const remainingBudget = Math.max(0, currentTrip.budget - totalSpent);
+    const remainingBudget = Math.max(0, (currentTrip.budget || 0) - totalSpent);
     
     document.getElementById('overview-remaining').innerHTML = `<span class="rupee-symbol">₹</span>${remainingBudget.toFixed(2)}`;
     
-    const budgetProgress = Math.min(100, (totalSpent / currentTrip.budget) * 100);
+    const budgetProgress = currentTrip.budget ? Math.min(100, (totalSpent / currentTrip.budget) * 100) : 0;
     const progressBar = document.getElementById('budget-progress-bar');
-    progressBar.style.width = `${budgetProgress}%`;
-    
-    if (budgetProgress > 90) {
-        progressBar.className = 'progress-bar bg-danger';
-        document.getElementById('budget-status').innerHTML = '<span class="text-danger">Warning: Budget almost exhausted</span>';
-    } else if (budgetProgress > 70) {
-        progressBar.className = 'progress-bar bg-warning';
-        document.getElementById('budget-status').innerHTML = '<span class="text-warning">Budget getting tight</span>';
-    } else {
-        progressBar.className = 'progress-bar bg-success';
-        document.getElementById('budget-status').innerHTML = '<span class="text-success">Budget on track</span>';
+    if (progressBar) {
+        progressBar.style.width = `${budgetProgress}%`;
+        progressBar.textContent = `${budgetProgress.toFixed(1)}%`;
+        
+        if (budgetProgress > 90) {
+            progressBar.className = 'progress-bar bg-danger';
+            document.getElementById('budget-status').innerHTML = '<span class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>Warning: Budget almost exhausted</span>';
+        } else if (budgetProgress > 70) {
+            progressBar.className = 'progress-bar bg-warning';
+            document.getElementById('budget-status').innerHTML = '<span class="text-warning"><i class="fas fa-exclamation-circle me-1"></i>Budget getting tight</span>';
+        } else {
+            progressBar.className = 'progress-bar bg-success';
+            document.getElementById('budget-status').innerHTML = '<span class="text-success"><i class="fas fa-check-circle me-1"></i>Budget on track</span>';
+        }
     }
     
     // Display trip actions based on user role
     const tripActions = document.getElementById('trip-actions-section');
-    if (currentTrip.createdBy === currentUser.uid) {
-        tripActions.innerHTML = `
-            <button class="btn btn-outline-primary me-2" id="edit-trip-btn">
-                <i class="fas fa-edit me-1"></i>Edit Trip
-            </button>
-            <button class="btn btn-outline-danger" id="delete-trip-btn">
-                <i class="fas fa-trash me-1"></i>Delete Trip
-            </button>
-        `;
-        
-        document.getElementById('edit-trip-btn').addEventListener('click', editTrip);
-        document.getElementById('delete-trip-btn').addEventListener('click', deleteTrip);
-    } else {
-        tripActions.innerHTML = `
-            <button class="btn btn-outline-danger" id="leave-trip-btn">
-                <i class="fas fa-sign-out-alt me-1"></i>Leave Trip
-            </button>
-        `;
-        
-        document.getElementById('leave-trip-btn').addEventListener('click', leaveTrip);
+    if (tripActions) {
+        if (currentTrip.createdBy === currentUser.uid) {
+            tripActions.innerHTML = `
+                <h6>Trip Management</h6>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-warning btn-sm" id="edit-trip-btn">
+                        <i class="fas fa-edit me-1"></i>Edit Trip
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm" id="delete-trip-btn">
+                        <i class="fas fa-trash me-1"></i>Delete Trip
+                    </button>
+                </div>
+                <small class="text-muted">As the trip creator, you can edit or delete this trip.</small>
+            `;
+            
+            document.getElementById('edit-trip-btn').addEventListener('click', editTrip);
+            document.getElementById('delete-trip-btn').addEventListener('click', deleteTrip);
+        } else {
+            tripActions.innerHTML = `
+                <h6>Trip Actions</h6>
+                <button class="btn btn-outline-danger btn-sm" id="leave-trip-btn">
+                    <i class="fas fa-sign-out-alt me-1"></i>Leave Trip
+                </button>
+                <small class="text-muted d-block mt-1">You can leave this trip at any time.</small>
+            `;
+            
+            document.getElementById('leave-trip-btn').addEventListener('click', leaveTrip);
+        }
     }
     
     // Display route details
     displayRouteDetails();
 }
 
+function loadTripMembers() {
+    const membersList = document.getElementById('members-list');
+    if (!membersList || !currentTrip.members) return;
+    
+    membersList.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div><p class="mt-2 text-muted">Loading members...</p></div>';
+    
+    const memberPromises = currentTrip.members.map(memberId => {
+        return firebase.firestore().collection('users').doc(memberId).get()
+            .then(doc => {
+                if (doc.exists) {
+                    const userData = doc.data();
+                    return {
+                        id: memberId,
+                        name: userData.name || userData.displayName || 'Traveler',
+                        email: userData.email,
+                        isCurrentUser: memberId === currentUser.uid,
+                        isCreator: memberId === currentTrip.createdBy
+                    };
+                } else {
+                    return {
+                        id: memberId,
+                        name: 'Traveler',
+                        isCurrentUser: memberId === currentUser.uid,
+                        isCreator: memberId === currentTrip.createdBy
+                    };
+                }
+            })
+            .catch(() => {
+                return {
+                    id: memberId,
+                    name: 'Traveler',
+                    isCurrentUser: memberId === currentUser.uid,
+                    isCreator: memberId === currentTrip.createdBy
+                };
+            });
+    });
+    
+    Promise.all(memberPromises).then(members => {
+        membersList.innerHTML = '';
+        
+        members.forEach(member => {
+            const memberDiv = document.createElement('div');
+            memberDiv.className = 'd-flex align-items-center mb-3 p-3 border rounded bg-light';
+            
+            const avatarSrc = `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}&background=4361ee&color=fff&size=128`;
+            
+            const badges = [];
+            if (member.isCreator) {
+                badges.push('<span class="badge bg-primary me-1"><i class="fas fa-crown me-1"></i>Trip Creator</span>');
+            }
+            if (member.isCurrentUser) {
+                badges.push('<span class="badge bg-success me-1"><i class="fas fa-user me-1"></i>You</span>');
+            }
+            
+            memberDiv.innerHTML = `
+                <img src="${avatarSrc}" class="user-avatar me-3 flex-shrink-0" alt="${member.name}" 
+                     style="width: 50px; height: 50px; object-fit: cover; border: 2px solid ${member.isCreator ? '#4361ee' : member.isCurrentUser ? '#28a745' : '#dee2e6'};">
+                <div class="flex-grow-1">
+                    <div class="d-flex align-items-center mb-1">
+                        <strong class="mb-0 me-2" style="font-size: 1.1rem;">${member.name}</strong>
+                        ${badges.join('')}
+                    </div>
+                    ${member.email ? `<small class="text-muted d-block">${member.email}</small>` : ''}
+                    <small class="text-muted">Trip Member</small>
+                </div>
+            `;
+            
+            membersList.appendChild(memberDiv);
+        });
+    });
+}
+
 function displayRouteDetails() {
     const routeDetails = document.getElementById('route-details');
     const emptyRoute = document.getElementById('empty-route');
+    
+    if (!routeDetails || !emptyRoute) return;
     
     if (!currentTrip.stops || currentTrip.stops.length === 0) {
         routeDetails.style.display = 'none';
@@ -152,21 +318,21 @@ function displayRouteDetails() {
     
     let html = `
         <div class="route-summary mb-4">
-            <h5>Route Summary</h5>
+            <h5><i class="fas fa-route me-2"></i>Route Summary</h5>
             <div class="row">
                 <div class="col-md-4">
                     <strong>Total Distance:</strong> ${calculateTotalKms(currentTrip).toFixed(1)} km
                 </div>
                 <div class="col-md-4">
-                    <strong>Fuel Type:</strong> ${currentTrip.fuelType}
+                    <strong>Fuel Type:</strong> ${currentTrip.fuelType || 'Not specified'}
                 </div>
                 <div class="col-md-4">
-                    <strong>Car Type:</strong> ${currentTrip.carType}
+                    <strong>Car Type:</strong> ${currentTrip.carType || 'Not specified'}
                 </div>
             </div>
         </div>
         <div class="route-breakdown">
-            <h5>Stop-by-Stop Breakdown</h5>
+            <h5><i class="fas fa-map-marker-alt me-2"></i>Stop-by-Stop Breakdown</h5>
             <div class="table-responsive">
                 <table class="table table-striped">
                     <thead>
@@ -188,7 +354,7 @@ function displayRouteDetails() {
     html += `
         <tr>
             <td>Start</td>
-            <td>${currentTrip.startLocation}</td>
+            <td>${currentTrip.startLocation || 'Not specified'}</td>
             <td>${lastMeterReading || '-'}</td>
             <td>-</td>
             <td>-</td>
@@ -209,7 +375,7 @@ function displayRouteDetails() {
             }
             
             cumulativeDistance += distance;
-            fuelUsed = distance / currentTrip.mileage;
+            fuelUsed = distance / (currentTrip.mileage || 1);
             
             html += `
                 <tr>
@@ -230,12 +396,12 @@ function displayRouteDetails() {
     }
     
     cumulativeDistance += finalDistance;
-    const finalFuelUsed = finalDistance / currentTrip.mileage;
+    const finalFuelUsed = finalDistance / (currentTrip.mileage || 1);
     
     html += `
         <tr>
             <td>End</td>
-            <td>${currentTrip.endLocation}</td>
+            <td>${currentTrip.endLocation || 'Not specified'}</td>
             <td>${currentTrip.endMeterReading || '-'}</td>
             <td>${finalDistance.toFixed(1)} km</td>
             <td>${finalFuelUsed.toFixed(2)} ${getFuelUnit(currentTrip.fuelType)}</td>
@@ -271,6 +437,8 @@ function loadTripExpenses() {
             const expensesList = document.getElementById('expenses-list');
             const emptyExpenses = document.getElementById('empty-expenses');
             
+            if (!expensesList || !emptyExpenses) return;
+            
             expensesList.innerHTML = '';
             
             if (querySnapshot.empty) {
@@ -302,24 +470,29 @@ function createExpenseItem(expense) {
     const div = document.createElement('div');
     div.className = 'card mb-3 expense-item';
     
+    const categoryClass = `category-${expense.category}`;
+    const categoryName = expense.category.charAt(0).toUpperCase() + expense.category.slice(1);
+    
     div.innerHTML = `
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-start">
-                <div>
+                <div class="flex-grow-1">
                     <h6 class="card-title mb-1">${expense.description}</h6>
-                    <p class="card-text text-muted mb-1">
-                        <span class="badge bg-secondary">${expense.category}</span>
-                        <span class="badge bg-light text-dark ms-1">${expense.paymentMode}</span>
-                    </p>
-                    <small class="text-muted">${formatDate(expense.date)}</small>
+                    <div class="d-flex align-items-center mt-1 flex-wrap">
+                        <span class="category-badge ${categoryClass}">${categoryName}</span>
+                        <span class="badge bg-light text-dark ms-2">
+                            <i class="fas fa-${getPaymentModeIcon(expense.paymentMode)} me-1"></i>${expense.paymentMode}
+                        </span>
+                        <small class="text-muted ms-2">${formatDate(expense.date)}</small>
+                    </div>
                 </div>
-                <div class="text-end">
-                    <div class="expense-amount mb-1"><span class="rupee-symbol">₹</span>${expense.amount.toFixed(2)}</div>
-                    <div class="expense-actions">
-                        <button class="btn btn-sm btn-outline-secondary edit-expense" data-expense-id="${expense.id}">
+                <div class="text-end ms-3">
+                    <div class="fw-bold fs-5"><span class="rupee-symbol">₹</span>${expense.amount.toFixed(2)}</div>
+                    <div class="mt-2">
+                        <button class="btn btn-sm btn-outline-primary edit-expense-btn me-1" data-expense-id="${expense.id}">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="btn btn-sm btn-outline-danger delete-expense" data-expense-id="${expense.id}">
+                        <button class="btn btn-sm btn-outline-danger delete-expense-btn" data-expense-id="${expense.id}">
                             <i class="fas fa-trash"></i>
                         </button>
                     </div>
@@ -329,19 +502,28 @@ function createExpenseItem(expense) {
     `;
     
     // Add event listeners
-    div.querySelector('.edit-expense').addEventListener('click', function() {
+    div.querySelector('.edit-expense-btn').addEventListener('click', function() {
         editExpense(expense.id);
     });
     
-    div.querySelector('.delete-expense').addEventListener('click', function() {
+    div.querySelector('.delete-expense-btn').addEventListener('click', function() {
         deleteExpense(expense.id);
     });
     
     return div;
 }
 
+function getPaymentModeIcon(paymentMode) {
+    switch(paymentMode) {
+        case 'cash': return 'money-bill-wave';
+        case 'upi': return 'mobile-alt';
+        case 'card': return 'credit-card';
+        default: return 'wallet';
+    }
+}
+
 function updateBudgetSummary() {
-    const totalBudget = currentTrip.budget;
+    const totalBudget = currentTrip.budget || 0;
     let totalSpent = 0;
     
     // Add fuel and rental costs
@@ -357,27 +539,40 @@ function updateBudgetSummary() {
     });
     
     const remaining = Math.max(0, totalBudget - totalSpent);
-    const progress = Math.min(100, (totalSpent / totalBudget) * 100);
+    const progress = totalBudget ? Math.min(100, (totalSpent / totalBudget) * 100) : 0;
     
-    document.getElementById('summary-total-budget').innerHTML = `<span class="rupee-symbol">₹</span>${totalBudget.toFixed(2)}`;
-    document.getElementById('summary-total-spent').innerHTML = `<span class="rupee-symbol">₹</span>${totalSpent.toFixed(2)}`;
-    document.getElementById('summary-remaining').innerHTML = `<span class="rupee-symbol">₹</span>${remaining.toFixed(2)}`;
-    
+    const totalBudgetEl = document.getElementById('summary-total-budget');
+    const totalSpentEl = document.getElementById('summary-total-spent');
+    const remainingEl = document.getElementById('summary-remaining');
     const progressBar = document.getElementById('summary-progress-bar');
-    progressBar.style.width = `${progress}%`;
     
-    if (progress > 90) {
-        progressBar.className = 'progress-bar bg-danger';
-    } else if (progress > 70) {
-        progressBar.className = 'progress-bar bg-warning';
-    } else {
-        progressBar.className = 'progress-bar bg-success';
+    if (totalBudgetEl) totalBudgetEl.innerHTML = `<span class="rupee-symbol">₹</span>${totalBudget.toFixed(2)}`;
+    if (totalSpentEl) totalSpentEl.innerHTML = `<span class="rupee-symbol">₹</span>${totalSpent.toFixed(2)}`;
+    if (remainingEl) remainingEl.innerHTML = `<span class="rupee-symbol">₹</span>${remaining.toFixed(2)}`;
+    
+    if (progressBar) {
+        progressBar.style.width = `${progress}%`;
+        progressBar.textContent = `${progress.toFixed(1)}%`;
+        
+        if (progress > 90) {
+            progressBar.className = 'progress-bar bg-danger';
+        } else if (progress > 70) {
+            progressBar.className = 'progress-bar bg-warning';
+        } else {
+            progressBar.className = 'progress-bar bg-success';
+        }
     }
 }
 
 function renderExpenseCharts() {
     // Expense by category chart
-    const expenseCtx = document.getElementById('expense-chart').getContext('2d');
+    const expenseCtx = document.getElementById('expense-chart');
+    if (!expenseCtx) return;
+    
+    // Destroy previous charts if they exist
+    if (expenseChart) {
+        expenseChart.destroy();
+    }
     
     // Group expenses by category
     const categories = {};
@@ -391,24 +586,24 @@ function renderExpenseCharts() {
     const categoryLabels = Object.keys(categories);
     const categoryData = Object.values(categories);
     
-    // Generate colors for each category
-    const backgroundColors = categoryLabels.map((_, i) => {
-        const hue = (i * 137.5) % 360; // Golden angle approximation for distinct colors
-        return `hsl(${hue}, 70%, 65%)`;
-    });
+    if (categoryLabels.length === 0) return;
     
-    new Chart(expenseCtx, {
+    expenseChart = new Chart(expenseCtx, {
         type: 'doughnut',
         data: {
             labels: categoryLabels,
             datasets: [{
                 data: categoryData,
-                backgroundColor: backgroundColors,
-                borderWidth: 1
+                backgroundColor: [
+                    '#ffd166', '#06d6a0', '#ef476f', '#118ab2', '#073b4c'
+                ],
+                borderWidth: 2,
+                borderColor: '#fff'
             }]
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: {
                     position: 'bottom'
@@ -418,7 +613,12 @@ function renderExpenseCharts() {
     });
     
     // Payment mode chart
-    const paymentCtx = document.getElementById('payment-chart').getContext('2d');
+    const paymentCtx = document.getElementById('payment-chart');
+    if (!paymentCtx) return;
+    
+    if (paymentChart) {
+        paymentChart.destroy();
+    }
     
     // Group expenses by payment mode
     const paymentModes = {};
@@ -432,20 +632,24 @@ function renderExpenseCharts() {
     const paymentLabels = Object.keys(paymentModes);
     const paymentData = Object.values(paymentModes);
     
-    new Chart(paymentCtx, {
+    if (paymentLabels.length === 0) return;
+    
+    paymentChart = new Chart(paymentCtx, {
         type: 'pie',
         data: {
             labels: paymentLabels,
             datasets: [{
                 data: paymentData,
                 backgroundColor: [
-                    '#4e73df', '#1cc88a', '#36b9cc', '#f6c23e'
+                    '#28a745', '#7248b9', '#17a2b8', '#6c757d'
                 ],
-                borderWidth: 1
+                borderWidth: 2,
+                borderColor: '#fff'
             }]
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: {
                     position: 'bottom'
@@ -471,6 +675,16 @@ function saveExpense() {
     const paymentMode = document.getElementById('expense-payment-mode').value;
     const date = document.getElementById('expense-date').value;
     
+    if (!description || !amount || !category || !paymentMode || !date) {
+        showToast('Please fill in all fields', 'error');
+        return;
+    }
+    
+    if (amount <= 0) {
+        showToast('Amount must be greater than 0', 'error');
+        return;
+    }
+    
     const expense = {
         tripId: currentTrip.id,
         description: description,
@@ -486,7 +700,8 @@ function saveExpense() {
     db.collection('expenses').add(expense)
         .then(() => {
             showToast('Expense added successfully!', 'success');
-            document.getElementById('addExpenseModal').querySelector('.btn-close').click();
+            const modal = bootstrap.Modal.getInstance(document.getElementById('addExpenseModal'));
+            modal.hide();
             document.getElementById('add-expense-form').reset();
             loadTripExpenses();
         })
@@ -553,6 +768,8 @@ function loadTripItinerary() {
             const itineraryDays = document.getElementById('itinerary-days');
             const emptyItinerary = document.getElementById('empty-itinerary');
             
+            if (!itineraryDays || !emptyItinerary) return;
+            
             itineraryDays.innerHTML = '';
             
             if (querySnapshot.empty) {
@@ -589,7 +806,7 @@ function loadTripItinerary() {
 
 function createDayCard(day, activities) {
     const col = document.createElement('div');
-    col.className = 'col-md-6 col-lg-4 mb-4';
+    col.className = 'col-12 mb-4';
     
     // Calculate date for this day
     const startDate = new Date(currentTrip.startDate);
@@ -597,45 +814,45 @@ function createDayCard(day, activities) {
     dayDate.setDate(startDate.getDate() + (day - 1));
     
     col.innerHTML = `
-        <div class="card h-100">
-            <div class="card-header">
-                <h5 class="mb-0">Day ${day} - ${formatDate(dayDate.toISOString().split('T')[0])}</h5>
+        <div class="card itinerary-card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-calendar-day me-2"></i>Day ${day} - ${formatDate(dayDate.toISOString().split('T')[0])}</h5>
             </div>
             <div class="card-body">
-                <div class="itinerary-activities">
-                    ${activities.map(activity => `
-                        <div class="activity-item mb-3 p-2 border rounded">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <h6 class="mb-1">${activity.place}</h6>
-                                    <p class="mb-1 text-muted small">${formatTime(activity.time)}</p>
-                                    ${activity.notes ? `<p class="mb-0 small">${activity.notes}</p>` : ''}
-                                </div>
-                                <div class="activity-actions">
-                                    <button class="btn btn-sm btn-outline-secondary edit-activity" data-activity-id="${activity.id}">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-danger delete-activity" data-activity-id="${activity.id}">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
+                ${activities.map(activity => `
+                    <div class="d-flex align-items-start mb-3 p-3 border rounded">
+                        <div class="me-3 text-center">
+                            <div class="bg-primary text-white rounded p-2" style="width: 70px;">
+                                <div class="fw-bold">${formatTime(activity.time)}</div>
                             </div>
                         </div>
-                    `).join('')}
-                </div>
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1 text-primary">${activity.place}</h6>
+                            ${activity.notes ? `<p class="mb-0 text-muted">${activity.notes}</p>` : ''}
+                            <div class="mt-2">
+                                <button class="btn btn-sm btn-outline-primary edit-activity-btn me-1" data-activity-id="${activity.id}">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger delete-activity-btn" data-activity-id="${activity.id}">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
             </div>
         </div>
     `;
     
     // Add event listeners for activity actions
-    col.querySelectorAll('.edit-activity').forEach(btn => {
+    col.querySelectorAll('.edit-activity-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const activityId = this.getAttribute('data-activity-id');
             editActivity(activityId);
         });
     });
     
-    col.querySelectorAll('.delete-activity').forEach(btn => {
+    col.querySelectorAll('.delete-activity-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const activityId = this.getAttribute('data-activity-id');
             deleteActivity(activityId);
@@ -650,6 +867,8 @@ function showAddActivityModal() {
     
     // Populate days dropdown
     const daySelect = document.getElementById('activity-day');
+    if (!daySelect) return;
+    
     daySelect.innerHTML = '';
     
     const startDate = new Date(currentTrip.startDate);
@@ -659,7 +878,8 @@ function showAddActivityModal() {
     for (let i = 1; i <= totalDays; i++) {
         const option = document.createElement('option');
         option.value = i;
-        option.textContent = `Day ${i}`;
+        const dayDate = new Date(startDate.getTime() + (i-1) * 24 * 60 * 60 * 1000);
+        option.textContent = `Day ${i} (${formatDate(dayDate.toISOString().split('T')[0])})`;
         daySelect.appendChild(option);
     }
     
@@ -671,6 +891,11 @@ function saveActivity() {
     const time = document.getElementById('activity-time').value;
     const place = document.getElementById('activity-place').value;
     const notes = document.getElementById('activity-notes').value;
+    
+    if (!day || !time || !place) {
+        showToast('Please fill in all required fields', 'error');
+        return;
+    }
     
     const activity = {
         tripId: currentTrip.id,
@@ -686,7 +911,8 @@ function saveActivity() {
     db.collection('itinerary').add(activity)
         .then(() => {
             showToast('Activity added successfully!', 'success');
-            document.getElementById('addActivityModal').querySelector('.btn-close').click();
+            const modal = bootstrap.Modal.getInstance(document.getElementById('addActivityModal'));
+            modal.hide();
             document.getElementById('add-activity-form').reset();
             loadTripItinerary();
         })
@@ -765,6 +991,11 @@ function updateTrip() {
     const endDate = document.getElementById('edit-end-date').value;
     const budget = document.getElementById('edit-trip-budget').value;
     
+    if (!tripName || !startLocation || !destination || !startDate || !endDate || !budget) {
+        showToast('Please fill in all fields', 'error');
+        return;
+    }
+    
     const db = firebase.firestore();
     db.collection('trips').doc(tripId).update({
         name: tripName,
@@ -776,7 +1007,8 @@ function updateTrip() {
     })
     .then(() => {
         showToast('Trip updated successfully!', 'success');
-        document.getElementById('editTripModal').querySelector('.btn-close').click();
+        const modal = bootstrap.Modal.getInstance(document.getElementById('editTripModal'));
+        modal.hide();
         loadTripDetails(tripId); // Reload trip details
     })
     .catch((error) => {
@@ -786,7 +1018,7 @@ function updateTrip() {
 }
 
 function deleteTrip() {
-    if (!confirm('Are you sure you want to delete this trip? This action cannot be undone.')) return;
+    if (!confirm('Are you sure you want to delete this trip? This action cannot be undone and will delete all trip data including expenses and itinerary.')) return;
     
     const db = firebase.firestore();
     db.collection('trips').doc(currentTrip.id).delete()
@@ -854,14 +1086,17 @@ function saveCustomCategory() {
     categorySelect.value = categoryName.toLowerCase();
     
     // Close the modal
-    document.getElementById('customCategoryModal').querySelector('.btn-close').click();
+    const modal = bootstrap.Modal.getInstance(document.getElementById('customCategoryModal'));
+    modal.hide();
     document.getElementById('custom-category-form').reset();
     
     showToast('Custom category added!', 'success');
 }
 
-// Helper functions from dashboard.js
+// Calculation functions
 function calculateTotalKms(trip) {
+    if (!trip) return 0;
+    
     // If we have meter readings, use them
     if (trip.endMeterReading && trip.startMeterReading) {
         return trip.endMeterReading - trip.startMeterReading;
@@ -891,26 +1126,64 @@ function calculateTotalKms(trip) {
 }
 
 function calculateFuelCost(trip, totalKms) {
-    if (!trip.fuelPrice || !trip.mileage) return 0;
+    if (!trip || !trip.fuelPrice || !trip.mileage) return 0;
     const fuelConsumed = totalKms / trip.mileage;
     return fuelConsumed * trip.fuelPrice;
 }
 
 function calculateRentalCost(trip) {
-    if (trip.carType !== 'rental' || !trip.rentalPerDay || !trip.rentalDays) return 0;
+    if (!trip || trip.carType !== 'rental' || !trip.rentalPerDay || !trip.rentalDays) return 0;
     return trip.rentalPerDay * trip.rentalDays;
 }
 
-// Profile functions (same as in dashboard.js)
+// Profile functions
 function showProfileModal() {
+    // Create profile modal dynamically since it doesn't exist in trip-details.html
+    let profileModal = document.getElementById('profileModal');
+    if (!profileModal) {
+        const modalHtml = `
+            <div class="modal fade" id="profileModal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">My Profile</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="profile-form">
+                                <div class="text-center mb-4">
+                                    <img id="profile-avatar" class="user-avatar mb-3" style="width: 100px; height: 100px;" src="${currentUser.photoURL || 'https://via.placeholder.com/100'}" alt="Profile">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="profile-name" class="form-label">Display Name</label>
+                                    <input type="text" class="form-control" id="profile-name" value="${currentUser.displayName || ''}" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Email</label>
+                                    <input type="email" class="form-control" value="${currentUser.email || ''}" disabled>
+                                    <small class="text-muted">Email cannot be changed</small>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">User ID</label>
+                                    <input type="text" class="form-control" value="${currentUser.uid}" disabled>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            <button type="button" class="btn btn-primary" id="save-profile-btn">Save Changes</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Add event listener to the save button
+        document.getElementById('save-profile-btn').addEventListener('click', saveProfile);
+    }
+    
     const modal = new bootstrap.Modal(document.getElementById('profileModal'));
-    
-    // Populate profile data
-    document.getElementById('profile-name').value = currentUser.displayName || '';
-    document.getElementById('profile-email').value = currentUser.email || '';
-    document.getElementById('profile-userid').value = currentUser.uid;
-    document.getElementById('profile-avatar').src = currentUser.photoURL || 'https://via.placeholder.com/100';
-    
     modal.show();
 }
 
@@ -923,39 +1196,13 @@ function saveProfile() {
     .then(() => {
         showToast('Profile updated successfully!', 'success');
         document.getElementById('user-name').textContent = displayName;
-        document.getElementById('profileModal').querySelector('.btn-close').click();
+        const modal = bootstrap.Modal.getInstance(document.getElementById('profileModal'));
+        modal.hide();
     })
     .catch((error) => {
         console.error('Error updating profile: ', error);
         showToast('Error updating profile. Please try again.', 'error');
     });
-}
-
-function handleAvatarUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    // In a real app, you would upload this to Firebase Storage
-    // For now, we'll just show a preview
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        document.getElementById('profile-avatar').src = e.target.result;
-        document.getElementById('user-avatar').src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-}
-
-function leaveAllTrips() {
-    if (!confirm('Are you sure you want to leave all trips? This action cannot be undone.')) return;
-    
-    const db = firebase.firestore();
-    const batch = db.batch();
-    
-    // We don't have all user trips loaded here, so we'll redirect to dashboard
-    showToast('Redirecting to dashboard to leave all trips', 'info');
-    setTimeout(() => {
-        window.location.href = 'dashboard.html';
-    }, 1000);
 }
 
 function logout() {
@@ -965,5 +1212,6 @@ function logout() {
         })
         .catch((error) => {
             console.error('Error signing out: ', error);
+            showToast('Error signing out', 'error');
         });
 }
