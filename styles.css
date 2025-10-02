@@ -655,3 +655,52 @@ html, body {
         width: 100%;
     }
 }
+
+/* Multiple Stops Styles */
+.route-stop {
+    position: relative;
+}
+
+.route-stop .input-group-text {
+    min-width: 45px;
+    justify-content: center;
+}
+
+.remove-stop-btn {
+    border-left: 1px solid #dee2e6;
+}
+
+.route-segment {
+    background: #f8f9fa;
+    transition: background-color 0.2s;
+}
+
+.route-segment:hover {
+    background: #e9ecef;
+}
+
+.route-summary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    color: white;
+    border: none;
+}
+
+.route-summary h6 {
+    color: white;
+    margin-bottom: 0.5rem;
+}
+
+.intermediate-stop, .edit-intermediate-stop {
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
