@@ -58,18 +58,3 @@ function validateLocation(location) {
 function validateDates(startDate, endDate) {
     return new Date(startDate) <= new Date(endDate);
 }
-
-// Real OpenRouteService API integration
-async function calculateRealDistance(startLocation, destination) {
-    try {
-        // First, you need to geocode the locations to get coordinates
-        // This requires additional geocoding API calls
-        console.log('Route calculation requires geocoding implementation');
-        
-        // For now, fallback to simulation
-        return calculateSimulatedDistance(startLocation, destination);
-    } catch (error) {
-        console.error('Route calculation failed:', error);
-        return calculateSimulatedDistance(startLocation, destination);
-    }
-}
