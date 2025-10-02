@@ -383,7 +383,7 @@ function createExpenseItem(expense, index) {
                     <div class="mt-1">
                         <small class="text-muted">
                             <i class="fas fa-user me-1"></i>
-                            <span class="added-by-text">Added by: Loading...</span>
+                            Added by: <span class="added-by-text">Loading...</span>
                         </small>
                     </div>
                 </div>
@@ -411,23 +411,24 @@ function createExpenseItem(expense, index) {
 }
 
 async function loadMemberNameForExpense(expenseItem, memberId) {
-    const addedByElement = expenseItem.querySelector('.text-muted small');
+    // Fix the selector to correctly target the "Added by" element
+    const addedByElement = expenseItem.querySelector('.added-by-text');
     if (!addedByElement) {
         console.warn('Added by element not found in expense item');
         return;
     }
     
     if (memberId === auth.currentUser.uid) {
-        addedByElement.innerHTML = '<i class="fas fa-user me-1"></i>Added by: You';
+        addedByElement.textContent = 'You';
         return;
     }
     
     try {
         const memberName = await getMemberName(memberId);
-        addedByElement.innerHTML = `<i class="fas fa-user me-1"></i>Added by: ${memberName}`;
+        addedByElement.textContent = memberName;
     } catch (error) {
         console.error('Error loading member name for expense:', error);
-        addedByElement.innerHTML = '<i class="fas fa-user me-1"></i>Added by: Traveler';
+        addedByElement.textContent = 'Traveler';
     }
 }
 
@@ -445,14 +446,31 @@ async function getMemberName(memberId) {
     try {
         if (memberId === auth.currentUser.uid) return 'You';
         
+        // Check if we're trying to get the current user's name from Firestore
+        if (memberId === auth.currentUser.uid) {
+            return auth.currentUser.displayName || auth.currentUser.email || 'You';
+        }
+        
         const userDoc = await db.collection('users').doc(memberId).get();
         if (userDoc.exists) {
             const userData = userDoc.data();
-            return userData.name || userData.displayName || 'Traveler';
+            return userData.name || userData.displayName || userData.email || 'Traveler';
         }
+        
+        // If user document doesn't exist, try to get from auth (for current user)
+        if (memberId === auth.currentUser.uid) {
+            return auth.currentUser.displayName || auth.currentUser.email || 'You';
+        }
+        
         return 'Traveler';
     } catch (error) {
         console.error('Error getting member name:', error);
+        
+        // Fallback for current user
+        if (memberId === auth.currentUser.uid) {
+            return 'You';
+        }
+        
         return 'Traveler';
     }
 }
