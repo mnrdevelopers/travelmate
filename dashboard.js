@@ -1,5 +1,6 @@
 let currentUser = null;
 let userTrips = [];
+let customCategories = [];
 
 document.addEventListener('DOMContentLoaded', function() {
     checkAuthState();
@@ -106,6 +107,20 @@ async function saveProfile() {
     }
 }
 
+async function loadCustomCategories() {
+    try {
+        const userDoc = await db.collection('users').doc(auth.currentUser.uid).get();
+        
+        if (userDoc.exists) {
+            const userData = userDoc.data();
+            customCategories = userData.customCategories || [];
+        }
+    } catch (error) {
+        console.error('Error loading custom categories:', error);
+        customCategories = [];
+    }
+}
+
 async function handleAvatarUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -162,10 +177,11 @@ function initializeApp() {
 }
 
 function checkAuthState() {
-    auth.onAuthStateChanged(user => {
+    auth.onAuthStateChanged(async (user) => {
         if (user) {
             currentUser = user;
             loadUserData();
+            await loadCustomCategories(); // Add this line
             loadUserTrips();
         } else {
             navigateTo('auth.html');
