@@ -798,6 +798,30 @@ function loadTripRoute(trip) {
     
     if (trip.route) {
         emptyRoute.classList.add('d-none');
+        
+        let calculatedDate = 'Unknown date';
+        try {
+            // Handle both Firestore Timestamp and regular Date objects
+            if (trip.route.calculatedAt) {
+                if (typeof trip.route.calculatedAt.toDate === 'function') {
+                    // It's a Firestore Timestamp
+                    calculatedDate = new Date(trip.route.calculatedAt.toDate()).toLocaleDateString();
+                } else if (trip.route.calculatedAt instanceof Date) {
+                    // It's already a Date object
+                    calculatedDate = trip.route.calculatedAt.toLocaleDateString();
+                } else if (trip.route.calculatedAt.seconds) {
+                    // It's a Firestore Timestamp in object format
+                    calculatedDate = new Date(trip.route.calculatedAt.seconds * 1000).toLocaleDateString();
+                } else {
+                    // It's a string or other format
+                    calculatedDate = new Date(trip.route.calculatedAt).toLocaleDateString();
+                }
+            }
+        } catch (error) {
+            console.warn('Error parsing calculatedAt date:', error);
+            calculatedDate = 'Unknown date';
+        }
+        
         routeDetails.innerHTML = `
             <div class="distance-info">
                 <h5><i class="fas fa-route me-2"></i>Route Information</h5>
@@ -805,20 +829,50 @@ function loadTripRoute(trip) {
                     <div class="col-md-6">
                         <p><strong>From:</strong> ${trip.startLocation}</p>
                         <p><strong>To:</strong> ${trip.destination}</p>
+                        ${trip.stops && trip.stops.length > 0 ? `
+                            <p><strong>Stops:</strong> ${trip.stops.join(' → ')}</p>
+                        ` : ''}
                     </div>
                     <div class="col-md-6">
                         <p><strong>Distance:</strong> ${trip.route.distance}</p>
                         <p><strong>Travel Time:</strong> ${trip.route.duration}</p>
+                        ${trip.route.totalDistance ? `
+                            <p><strong>Total Distance:</strong> ${trip.route.totalDistance.toFixed(1)} km</p>
+                        ` : ''}
                     </div>
                 </div>
-                ${trip.route.calculatedAt ? `
-                    <div class="mt-2">
-                        <small class="text-muted">
-                            <i class="fas fa-clock me-1"></i>
-                            Calculated on ${new Date(trip.route.calculatedAt.toDate()).toLocaleDateString()}
-                        </small>
+                
+                <!-- Display route segments if available -->
+                ${trip.route.segments && trip.route.segments.length > 0 ? `
+                    <div class="mt-4">
+                        <h6>Route Segments</h6>
+                        <div class="segments-container">
+                            ${trip.route.segments.map((segment, index) => `
+                                <div class="route-segment card mb-2">
+                                    <div class="card-body py-2">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <strong>${index + 1}.</strong> 
+                                                ${segment.from} → ${segment.to}
+                                            </div>
+                                            <div class="text-end">
+                                                <small class="text-muted">${segment.distance}</small><br>
+                                                <small class="text-muted">${segment.duration}</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
                     </div>
                 ` : ''}
+                
+                <div class="mt-2">
+                    <small class="text-muted">
+                        <i class="fas fa-clock me-1"></i>
+                        Calculated on ${calculatedDate}
+                    </small>
+                </div>
             </div>
         `;
     } else {
@@ -1108,21 +1162,31 @@ async function calculateRoute() {
         document.getElementById('calculate-route-btn').disabled = true;
         document.getElementById('calculate-route-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Calculating...';
         
-        // Use the utility function from utils.js
-        const routeData = await calculateRealDistance(currentTrip.startLocation, currentTrip.destination);
+        // Prepare locations array including stops
+        const allLocations = [currentTrip.startLocation];
+        if (currentTrip.stops && currentTrip.stops.length > 0) {
+            allLocations.push(...currentTrip.stops);
+        }
+        allLocations.push(currentTrip.destination);
+        
+        // Use enhanced route calculation with stops
+        const routeData = await calculateRouteWithStops(allLocations);
         
         console.log('Route calculated in trip details:', routeData);
         
-        // Update Firestore
-        await db.collection('trips').doc(currentTrip.id).update({
+        // Prepare update data with proper timestamp
+        const updateData = {
             route: {
                 ...routeData,
-                calculatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                calculatedAt: new Date() // Use regular Date object instead of Firestore timestamp
             },
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
+        };
         
-        // Update local trip data immediately
+        // Update Firestore
+        await db.collection('trips').doc(currentTrip.id).update(updateData);
+        
+        // Update local trip data immediately with proper date handling
         currentTrip.route = {
             ...routeData,
             calculatedAt: new Date()
@@ -1147,6 +1211,72 @@ async function calculateRoute() {
     } finally {
         document.getElementById('calculate-route-btn').disabled = false;
         document.getElementById('calculate-route-btn').innerHTML = '<i class="fas fa-route me-1"></i>Calculate Route';
+    }
+}
+
+// Enhanced route calculation with stops
+async function calculateRouteWithStops(locations) {
+    if (locations.length < 2) {
+        throw new Error('At least two locations required');
+    }
+    
+    try {
+        let totalDistance = 0;
+        let totalDuration = 0;
+        const segments = [];
+        
+        // Calculate route for each segment
+        for (let i = 0; i < locations.length - 1; i++) {
+            const segment = await calculateRealDistance(locations[i], locations[i + 1]);
+            
+            // Extract numeric distance (remove " km")
+            const distanceKm = parseFloat(segment.distance) || 0;
+            totalDistance += distanceKm;
+            
+            // Extract duration in minutes
+            const durationMinutes = parseDurationToMinutes(segment.duration);
+            totalDuration += durationMinutes;
+            
+            segments.push({
+                from: locations[i],
+                to: locations[i + 1],
+                distance: segment.distance,
+                duration: segment.duration,
+                distanceKm: distanceKm,
+                durationMinutes: durationMinutes
+            });
+        }
+        
+        return {
+            distance: `${totalDistance.toFixed(1)} km`,
+            duration: formatMinutesToDuration(totalDuration),
+            totalDistance: totalDistance,
+            totalDuration: totalDuration,
+            segments: segments,
+            stops: locations.slice(1, -1) // All locations except start and end
+        };
+        
+    } catch (error) {
+        console.error('Error calculating route with stops:', error);
+        
+        // Fallback: calculate direct route without stops
+        console.log('Falling back to direct route calculation');
+        const directRoute = await calculateRealDistance(locations[0], locations[locations.length - 1]);
+        
+        return {
+            ...directRoute,
+            totalDistance: parseFloat(directRoute.distance) || 0,
+            totalDuration: parseDurationToMinutes(directRoute.duration),
+            segments: [{
+                from: locations[0],
+                to: locations[locations.length - 1],
+                distance: directRoute.distance,
+                duration: directRoute.duration,
+                distanceKm: parseFloat(directRoute.distance) || 0,
+                durationMinutes: parseDurationToMinutes(directRoute.duration)
+            }],
+            stops: locations.slice(1, -1)
+        };
     }
 }
 
