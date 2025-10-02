@@ -1152,7 +1152,7 @@ async function saveCustomCategory() {
             name: name,
             color: color,
             createdBy: auth.currentUser.uid,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            createdAt: new Date().toISOString() // Use client timestamp instead of serverTimestamp
         };
 
         // Save to Firestore
@@ -1203,6 +1203,14 @@ async function loadCustomCategories() {
         if (userDoc.exists) {
             const userData = userDoc.data();
             customCategories = userData.customCategories || [];
+            
+            // Convert any Firestore timestamps to Date objects if needed
+            customCategories = customCategories.map(cat => {
+                if (cat.createdAt && typeof cat.createdAt.toDate === 'function') {
+                    cat.createdAt = cat.createdAt.toDate().toISOString();
+                }
+                return cat;
+            });
         } else {
             // Create user document if it doesn't exist
             await db.collection('users').doc(auth.currentUser.uid).set({
