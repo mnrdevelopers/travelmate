@@ -1658,3 +1658,58 @@ async function updateTripFromDetails() {
         updateBtn.innerHTML = '<i class="fas fa-save me-1"></i>Update Trip';
     }
 }
+
+// Meter reading functionality
+let currentMeterReading = 0;
+
+function setupMeterReading() {
+    document.getElementById('increment-reading').addEventListener('click', function() {
+        currentMeterReading++;
+        updateMeterDisplay();
+    });
+    
+    document.getElementById('reset-reading').addEventListener('click', function() {
+        currentMeterReading = 0;
+        updateMeterDisplay();
+    });
+    
+    document.getElementById('custom-reading').addEventListener('input', function() {
+        currentMeterReading = parseInt(this.value) || 0;
+        updateMeterDisplay();
+    });
+    
+    document.getElementById('save-reading').addEventListener('click', function() {
+        saveMeterReading(currentMeterReading);
+    });
+}
+
+function updateMeterDisplay() {
+    document.getElementById('current-reading').textContent = `${currentMeterReading} km`;
+}
+
+function saveMeterReading(reading) {
+    // Save to current trip or global storage
+    if (currentTrip) {
+        if (!currentTrip.meterReadings) currentTrip.meterReadings = [];
+        currentTrip.meterReadings.push({
+            reading: reading,
+            timestamp: new Date().toISOString(),
+            location: 'Current Location' // Could use geolocation API
+        });
+        
+        // Update Firestore
+        db.collection('trips').doc(currentTrip.id).update({
+            meterReadings: currentTrip.meterReadings,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        showToast('Meter reading saved!', 'success');
+    }
+}
+
+function showMeterReadingModal() {
+    currentMeterReading = 0;
+    updateMeterDisplay();
+    const modal = new bootstrap.Modal(document.getElementById('meterReadingModal'));
+    modal.show();
+}
