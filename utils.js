@@ -73,3 +73,25 @@ async function calculateRealDistance(startLocation, destination) {
         return calculateSimulatedDistance(startLocation, destination);
     }
 }
+
+function parseDurationToMinutes(durationString) {
+    // Convert "X hours Y minutes" to total minutes
+    const hoursMatch = durationString.match(/(\d+)\s*hour/);
+    const minutesMatch = durationString.match(/(\d+)\s*minute/);
+    
+    const hours = hoursMatch ? parseInt(hoursMatch[1]) : 0;
+    const minutes = minutesMatch ? parseInt(minutesMatch[1]) : 0;
+    
+    return hours * 60 + minutes;
+}
+
+function formatMinutesToDuration(totalMinutes) {
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    
+    if (hours > 0) {
+        return `${hours} hour${hours > 1 ? 's' : ''} ${minutes} minute${minutes > 1 ? 's' : ''}`;
+    } else {
+        return `${minutes} minute${minutes > 1 ? 's' : ''}`;
+    }
+}
