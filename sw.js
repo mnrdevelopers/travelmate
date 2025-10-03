@@ -11,8 +11,8 @@ const ASSETS_TO_CACHE = [
   '/firebase-config.js',
   '/utils.js',
   '/trip-details.js',
-  '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png'
+  '/icon.png',
+  '/icon.png'
 ];
 
 // Install event: caching app shell
