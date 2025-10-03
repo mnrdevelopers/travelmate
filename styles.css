@@ -704,3 +704,24 @@ html, body {
         transform: translateY(0);
     }
 }
+
+/* Fuel Tracking Styles */
+.fuel-stats-card {
+    transition: transform 0.2s ease-in-out;
+}
+
+.fuel-stats-card:hover {
+    transform: translateY(-2px);
+}
+
+#fuelPriceChart {
+    max-height: 300px;
+}
+
+.fuel-fillup-item {
+    border-left: 4px solid #28a745;
+}
+
+.fuel-price-trend {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
