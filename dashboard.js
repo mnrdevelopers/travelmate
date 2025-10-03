@@ -2,6 +2,7 @@ let currentUser = null;
 let userTrips = [];
 let customCategories = [];
 let carExpenseChart = null;
+let fuelPriceChart = null;
 
 document.addEventListener('DOMContentLoaded', function() {
     checkAuthState();
@@ -224,6 +225,7 @@ async function loadUserTrips() {
         updateDashboardStats();
         loadUpcomingTrips();
         loadRecentCalculations();
+        loadFuelTrackingData(); // Add this line
         
     } catch (error) {
         console.error('Error loading trips:', error);
@@ -1291,4 +1293,373 @@ function validateDates(startDate, endDate) {
         return false;
     }
     return true;
+}
+
+function loadFuelTrackingData() {
+    loadRecentFuelFillups();
+    calculateFuelStatistics();
+    renderFuelPriceChart();
+}
+
+function calculateFuelStatistics() {
+    let totalFuel = 0;
+    let totalFuelCost = 0;
+    let totalDistance = 0;
+    let allFillUps = [];
+
+    // Collect all fuel fill-ups from all trips
+    userTrips.forEach(trip => {
+        if (trip.fuelFillUps && trip.fuelFillUps.length > 0) {
+            allFillUps = allFillUps.concat(trip.fuelFillUps.map(fillUp => ({
+                ...fillUp,
+                tripName: trip.name
+            })));
+        }
+    });
+
+    // Calculate statistics
+    if (allFillUps.length >= 2) {
+        // Sort all fill-ups by odometer reading
+        allFillUps.sort((a, b) => a.odometer - b.odometer);
+
+        for (let i = 1; i < allFillUps.length; i++) {
+            const distance = allFillUps[i].odometer - allFillUps[i-1].odometer;
+            const fuel = allFillUps[i].liters;
+            const cost = allFillUps[i].cost;
+
+            totalDistance += distance;
+            totalFuel += fuel;
+            totalFuelCost += cost;
+        }
+    }
+
+    // Also include fuel from expenses for total cost
+    userTrips.forEach(trip => {
+        if (trip.expenses) {
+            trip.expenses.forEach(expense => {
+                if (expense.category === 'fuel' || expense.description.toLowerCase().includes('fuel')) {
+                    totalFuelCost += expense.amount;
+                }
+            });
+        }
+    });
+
+    const averageMileage = totalFuel > 0 ? (totalDistance / totalFuel).toFixed(2) : 0;
+
+    // Update DOM
+    document.getElementById('total-fuel-filled').textContent = `${totalFuel.toFixed(1)} L`;
+    document.getElementById('total-fuel-cost').textContent = totalFuelCost.toFixed(2);
+    document.getElementById('average-mileage').textContent = `${averageMileage} km/L`;
+    document.getElementById('total-fuel-distance').textContent = `${totalDistance} km`;
+}
+
+function loadRecentFuelFillups() {
+    const recentFuelContainer = document.getElementById('recent-fuel-fillups');
+    let allFillUps = [];
+
+    // Collect all fuel fill-ups from all trips
+    userTrips.forEach(trip => {
+        if (trip.fuelFillUps && trip.fuelFillUps.length > 0) {
+            allFillUps = allFillUps.concat(trip.fuelFillUps.map(fillUp => ({
+                ...fillUp,
+                tripName: trip.name,
+                tripCode: trip.code
+            })));
+        }
+    });
+
+    // Sort by date (newest first)
+    allFillUps.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    // Take only last 5 fill-ups
+    const recentFillUps = allFillUps.slice(0, 5);
+
+    if (recentFillUps.length === 0) {
+        recentFuelContainer.innerHTML = `
+            <div class="text-center text-muted py-3">
+                <i class="fas fa-gas-pump fa-2x mb-2"></i>
+                <p>No fuel fill-ups recorded yet</p>
+                <a href="car-calculations.html" class="btn btn-success btn-sm">
+                    <i class="fas fa-plus me-1"></i>Add Fuel Fill-up
+                </a>
+            </div>
+        `;
+        return;
+    }
+
+    recentFuelContainer.innerHTML = recentFillUps.map(fillUp => {
+        const date = new Date(fillUp.date).toLocaleDateString();
+        const fuelPrice = fillUp.fuelPrice || (fillUp.cost / fillUp.liters).toFixed(2);
+        
+        return `
+            <div class="card mb-2">
+                <div class="card-body py-3">
+                    <div class="row align-items-center">
+                        <div class="col-md-2 text-center">
+                            <i class="fas fa-gas-pump text-warning fa-2x"></i>
+                        </div>
+                        <div class="col-md-3">
+                            <strong class="d-block">${fillUp.liters} L</strong>
+                            <small class="text-muted">₹${fuelPrice}/L</small>
+                        </div>
+                        <div class="col-md-2">
+                            <strong class="text-success">₹${fillUp.cost.toFixed(2)}</strong>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted">
+                                <i class="fas fa-road me-1"></i>${fillUp.odometer} km
+                            </small>
+                            <br>
+                            <small class="text-muted">${date}</small>
+                        </div>
+                        <div class="col-md-2">
+                            <span class="badge bg-primary">${fillUp.tripName}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // Add "View All" button if there are more fill-ups
+    if (allFillUps.length > 5) {
+        recentFuelContainer.innerHTML += `
+            <div class="text-center mt-3">
+                <button class="btn btn-outline-primary btn-sm" id="view-all-fillups-btn">
+                    <i class="fas fa-list me-1"></i>View All ${allFillUps.length} Fill-ups
+                </button>
+            </div>
+        `;
+
+        document.getElementById('view-all-fillups-btn').addEventListener('click', showAllFuelFillupsModal);
+    }
+}
+
+function renderFuelPriceChart() {
+    const ctx = document.getElementById('fuelPriceChart').getContext('2d');
+    
+    // Destroy previous chart if it exists
+    if (fuelPriceChart) {
+        fuelPriceChart.destroy();
+    }
+
+    let allFillUps = [];
+
+    // Collect all fuel fill-ups
+    userTrips.forEach(trip => {
+        if (trip.fuelFillUps && trip.fuelFillUps.length > 0) {
+            allFillUps = allFillUps.concat(trip.fuelFillUps);
+        }
+    });
+
+    if (allFillUps.length < 2) {
+        document.getElementById('fuelPriceChart').closest('.mt-4').innerHTML = `
+            <h6><i class="fas fa-chart-line me-2"></i>Fuel Price Trend</h6>
+            <div class="text-center text-muted py-4">
+                <i class="fas fa-chart-line fa-2x mb-2"></i>
+                <p>Not enough data for fuel price trend</p>
+                <small>Add more fuel fill-ups to see the trend</small>
+            </div>
+        `;
+        return;
+    }
+
+    // Sort by date
+    allFillUps.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // Prepare chart data
+    const labels = allFillUps.map(fillUp => {
+        const date = new Date(fillUp.date);
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    });
+
+    const fuelPrices = allFillUps.map(fillUp => {
+        return fillUp.fuelPrice || (fillUp.cost / fillUp.liters);
+    });
+
+    const fuelAmounts = allFillUps.map(fillUp => fillUp.liters);
+
+    fuelPriceChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Fuel Price (₹/L)',
+                    data: fuelPrices,
+                    borderColor: '#ff6b6b',
+                    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                    yAxisID: 'y',
+                    tension: 0.4,
+                    fill: true
+                },
+                {
+                    label: 'Fuel Amount (L)',
+                    data: fuelAmounts,
+                    borderColor: '#4ecdc4',
+                    backgroundColor: 'rgba(78, 205, 196, 0.1)',
+                    yAxisID: 'y1',
+                    tension: 0.4,
+                    fill: true
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            scales: {
+                x: {
+                    display: true,
+                    title: {
+                        display: true,
+                        text: 'Date'
+                    }
+                },
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: 'Price (₹/L)'
+                    },
+                    min: Math.min(...fuelPrices) * 0.9,
+                    max: Math.max(...fuelPrices) * 1.1
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: 'Amount (L)'
+                    },
+                    grid: {
+                        drawOnChartArea: false,
+                    },
+                    min: 0,
+                    max: Math.max(...fuelAmounts) * 1.2
+                },
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.dataset.label.includes('Price')) {
+                                label += '₹' + context.parsed.y.toFixed(2) + '/L';
+                            } else {
+                                label += context.parsed.y.toFixed(1) + 'L';
+                            }
+                            return label;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function showAllFuelFillupsModal() {
+    let allFillUps = [];
+
+    // Collect all fuel fill-ups
+    userTrips.forEach(trip => {
+        if (trip.fuelFillUps && trip.fuelFillUps.length > 0) {
+            allFillUps = allFillUps.concat(trip.fuelFillUps.map(fillUp => ({
+                ...fillUp,
+                tripName: trip.name,
+                tripCode: trip.code
+            })));
+        }
+    });
+
+    // Sort by date (newest first)
+    allFillUps.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    // Create modal HTML
+    const modalHtml = `
+        <div class="modal fade" id="allFuelFillupsModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fas fa-gas-pump me-2"></i>All Fuel Fill-ups
+                            <span class="badge bg-primary ms-2">${allFillUps.length}</span>
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Odometer</th>
+                                        <th>Fuel</th>
+                                        <th>Price</th>
+                                        <th>Cost</th>
+                                        <th>Trip</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${allFillUps.map(fillUp => {
+                                        const date = new Date(fillUp.date).toLocaleDateString();
+                                        const fuelPrice = fillUp.fuelPrice || (fillUp.cost / fillUp.liters).toFixed(2);
+                                        return `
+                                            <tr>
+                                                <td>${date}</td>
+                                                <td>${fillUp.odometer} km</td>
+                                                <td>${fillUp.liters} L</td>
+                                                <td>₹${fuelPrice}/L</td>
+                                                <td class="text-success fw-bold">₹${fillUp.cost.toFixed(2)}</td>
+                                                <td><span class="badge bg-light text-dark">${fillUp.tripName}</span></td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                                <tfoot>
+                                    <tr class="table-primary">
+                                        <td colspan="2"><strong>Total</strong></td>
+                                        <td><strong>${allFillUps.reduce((sum, fill) => sum + fill.liters, 0).toFixed(1)} L</strong></td>
+                                        <td></td>
+                                        <td><strong>₹${allFillUps.reduce((sum, fill) => sum + fill.cost, 0).toFixed(2)}</strong></td>
+                                        <td></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <a href="car-calculations.html" class="btn btn-success">
+                            <i class="fas fa-plus me-1"></i>Add New Fill-up
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Remove existing modal if any
+    const existingModal = document.getElementById('allFuelFillupsModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // Add modal to DOM
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // Show the modal
+    const modal = new bootstrap.Modal(document.getElementById('allFuelFillupsModal'));
+    modal.show();
 }
