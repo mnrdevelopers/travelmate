@@ -916,3 +916,171 @@ body {
     max-zoom: 1.0;
     user-zoom: fixed;
 }
+
+/* Enhanced Mobile Styles for iPhone 16 Pro and similar devices */
+@media (max-width: 430px) {
+    /* iPhone 16 Pro has 393px width, but accounting for larger screens */
+    
+    /* Container padding adjustments */
+    .container {
+        padding-left: 15px;
+        padding-right: 15px;
+    }
+    
+    /* Fuel tracking section improvements */
+    .card-body .row {
+        margin-left: -8px;
+        margin-right: -8px;
+    }
+    
+    .card-body .col-md-3 {
+        padding-left: 8px;
+        padding-right: 8px;
+        margin-bottom: 15px;
+    }
+    
+    /* Fuel stat cards */
+    .card.bg-light .card-body {
+        padding: 15px 10px;
+    }
+    
+    .card.bg-light .card-body h4 {
+        font-size: 1.1rem;
+        margin-bottom: 5px;
+    }
+    
+    .card.bg-light .card-body small {
+        font-size: 0.75rem;
+    }
+    
+    /* Recent fuel fill-ups */
+    #recent-fuel-fillups .card {
+        margin-bottom: 12px;
+    }
+    
+    #recent-fuel-fillups .card-body {
+        padding: 12px;
+    }
+    
+    #recent-fuel-fillups .row.align-items-center {
+        margin-left: -5px;
+        margin-right: -5px;
+    }
+    
+    #recent-fuel-fillups .col-md-2,
+    #recent-fuel-fillups .col-md-3,
+    #recent-fuel-fillups .col-md-2 {
+        padding-left: 5px;
+        padding-right: 5px;
+    }
+    
+    /* Fuel price trend section */
+    #fuelPriceChart {
+        height: 120px !important;
+    }
+    
+    /* Better text sizing for mobile */
+    .card-header h5 {
+        font-size: 1rem;
+    }
+    
+    /* Fix for the "Not enough data" message */
+    .text-muted p {
+        margin-bottom: 8px;
+        font-size: 0.9rem;
+    }
+    
+    /* Button sizing */
+    .btn-sm {
+        padding: 8px 12px;
+        font-size: 0.85rem;
+    }
+}
+
+/* Specific fixes for fuel tracking section */
+.fuel-stats-card .card-body {
+    text-align: center;
+    padding: 1rem 0.5rem;
+}
+
+.fuel-stats-card i.fa-2x {
+    font-size: 1.5rem !important;
+    margin-bottom: 0.5rem;
+}
+
+.fuel-stats-card h4 {
+    font-size: 1.1rem;
+    margin-bottom: 0.25rem;
+}
+
+.fuel-stats-card small {
+    font-size: 0.75rem;
+}
+
+/* Recent fuel fill-ups mobile optimization */
+@media (max-width: 768px) {
+    #recent-fuel-fillups .card .row {
+        flex-wrap: nowrap;
+        overflow-x: visible;
+    }
+    
+    #recent-fuel-fillups .card .col-md-2,
+    #recent-fuel-fillups .card .col-md-3 {
+        flex: 0 0 auto;
+    }
+    
+    #recent-fuel-fillups .card .col-md-2:first-child {
+        flex: 0 0 50px;
+    }
+    
+    #recent-fuel-fillups .card .col-md-3:nth-child(2) {
+        flex: 0 0 80px;
+    }
+    
+    #recent-fuel-fillups .card .col-md-2:nth-child(3) {
+        flex: 0 0 70px;
+    }
+    
+    #recent-fuel-fillups .card .col-md-3:nth-child(4) {
+        flex: 1;
+        min-width: 100px;
+    }
+    
+    #recent-fuel-fillups .card .col-md-2:last-child {
+        flex: 0 0 70px;
+    }
+}
+
+/* Safe area support for notch devices */
+@supports(padding: max(0px)) {
+    .container {
+        padding-left: max(15px, env(safe-area-inset-left));
+        padding-right: max(15px, env(safe-area-inset-right));
+    }
+}
+
+/* Fuel fill-up item compact design */
+.fuel-fillup-item .row.align-items-center {
+    align-items: flex-start !important;
+}
+
+.fuel-fillup-item .col-md-2.text-center {
+    padding-top: 4px;
+}
+
+.fuel-fillup-item strong {
+    font-size: 0.9rem;
+    display: block;
+}
+
+.fuel-fillup-item small {
+    font-size: 0.75rem;
+}
+
+.fuel-fillup-item .badge {
+    font-size: 0.7rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 80px;
+}
