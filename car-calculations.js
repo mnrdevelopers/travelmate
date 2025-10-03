@@ -764,7 +764,8 @@ function checkAuthState() {
             // User is signed in
             loadUserData();
             setupCarCalculatorEventListeners();
-            loadSavedVehicles(); // Move this here
+            loadSavedVehicles();
+            loadTripsForFuelTracking(); // Add this line
         } else {
             // User is signed out
             navigateTo('auth.html');
@@ -1146,4 +1147,75 @@ async function addFuelFillUpsToExpenses(tripId) {
         console.error('Error adding fuel fill-ups to expenses:', error);
         showAlert('Error adding fuel expenses to trip', 'danger');
     }
+}
+
+// Load trips for fuel fill-up association
+async function loadTripsForFuelTracking() {
+    try {
+        const tripsSnapshot = await db.collection('trips')
+            .where('members', 'array-contains', auth.currentUser.uid)
+            .get();
+        
+        const tripSelect = document.getElementById('select-fillup-trip');
+        tripSelect.innerHTML = '<option value="">Select a trip...</option>';
+        
+        tripsSnapshot.forEach(doc => {
+            const trip = doc.data();
+            const option = document.createElement('option');
+            option.value = doc.id;
+            option.textContent = `${trip.name} (${trip.code})`;
+            option.dataset.trip = JSON.stringify({
+                id: doc.id,
+                ...trip
+            });
+            tripSelect.appendChild(option);
+        });
+        
+        // Add event listener for trip selection
+        tripSelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            if (selectedOption.value) {
+                const trip = JSON.parse(selectedOption.dataset.trip);
+                setCurrentFillUpTrip(trip);
+                document.getElementById('clear-trip-fuel-btn').style.display = 'block';
+            } else {
+                setCurrentFillUpTrip(null);
+                document.getElementById('clear-trip-fuel-btn').style.display = 'none';
+            }
+        });
+        
+        // Add event listener for clear button
+        document.getElementById('clear-trip-fuel-btn').addEventListener('click', function() {
+            const tripId = document.getElementById('select-fillup-trip').value;
+            if (tripId && confirm('Are you sure you want to clear all fuel data for this trip?')) {
+                clearTripFuelData(tripId);
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error loading trips for fuel tracking:', error);
+    }
+}
+
+// Update setupFuelFillUpEventListeners function
+function setupFuelFillUpEventListeners() {
+    const addFillUpBtn = document.getElementById('add-fillup-btn');
+    const resetFillUpsBtn = document.getElementById('reset-fillups-btn');
+    
+    if (addFillUpBtn) {
+        addFillUpBtn.addEventListener('click', addFuelFillUp);
+    }
+    
+    if (resetFillUpsBtn) {
+        resetFillUpsBtn.addEventListener('click', resetAllFillUps);
+    }
+    
+    // Set default date to today
+    document.getElementById('fillup-date').valueAsDate = new Date();
+    
+    // Load trips for association
+    loadTripsForFuelTracking();
+    
+    // Load saved fill-ups if any
+    loadSavedFillUps();
 }
