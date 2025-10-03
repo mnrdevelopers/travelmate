@@ -411,6 +411,11 @@ function updateCarExpenseChart(trips) {
         other: 0
     };
     
+    // Calculate fuel efficiency from fill-ups
+    let totalFuel = 0;
+    let totalDistance = 0;
+    let totalFuelCost = 0;
+    
     trips.forEach(trip => {
         if (trip.expenses) {
             trip.expenses.forEach(expense => {
@@ -432,7 +437,23 @@ function updateCarExpenseChart(trips) {
                 }
             });
         }
+        
+        // Calculate fuel efficiency from fill-up data
+        if (trip.fuelFillUps && trip.fuelFillUps.length >= 2) {
+            for (let i = 1; i < trip.fuelFillUps.length; i++) {
+                const distance = trip.fuelFillUps[i].odometer - trip.fuelFillUps[i-1].odometer;
+                const fuel = trip.fuelFillUps[i].liters;
+                const cost = trip.fuelFillUps[i].cost;
+                
+                totalDistance += distance;
+                totalFuel += fuel;
+                totalFuelCost += cost;
+            }
+        }
     });
+    
+    const averageMileage = totalFuel > 0 ? (totalDistance / totalFuel).toFixed(2) : 0;
+    const averageCostPerKm = totalDistance > 0 ? (totalFuelCost / totalDistance).toFixed(2) : 0;
     
     // Filter out zero categories
     const labels = [];
@@ -453,12 +474,29 @@ function updateCarExpenseChart(trips) {
         }
     });
     
+    const totalCarExpenses = data.reduce((sum, value) => sum + value, 0);
+    
     if (data.length === 0) {
         document.getElementById('car-expense-details').innerHTML = `
             <div class="text-center text-muted py-4">
                 <i class="fas fa-car fa-3x mb-3"></i>
                 <p>No car expenses recorded yet</p>
-                <a href="car-calculations.html" class="btn btn-primary btn-sm">
+                ${averageMileage > 0 ? `
+                    <div class="mt-3 p-3 bg-light rounded">
+                        <h6 class="text-success">Fuel Efficiency</h6>
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <small class="text-muted">Average Mileage</small>
+                                <div class="fw-bold">${averageMileage} km/L</div>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">Cost per Km</small>
+                                <div class="fw-bold">₹${averageCostPerKm}/km</div>
+                            </div>
+                        </div>
+                    </div>
+                ` : ''}
+                <a href="car-calculations.html" class="btn btn-primary btn-sm mt-3">
                     <i class="fas fa-calculator me-1"></i>Calculate Car Expenses
                 </a>
             </div>
@@ -504,18 +542,58 @@ function updateCarExpenseChart(trips) {
         }
     });
     
-    // Update expense details
-    const totalCarExpenses = data.reduce((sum, value) => sum + value, 0);
+    // Update expense details with fuel efficiency
+    let fuelEfficiencyHtml = '';
+    if (averageMileage > 0) {
+        fuelEfficiencyHtml = `
+            <div class="mt-3 p-3 bg-light rounded">
+                <h6 class="text-success mb-3">
+                    <i class="fas fa-chart-line me-2"></i>Fuel Efficiency
+                </h6>
+                <div class="row text-center">
+                    <div class="col-md-4 mb-2">
+                        <small class="text-muted d-block">Average Mileage</small>
+                        <span class="fw-bold text-primary">${averageMileage} km/L</span>
+                    </div>
+                    <div class="col-md-4 mb-2">
+                        <small class="text-muted d-block">Cost per Km</small>
+                        <span class="fw-bold text-success">₹${averageCostPerKm}/km</span>
+                    </div>
+                    <div class="col-md-4 mb-2">
+                        <small class="text-muted d-block">Total Distance</small>
+                        <span class="fw-bold text-info">${totalDistance} km</span>
+                    </div>
+                </div>
+                ${totalFuel > 0 ? `
+                    <div class="row text-center mt-2">
+                        <div class="col-md-6">
+                            <small class="text-muted d-block">Total Fuel</small>
+                            <span class="fw-bold text-warning">${totalFuel.toFixed(1)} L</span>
+                        </div>
+                        <div class="col-md-6">
+                            <small class="text-muted d-block">Fuel Cost</small>
+                            <span class="fw-bold text-danger">₹${totalFuelCost.toFixed(2)}</span>
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
+    
     document.getElementById('car-expense-details').innerHTML = `
         <div class="text-center">
             <h4 class="text-primary"><span class="rupee-symbol">₹</span>${totalCarExpenses.toFixed(2)}</h4>
             <p class="text-muted mb-3">Total Car Expenses</p>
+            
             ${labels.map((label, index) => `
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <span class="small">${label}:</span>
                     <span class="fw-bold"><span class="rupee-symbol">₹</span>${data[index].toFixed(2)}</span>
                 </div>
             `).join('')}
+            
+            ${fuelEfficiencyHtml}
+            
             <a href="car-calculations.html" class="btn btn-primary btn-sm mt-3">
                 <i class="fas fa-calculator me-1"></i>New Calculation
             </a>
