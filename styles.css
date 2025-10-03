@@ -725,3 +725,79 @@ html, body {
 .fuel-price-trend {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
+
+/* Enhanced Mobile Styles for PWA */
+@media (max-width: 768px) {
+    /* Better touch targets */
+    .btn, .nav-link, .form-control, .form-select {
+        min-height: 44px;
+    }
+    
+    /* Prevent zoom on input focus in iOS */
+    input, select, textarea {
+        font-size: 16px;
+    }
+    
+    /* Enhanced card layouts for mobile */
+    .card {
+        margin-bottom: 1rem;
+    }
+    
+    /* Better modal experience on mobile */
+    .modal-dialog {
+        margin: 0.5rem;
+    }
+    
+    /* Improved navigation for mobile */
+    .navbar-nav .nav-link {
+        padding: 0.75rem 1rem;
+    }
+    
+    /* Safe area handling for devices with notches */
+    .container {
+        padding-left: max(1rem, env(safe-area-inset-left));
+        padding-right: max(1rem, env(safe-area-inset-right));
+    }
+}
+
+/* Standalone app specific styles */
+@media (display-mode: standalone) {
+    body {
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        -khtml-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+    }
+    
+    /* Allow text selection in input areas */
+    input, textarea {
+        -webkit-user-select: text;
+        user-select: text;
+    }
+}
+
+/* Enhanced touch interactions */
+.touch-target {
+    min-height: 44px;
+    min-width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Swipe gestures support */
+.swipe-area {
+    touch-action: pan-y;
+}
+
+/* Prevent pull-to-refresh on main content */
+body {
+    overscroll-behavior-y: contain;
+}
+
+/* Better scrolling on iOS */
+.scroll-container {
+    -webkit-overflow-scrolling: touch;
+}
