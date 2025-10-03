@@ -408,8 +408,8 @@ async function deleteVehicle(index) {
 }
 
 function showAddToExpensesModal() {
-    if (!currentCalculation) {
-        showAlert('Please calculate costs first', 'warning');
+     if (!currentCalculation && fuelFillUps.length === 0) {
+        showAlert('Please calculate costs or add fuel fill-ups first', 'warning');
         return;
     }
     
@@ -445,11 +445,38 @@ async function loadUserTripsForExpenses() {
 function showExpenseBreakdown() {
     const breakdown = document.getElementById('expense-breakdown');
     
-    breakdown.innerHTML = `
-        <div class="border rounded p-2">
+    let breakdownHTML = '<div class="border rounded p-2">';
+    
+    // Show fuel fill-ups if any
+    if (fuelFillUps.length > 0) {
+        breakdownHTML += `
+            <div class="mb-3">
+                <h6 class="text-success"><i class="fas fa-gas-pump me-2"></i>Fuel Fill-ups</h6>
+                ${fuelFillUps.map((fillUp, index) => {
+                    const previousOdometer = index > 0 ? fuelFillUps[index - 1].odometer : 0;
+                    const distance = index > 0 ? fillUp.odometer - previousOdometer : 0;
+                    
+                    return `
+                        <div class="row small border-bottom pb-1 mb-1">
+                            <div class="col-8">${fillUp.liters}L at ${fillUp.odometer} km${index > 0 ? ` (+${distance} km)` : ''}</div>
+                            <div class="col-4 text-end"><span class="rupee-symbol">₹</span>${fillUp.cost.toFixed(2)}</div>
+                        </div>
+                    `;
+                }).join('')}
+                <div class="row small fw-bold mt-1">
+                    <div class="col-8">Total Fuel Fill-ups (${fuelFillUps.length}):</div>
+                    <div class="col-4 text-end"><span class="rupee-symbol">₹</span>${fuelFillUps.reduce((sum, fillUp) => sum + fillUp.cost, 0).toFixed(2)}</div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Show calculated costs if available
+    if (currentCalculation) {
+        breakdownHTML += `
             ${currentCalculation.fuelCost > 0 ? `
             <div class="row">
-                <div class="col-6">Fuel Cost:</div>
+                <div class="col-6">Calculated Fuel Cost:</div>
                 <div class="col-6 text-end"><span class="rupee-symbol">₹</span>${currentCalculation.fuelCost.toFixed(2)}</div>
             </div>
             ` : ''}
@@ -488,17 +515,29 @@ function showExpenseBreakdown() {
                 <div class="col-6 text-end"><span class="rupee-symbol">₹</span>${currentCalculation.parkingCost.toFixed(2)}</div>
             </div>
             ` : ''}
-            
-            <div class="row fw-bold border-top mt-1 pt-1">
-                <div class="col-6">Total:</div>
-                <div class="col-6 text-end"><span class="rupee-symbol">₹</span>${currentCalculation.totalCost.toFixed(2)}</div>
-            </div>
+        `;
+    }
+    
+    // Calculate and show totals
+    const totalFuelFillUpsCost = fuelFillUps.reduce((sum, fillUp) => sum + fillUp.cost, 0);
+    const totalCalculatedCost = currentCalculation ? currentCalculation.totalCost : 0;
+    const grandTotal = totalFuelFillUpsCost + totalCalculatedCost;
+    
+    breakdownHTML += `
+        <div class="row fw-bold border-top mt-1 pt-1">
+            <div class="col-6">Grand Total:</div>
+            <div class="col-6 text-end"><span class="rupee-symbol">₹</span>${grandTotal.toFixed(2)}</div>
         </div>
-        <div class="mt-2 small text-muted">
-            <i class="fas fa-info-circle me-1"></i>
-            Each cost will be added as a separate expense item
-        </div>
+    </div>
+    
+    <div class="mt-2 small text-muted">
+        <i class="fas fa-info-circle me-1"></i>
+        ${fuelFillUps.length > 0 ? 'Fuel fill-ups will be added as individual expense items. ' : ''}
+        ${currentCalculation ? 'Each calculated cost will be added as a separate expense item.' : ''}
+    </div>
     `;
+    
+    breakdown.innerHTML = breakdownHTML;
 }
 
 async function addToTripExpenses() {
@@ -509,22 +548,10 @@ async function addToTripExpenses() {
         return;
     }
     
-    try {
-        document.getElementById('confirm-add-expenses').disabled = true;
-        document.getElementById('confirm-add-expenses').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Adding...';
-
-        // First add fuel fill-ups if any
-        if (fuelFillUps.length > 0) {
-            await addFuelFillUpsToExpenses(tripId);
-        }
-        
-        // Then add the calculated costs (existing logic)
-        if (currentCalculation) {
-            const tripDoc = await db.collection('trips').doc(tripId).get();
-            const tripData = tripDoc.data();
-            
-            const expenses = tripData.expenses || [];
-            const today = new Date().toISOString().split('T')[0];
+    if (!currentCalculation && fuelFillUps.length === 0) {
+        showAlert('No calculation data or fuel fill-ups available', 'warning');
+        return;
+    }
     
     try {
         document.getElementById('confirm-add-expenses').disabled = true;
@@ -536,93 +563,142 @@ async function addToTripExpenses() {
         const expenses = tripData.expenses || [];
         const today = new Date().toISOString().split('T')[0];
         
-        // Add fuel expense
-        if (currentCalculation.fuelCost > 0) {
-            expenses.push({
-                description: `Fuel for ${currentCalculation.tripDistance} km trip`,
-                amount: currentCalculation.fuelCost,
-                category: 'fuel',
-                paymentMode: 'cash',
-                date: today,
-                addedBy: auth.currentUser.uid,
-                addedAt: new Date().toISOString()
+        // First add fuel fill-ups if any
+        if (fuelFillUps.length > 0) {
+            fuelFillUps.forEach((fillUp, index) => {
+                expenses.push({
+                    description: `Fuel fill-up at ${fillUp.odometer} km - ${fillUp.liters}L`,
+                    amount: fillUp.cost,
+                    category: 'fuel',
+                    paymentMode: 'cash',
+                    date: fillUp.date || today,
+                    addedBy: auth.currentUser.uid,
+                    addedAt: new Date().toISOString(),
+                    isFuelFillUp: true,
+                    odometer: fillUp.odometer,
+                    liters: fillUp.liters,
+                    fuelPrice: fillUp.fuelPrice,
+                    fillUpIndex: index
+                });
+            });
+            
+            // Also save raw fill-up data to trip for reporting
+            await db.collection('trips').doc(tripId).update({
+                fuelFillUps: fuelFillUps,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
         }
         
-        // Add rental expense if applicable
-        if (currentCalculation.rentalCost > 0) {
-            expenses.push({
-                description: `Car rental for ${currentCalculation.tripDuration} days`,
-                amount: currentCalculation.rentalCost,
-                category: 'transport',
-                paymentMode: 'card',
-                date: today,
-                addedBy: auth.currentUser.uid,
-                addedAt: new Date().toISOString()
-            });
-        }
-        
-        // Add MAINTENANCE expense separately
-        if (currentCalculation.maintenanceCost > 0) {
-            expenses.push({
-                description: 'Vehicle maintenance',
-                amount: currentCalculation.maintenanceCost,
-                category: 'maintenance',
-                paymentMode: 'cash',
-                date: today,
-                addedBy: auth.currentUser.uid,
-                addedAt: new Date().toISOString()
-            });
-        }
-        
-        // Add TOLL CHARGES expense separately
-        if (currentCalculation.tollCost > 0) {
-            expenses.push({
-                description: 'Toll charges',
-                amount: currentCalculation.tollCost,
-                category: 'transport',
-                paymentMode: 'cash',
-                date: today,
-                addedBy: auth.currentUser.uid,
-                addedAt: new Date().toISOString()
-            });
-        }
-        
-        // Add PARKING expense separately
-        if (currentCalculation.parkingCost > 0) {
-            expenses.push({
-                description: 'Parking fees',
-                amount: currentCalculation.parkingCost,
-                category: 'transport',
-                paymentMode: 'cash',
-                date: today,
-                addedBy: auth.currentUser.uid,
-                addedAt: new Date().toISOString()
-            });
-        }
-        
-        // Add insurance expense separately if applicable
-        if (currentCalculation.insuranceCost > 0) {
-            expenses.push({
-                description: 'Vehicle insurance',
-                amount: currentCalculation.insuranceCost,
-                category: 'insurance',
-                paymentMode: 'card',
-                date: today,
-                addedBy: auth.currentUser.uid,
-                addedAt: new Date().toISOString()
-            });
+        // Then add the calculated costs (existing logic)
+        if (currentCalculation) {
+            // Add fuel expense from calculation
+            if (currentCalculation.fuelCost > 0) {
+                expenses.push({
+                    description: `Fuel for ${currentCalculation.tripDistance} km trip`,
+                    amount: currentCalculation.fuelCost,
+                    category: 'fuel',
+                    paymentMode: 'cash',
+                    date: today,
+                    addedBy: auth.currentUser.uid,
+                    addedAt: new Date().toISOString(),
+                    isCalculatedFuel: true,
+                    tripDistance: currentCalculation.tripDistance,
+                    fuelConsumed: currentCalculation.fuelConsumed
+                });
+            }
+            
+            // Add rental expense if applicable
+            if (currentCalculation.rentalCost > 0) {
+                expenses.push({
+                    description: `Car rental for ${currentCalculation.tripDuration} days`,
+                    amount: currentCalculation.rentalCost,
+                    category: 'transport',
+                    paymentMode: 'card',
+                    date: today,
+                    addedBy: auth.currentUser.uid,
+                    addedAt: new Date().toISOString()
+                });
+            }
+            
+            // Add MAINTENANCE expense separately
+            if (currentCalculation.maintenanceCost > 0) {
+                expenses.push({
+                    description: 'Vehicle maintenance',
+                    amount: currentCalculation.maintenanceCost,
+                    category: 'maintenance',
+                    paymentMode: 'cash',
+                    date: today,
+                    addedBy: auth.currentUser.uid,
+                    addedAt: new Date().toISOString()
+                });
+            }
+            
+            // Add TOLL CHARGES expense separately
+            if (currentCalculation.tollCost > 0) {
+                expenses.push({
+                    description: 'Toll charges',
+                    amount: currentCalculation.tollCost,
+                    category: 'transport',
+                    paymentMode: 'cash',
+                    date: today,
+                    addedBy: auth.currentUser.uid,
+                    addedAt: new Date().toISOString()
+                });
+            }
+            
+            // Add PARKING expense separately
+            if (currentCalculation.parkingCost > 0) {
+                expenses.push({
+                    description: 'Parking fees',
+                    amount: currentCalculation.parkingCost,
+                    category: 'transport',
+                    paymentMode: 'cash',
+                    date: today,
+                    addedBy: auth.currentUser.uid,
+                    addedAt: new Date().toISOString()
+                });
+            }
+            
+            // Add insurance expense separately if applicable
+            if (currentCalculation.insuranceCost > 0) {
+                expenses.push({
+                    description: 'Vehicle insurance',
+                    amount: currentCalculation.insuranceCost,
+                    category: 'insurance',
+                    paymentMode: 'card',
+                    date: today,
+                    addedBy: auth.currentUser.uid,
+                    addedAt: new Date().toISOString()
+                });
+            }
         }
 
+        // Update trip with all expenses
         await db.collection('trips').doc(tripId).update({
             expenses: expenses,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
-        
+
         const modal = bootstrap.Modal.getInstance(document.getElementById('addToExpensesModal'));
         modal.hide();
         
-        showAlert('All expenses added to trip successfully!', 'success');
+        // Show success message with details
+        let successMessage = 'All expenses added to trip successfully!';
+        if (fuelFillUps.length > 0 && currentCalculation) {
+            successMessage = `${fuelFillUps.length} fuel fill-ups and calculated costs added to trip!`;
+        } else if (fuelFillUps.length > 0) {
+            successMessage = `${fuelFillUps.length} fuel fill-ups added to trip!`;
+        } else if (currentCalculation) {
+            successMessage = 'Calculated costs added to trip!';
+        }
+        
+        showAlert(successMessage, 'success');
+        
+        // Reset fill-ups after successful addition (optional)
+        // fuelFillUps = [];
+        // updateFillUpHistory();
+        // calculateActualMileage();
+        // saveFillUpsToStorage();
         
     } catch (error) {
         console.error('Error adding expenses to trip:', error);
