@@ -238,6 +238,78 @@
         </div>
     </div>
 
+    <!-- Fuel Tracking Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-gas-pump me-2"></i>Fuel Tracking</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- Fuel Statistics -->
+                    <div class="col-md-3 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <i class="fas fa-fire text-warning fa-2x mb-2"></i>
+                                <h4 id="total-fuel-filled">0 L</h4>
+                                <small class="text-muted">Total Fuel Filled</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <i class="fas fa-rupee-sign text-success fa-2x mb-2"></i>
+                                <h4><span class="rupee-symbol">₹</span><span id="total-fuel-cost">0</span></h4>
+                                <small class="text-muted">Total Fuel Cost</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <i class="fas fa-tachometer-alt text-primary fa-2x mb-2"></i>
+                                <h4 id="average-mileage">0 km/L</h4>
+                                <small class="text-muted">Average Mileage</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <i class="fas fa-road text-info fa-2x mb-2"></i>
+                                <h4 id="total-fuel-distance">0 km</h4>
+                                <small class="text-muted">Distance Covered</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Fuel Fill-ups -->
+                <div class="mt-4">
+                    <h6><i class="fas fa-history me-2"></i>Recent Fuel Fill-ups</h6>
+                    <div id="recent-fuel-fillups">
+                        <div class="text-center text-muted py-3">
+                            <i class="fas fa-gas-pump fa-2x mb-2"></i>
+                            <p>No fuel fill-ups recorded yet</p>
+                            <a href="car-calculations.html" class="btn btn-success btn-sm">
+                                <i class="fas fa-plus me-1"></i>Add Fuel Fill-up
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fuel Price Trend -->
+                <div class="mt-4">
+                    <h6><i class="fas fa-chart-line me-2"></i>Fuel Price Trend</h6>
+                    <canvas id="fuelPriceChart" height="100"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
     <!-- Main Trips Grid -->
     <div class="row">
         <div class="col-12">
