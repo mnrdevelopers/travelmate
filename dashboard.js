@@ -1701,29 +1701,3 @@ async function clearTripFuelData(tripId) {
         showToast('Error clearing fuel data', 'danger');
     }
 }
-
-// PWA Initialization
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function() {
-        navigator.serviceWorker.register('/sw.js')
-            .then(function(registration) {
-                console.log('ServiceWorker registration successful');
-            })
-            .catch(function(error) {
-                console.log('ServiceWorker registration failed: ', error);
-            });
-    });
-}
-
-// Handle app installed event
-window.addEventListener('appinstalled', (evt) => {
-    console.log('TravelMate was installed successfully!');
-});
-
-// Enhanced offline handling
-window.addEventListener('online', function() {
-    // Sync data when coming back online
-    if (typeof syncOfflineData === 'function') {
-        syncOfflineData();
-    }
-});
