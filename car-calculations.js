@@ -876,7 +876,29 @@ function addFuelFillUp() {
     resetFillUpForm();
     saveFillUpsToStorage();
     
+    // Update trip data if we have a current trip
+    if (currentFillUpTrip && currentFillUpTrip.id) {
+        updateTripFuelFillUps(currentFillUpTrip.id, fuelFillUps);
+    }
+    
     showAlert('Fuel fill-up added successfully!', 'success');
+}
+
+// Function to set current trip for fuel tracking
+function setCurrentFillUpTrip(trip) {
+    currentFillUpTrip = trip;
+    
+    // Load fill-ups from the specific trip
+    if (trip && trip.fuelFillUps) {
+        fuelFillUps = [...trip.fuelFillUps];
+        fuelFillUps.sort((a, b) => a.odometer - b.odometer);
+        updateFillUpHistory();
+        calculateActualMileage();
+    } else {
+        fuelFillUps = [];
+        updateFillUpHistory();
+        calculateActualMileage();
+    }
 }
 
 function calculateActualMileage() {
@@ -997,10 +1019,16 @@ function updateFillUpHistory() {
 function deleteFillUp(index) {
     if (!confirm('Are you sure you want to delete this fill-up?')) return;
     
+    const deletedFillUp = fuelFillUps[index];
     fuelFillUps.splice(index, 1);
     updateFillUpHistory();
     calculateActualMileage();
     saveFillUpsToStorage();
+    
+    // Update trip data if we have a current trip
+    if (currentFillUpTrip && currentFillUpTrip.id) {
+        updateTripFuelFillUps(currentFillUpTrip.id, fuelFillUps);
+    }
     
     showAlert('Fill-up deleted successfully!', 'success');
 }
@@ -1017,10 +1045,16 @@ function resetAllFillUps() {
     
     if (!confirm('Are you sure you want to delete all fill-ups? This cannot be undone.')) return;
     
+    const tripId = currentFillUpTrip ? currentFillUpTrip.id : null;
     fuelFillUps = [];
     updateFillUpHistory();
     calculateActualMileage();
     saveFillUpsToStorage();
+    
+    // Update trip data
+    if (tripId) {
+        updateTripFuelFillUps(tripId, []);
+    }
     
     showAlert('All fill-ups cleared!', 'info');
 }
@@ -1052,6 +1086,19 @@ function loadSavedFillUps() {
     } catch (error) {
         console.error('Error loading saved fill-ups:', error);
         fuelFillUps = [];
+    }
+}
+
+async function updateTripFuelFillUps(tripId, fillUps) {
+    if (!tripId) return;
+    
+    try {
+        await db.collection('trips').doc(tripId).update({
+            fuelFillUps: fillUps,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    } catch (error) {
+        console.error('Error updating trip fuel fill-ups:', error);
     }
 }
 
