@@ -1360,19 +1360,40 @@ function loadRecentFuelFillups() {
     // Collect all fuel fill-ups from all trips
     userTrips.forEach(trip => {
         if (trip.fuelFillUps && trip.fuelFillUps.length > 0) {
-            allFillUps = allFillUps.concat(trip.fuelFillUps.map(fillUp => ({
-                ...fillUp,
-                tripName: trip.name,
-                tripCode: trip.code
-            })));
+            // Filter out any invalid fill-ups
+            const validFillUps = trip.fuelFillUps.filter(fillUp => 
+                fillUp && 
+                fillUp.odometer && 
+                fillUp.liters && 
+                fillUp.cost &&
+                fillUp.odometer > 0 &&
+                fillUp.liters > 0 &&
+                fillUp.cost > 0
+            );
+            
+            if (validFillUps.length > 0) {
+                allFillUps = allFillUps.concat(validFillUps.map(fillUp => ({
+                    ...fillUp,
+                    tripName: trip.name,
+                    tripCode: trip.code
+                })));
+            }
         }
     });
 
-    // Sort by date (newest first)
+    // Sort by date (newest first) and filter out duplicates
     allFillUps.sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    // Remove duplicates based on timestamp and odometer
+    const uniqueFillUps = allFillUps.filter((fillUp, index, self) =>
+        index === self.findIndex(f => 
+            f.timestamp === fillUp.timestamp && 
+            f.odometer === fillUp.odometer
+        )
+    );
 
     // Take only last 5 fill-ups
-    const recentFillUps = allFillUps.slice(0, 5);
+    const recentFillUps = uniqueFillUps.slice(0, 5);
 
     if (recentFillUps.length === 0) {
         recentFuelContainer.innerHTML = `
@@ -1422,11 +1443,11 @@ function loadRecentFuelFillups() {
     }).join('');
 
     // Add "View All" button if there are more fill-ups
-    if (allFillUps.length > 5) {
+    if (uniqueFillUps.length > 5) {
         recentFuelContainer.innerHTML += `
             <div class="text-center mt-3">
                 <button class="btn btn-outline-primary btn-sm" id="view-all-fillups-btn">
-                    <i class="fas fa-list me-1"></i>View All ${allFillUps.length} Fill-ups
+                    <i class="fas fa-list me-1"></i>View All ${uniqueFillUps.length} Fill-ups
                 </button>
             </div>
         `;
@@ -1662,4 +1683,21 @@ function showAllFuelFillupsModal() {
     // Show the modal
     const modal = new bootstrap.Modal(document.getElementById('allFuelFillupsModal'));
     modal.show();
+}
+
+// Function to clear fuel data from a specific trip
+async function clearTripFuelData(tripId) {
+    try {
+        await db.collection('trips').doc(tripId).update({
+            fuelFillUps: [],
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        // Reload the dashboard data
+        await loadUserTrips();
+        showToast('Fuel data cleared successfully!', 'success');
+    } catch (error) {
+        console.error('Error clearing fuel data:', error);
+        showToast('Error clearing fuel data', 'danger');
+    }
 }
