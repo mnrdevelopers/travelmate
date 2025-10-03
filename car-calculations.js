@@ -2,6 +2,8 @@
 let currentVehicle = null;
 let savedVehicles = [];
 let currentCalculation = null;
+let fuelFillUps = [];
+let currentFillUpTrip = null;
 
 document.addEventListener('DOMContentLoaded', function() {
     checkAuthState();
@@ -58,6 +60,9 @@ function setupCarCalculatorEventListeners() {
     if (logoutBtn) {
         logoutBtn.addEventListener('click', handleLogout);
     }
+
+     // Add fuel fill-up listeners
+    setupFuelFillUpEventListeners();
     
     // Auto-calculate on input changes
     const autoCalculateFields = ['trip-distance', 'mileage', 'fuel-price', 'rental-cost', 'trip-duration'];
@@ -504,10 +509,22 @@ async function addToTripExpenses() {
         return;
     }
     
-    if (!currentCalculation) {
-        showAlert('No calculation data available', 'warning');
-        return;
-    }
+    try {
+        document.getElementById('confirm-add-expenses').disabled = true;
+        document.getElementById('confirm-add-expenses').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Adding...';
+
+        // First add fuel fill-ups if any
+        if (fuelFillUps.length > 0) {
+            await addFuelFillUpsToExpenses(tripId);
+        }
+        
+        // Then add the calculated costs (existing logic)
+        if (currentCalculation) {
+            const tripDoc = await db.collection('trips').doc(tripId).get();
+            const tripData = tripDoc.data();
+            
+            const expenses = tripData.expenses || [];
+            const today = new Date().toISOString().split('T')[0];
     
     try {
         document.getElementById('confirm-add-expenses').disabled = true;
@@ -721,5 +738,289 @@ function getAlertIcon(type) {
         case 'warning': return 'exclamation-circle';
         case 'info': return 'info-circle';
         default: return 'info-circle';
+    }
+}
+
+// Fuel Fill-up Tracking Functions
+function setupFuelFillUpEventListeners() {
+    const addFillUpBtn = document.getElementById('add-fillup-btn');
+    const resetFillUpsBtn = document.getElementById('reset-fillups-btn');
+    
+    if (addFillUpBtn) {
+        addFillUpBtn.addEventListener('click', addFuelFillUp);
+    }
+    
+    if (resetFillUpsBtn) {
+        resetFillUpsBtn.addEventListener('click', resetAllFillUps);
+    }
+    
+    // Set default date to today
+    document.getElementById('fillup-date').valueAsDate = new Date();
+    
+    // Load saved fill-ups if any
+    loadSavedFillUps();
+}
+
+function addFuelFillUp() {
+    const odometer = parseFloat(document.getElementById('fillup-odometer').value);
+    const liters = parseFloat(document.getElementById('fillup-liters').value);
+    const cost = parseFloat(document.getElementById('fillup-cost').value);
+    const date = document.getElementById('fillup-date').value;
+    
+    if (!odometer || !liters || !cost) {
+        showAlert('Please fill all required fields', 'warning');
+        return;
+    }
+    
+    // Validate odometer reading is increasing
+    if (fuelFillUps.length > 0) {
+        const lastOdometer = fuelFillUps[fuelFillUps.length - 1].odometer;
+        if (odometer <= lastOdometer) {
+            showAlert('Odometer reading must be greater than previous reading', 'warning');
+            return;
+        }
+    }
+    
+    const fillUp = {
+        odometer,
+        liters,
+        cost,
+        date: date || new Date().toISOString().split('T')[0],
+        timestamp: new Date().toISOString(),
+        fuelPrice: parseFloat((cost / liters).toFixed(2))
+    };
+    
+    fuelFillUps.push(fillUp);
+    
+    // Sort by odometer reading
+    fuelFillUps.sort((a, b) => a.odometer - b.odometer);
+    
+    updateFillUpHistory();
+    calculateActualMileage();
+    resetFillUpForm();
+    saveFillUpsToStorage();
+    
+    showAlert('Fuel fill-up added successfully!', 'success');
+}
+
+function calculateActualMileage() {
+    const resultsContainer = document.getElementById('actual-mileage-results');
+    
+    if (fuelFillUps.length < 2) {
+        resultsContainer.style.display = 'none';
+        return;
+    }
+    
+    let totalDistance = 0;
+    let totalFuel = 0;
+    let totalCost = 0;
+    
+    // Calculate distances and fuel between fill-ups
+    for (let i = 1; i < fuelFillUps.length; i++) {
+        const distance = fuelFillUps[i].odometer - fuelFillUps[i-1].odometer;
+        const fuel = fuelFillUps[i].liters;
+        
+        totalDistance += distance;
+        totalFuel += fuel;
+        totalCost += fuelFillUps[i].cost;
+    }
+    
+    const actualMileage = totalFuel > 0 ? (totalDistance / totalFuel).toFixed(2) : 0;
+    const costPerKm = totalDistance > 0 ? (totalCost / totalDistance).toFixed(2) : 0;
+    const averageFuelPrice = totalFuel > 0 ? (totalCost / totalFuel).toFixed(2) : 0;
+    
+    // Update UI with actual calculations
+    document.getElementById('actual-mileage').textContent = `${actualMileage} km/l`;
+    document.getElementById('actual-cost-per-km').textContent = `₹${costPerKm}/km`;
+    document.getElementById('total-distance-traveled').textContent = `${totalDistance} km`;
+    document.getElementById('total-fuel-cost').textContent = `₹${totalCost.toFixed(2)}`;
+    
+    resultsContainer.style.display = 'block';
+    
+    // Update the main calculator with actual data
+    updateCalculatorWithActualData(actualMileage, averageFuelPrice, totalDistance);
+}
+
+function updateCalculatorWithActualData(mileage, fuelPrice, distance) {
+    if (mileage > 0) {
+        document.getElementById('mileage').value = mileage;
+    }
+    if (fuelPrice > 0) {
+        document.getElementById('fuel-price').value = fuelPrice;
+    }
+    if (distance > 0 && !document.getElementById('trip-distance').value) {
+        document.getElementById('trip-distance').value = distance;
+    }
+    
+    // Recalculate costs with actual data
+    calculateAllCosts();
+}
+
+function updateFillUpHistory() {
+    const fillupList = document.getElementById('fillup-list');
+    
+    if (fuelFillUps.length === 0) {
+        fillupList.innerHTML = `
+            <div class="text-center text-muted py-3">
+                <i class="fas fa-gas-pump fa-2x mb-2"></i>
+                <p>No fill-ups recorded yet</p>
+                <small>Add your first fuel fill-up to start tracking</small>
+            </div>
+        `;
+        return;
+    }
+    
+    fillupList.innerHTML = fuelFillUps.map((fillUp, index) => {
+        const previousOdometer = index > 0 ? fuelFillUps[index - 1].odometer : 0;
+        const distance = index > 0 ? fillUp.odometer - previousOdometer : 0;
+        const mileage = index > 0 ? (distance / fillUp.liters).toFixed(2) : 'N/A';
+        
+        return `
+            <div class="card mb-3 fillup-item">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="row">
+                                <div class="col-md-2">
+                                    <strong class="text-primary">${fillUp.odometer} km</strong>
+                                    ${index > 0 ? `<br><small class="text-muted">+${distance} km</small>` : ''}
+                                </div>
+                                <div class="col-md-2">
+                                    ${fillUp.liters} L<br>
+                                    <small class="text-muted">₹${fillUp.fuelPrice}/L</small>
+                                </div>
+                                <div class="col-md-2">
+                                    ₹${fillUp.cost.toFixed(2)}<br>
+                                    ${index > 0 ? `<small class="text-muted">${mileage} km/L</small>` : '<small class="text-muted">First fill</small>'}
+                                </div>
+                                <div class="col-md-3">
+                                    <small class="text-muted">${new Date(fillUp.date).toLocaleDateString()}</small>
+                                </div>
+                                <div class="col-md-3 text-end">
+                                    <button class="btn btn-sm btn-outline-danger delete-fillup-btn" data-index="${index}">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    // Add event listeners to delete buttons
+    document.querySelectorAll('.delete-fillup-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const index = parseInt(e.target.closest('.delete-fillup-btn').dataset.index);
+            deleteFillUp(index);
+        });
+    });
+}
+
+function deleteFillUp(index) {
+    if (!confirm('Are you sure you want to delete this fill-up?')) return;
+    
+    fuelFillUps.splice(index, 1);
+    updateFillUpHistory();
+    calculateActualMileage();
+    saveFillUpsToStorage();
+    
+    showAlert('Fill-up deleted successfully!', 'success');
+}
+
+function resetFillUpForm() {
+    document.getElementById('fillup-odometer').value = '';
+    document.getElementById('fillup-liters').value = '';
+    document.getElementById('fillup-cost').value = '';
+    // Keep the date as is for convenience
+}
+
+function resetAllFillUps() {
+    if (fuelFillUps.length === 0) return;
+    
+    if (!confirm('Are you sure you want to delete all fill-ups? This cannot be undone.')) return;
+    
+    fuelFillUps = [];
+    updateFillUpHistory();
+    calculateActualMileage();
+    saveFillUpsToStorage();
+    
+    showAlert('All fill-ups cleared!', 'info');
+}
+
+function saveFillUpsToStorage() {
+    // Save to localStorage (you can modify this to use Firestore)
+    const fillUpData = {
+        fillUps: fuelFillUps,
+        savedAt: new Date().toISOString(),
+        tripId: currentFillUpTrip ? currentFillUpTrip.id : null
+    };
+    
+    localStorage.setItem('fuelFillUps', JSON.stringify(fillUpData));
+}
+
+function loadSavedFillUps() {
+    try {
+        const savedData = localStorage.getItem('fuelFillUps');
+        if (savedData) {
+            const fillUpData = JSON.parse(savedData);
+            fuelFillUps = fillUpData.fillUps || [];
+            
+            // Sort by odometer reading
+            fuelFillUps.sort((a, b) => a.odometer - b.odometer);
+            
+            updateFillUpHistory();
+            calculateActualMileage();
+        }
+    } catch (error) {
+        console.error('Error loading saved fill-ups:', error);
+        fuelFillUps = [];
+    }
+}
+
+// Enhanced Add to Expenses function to include fill-up data
+async function addFuelFillUpsToExpenses(tripId) {
+    if (fuelFillUps.length === 0) {
+        showAlert('No fuel fill-ups to add', 'warning');
+        return;
+    }
+    
+    try {
+        const tripDoc = await db.collection('trips').doc(tripId).get();
+        const tripData = tripDoc.data();
+        
+        const expenses = tripData.expenses || [];
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Add each fill-up as a separate expense
+        fuelFillUps.forEach((fillUp, index) => {
+            expenses.push({
+                description: `Fuel fill-up at ${fillUp.odometer} km - ${fillUp.liters}L`,
+                amount: fillUp.cost,
+                category: 'fuel',
+                paymentMode: 'cash',
+                date: fillUp.date || today,
+                addedBy: auth.currentUser.uid,
+                addedAt: new Date().toISOString(),
+                isFuelFillUp: true,
+                odometer: fillUp.odometer,
+                liters: fillUp.liters,
+                fuelPrice: fillUp.fuelPrice
+            });
+        });
+        
+        // Also save fill-up data to trip for reporting
+        await db.collection('trips').doc(tripId).update({
+            expenses: expenses,
+            fuelFillUps: fuelFillUps, // Store raw fill-up data
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        showAlert(`${fuelFillUps.length} fuel fill-ups added to trip expenses!`, 'success');
+        
+    } catch (error) {
+        console.error('Error adding fuel fill-ups to expenses:', error);
+        showAlert('Error adding fuel expenses to trip', 'danger');
     }
 }
