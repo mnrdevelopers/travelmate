@@ -1745,7 +1745,7 @@ async function calculateAndDisplayMemberExpenditure(trips) {
         memberStatsElement.innerHTML = `
             <div class="text-center text-muted py-4">
                 <i class="fas fa-users fa-3x mb-3"></i>
-                <p>No trips available</p>
+                <p>No expenditure data available</p>
             </div>
         `;
         return;
@@ -1798,6 +1798,9 @@ async function calculateAndDisplayMemberExpenditure(trips) {
             });
         }
 
+        // Calculate equalization
+        const equalizationData = calculateExpenseEqualization(memberData);
+
         // Sort by total spent (descending)
         memberData.sort((a, b) => b.totalSpent - a.totalSpent);
 
@@ -1814,65 +1817,194 @@ async function calculateAndDisplayMemberExpenditure(trips) {
             return;
         }
 
-        // Display member statistics
+        // Display member statistics with equalization
         memberStatsElement.innerHTML = `
             <div class="row">
-                <div class="col-md-8">
-                    <div class="table-responsive">
-                        <table class="table table-striped">
-                            <thead>
-                                <tr>
-                                    <th>Member</th>
-                                    <th>Trips</th>
-                                    <th>Total Spent</th>
-                                    <th>Percentage</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${memberData.map(member => `
-                                    <tr class="${member.isCurrentUser ? 'table-info' : ''}">
-                                        <td>
-                                            <div class="d-flex align-items-center">
-                                                <span class="badge bg-primary me-2">${member.isCurrentUser ? 'You' : 'Member'}</span>
-                                                ${member.name}
-                                            </div>
-                                        </td>
-                                        <td>${member.tripsCount}</td>
-                                        <td class="fw-bold text-success">
-                                            <span class="rupee-symbol">₹</span>${member.totalSpent.toFixed(2)}
-                                        </td>
-                                        <td>
-                                            <div class="progress" style="height: 20px;">
-                                                <div class="progress-bar ${member.isCurrentUser ? 'bg-info' : 'bg-success'}" 
-                                                     role="progressbar" 
-                                                     style="width: ${totalAllExpenses > 0 ? (member.totalSpent / totalAllExpenses * 100) : 0}%">
-                                                    ${totalAllExpenses > 0 ? ((member.totalSpent / totalAllExpenses * 100).toFixed(1)) : 0}%
+                <div class="col-md-12 mb-4">
+                    <div class="card border-warning">
+                        <div class="card-header bg-warning text-dark">
+                            <h6 class="mb-0"><i class="fas fa-balance-scale me-2"></i>Expense Equalization Summary</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-md-3 mb-3">
+                                    <div class="card bg-light">
+                                        <div class="card-body">
+                                            <h4 class="text-primary"><span class="rupee-symbol">₹</span>${totalAllExpenses.toFixed(2)}</h4>
+                                            <small class="text-muted">Total Group Expenses</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <div class="card bg-light">
+                                        <div class="card-body">
+                                            <h4 class="text-success"><span class="rupee-symbol">₹</span>${equalizationData.averagePerPerson.toFixed(2)}</h4>
+                                            <small class="text-muted">Average Per Person</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <div class="card bg-light">
+                                        <div class="card-body">
+                                            <h4 class="text-info">${allMembers.size}</h4>
+                                            <small class="text-muted">Total Members</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <div class="card bg-light">
+                                        <div class="card-body">
+                                            <h4 class="${equalizationData.netBalance === 0 ? 'text-success' : 'text-warning'}">
+                                                <span class="rupee-symbol">₹</span>${Math.abs(equalizationData.netBalance).toFixed(2)}
+                                            </h4>
+                                            <small class="text-muted">${equalizationData.netBalance === 0 ? 'Perfectly Balanced' : 'Net Balance'}</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            ${equalizationData.transactions.length > 0 ? `
+                                <div class="mt-4">
+                                    <h6 class="text-center mb-3"><i class="fas fa-exchange-alt me-2"></i>Payment Settlements Required</h6>
+                                    <div class="row justify-content-center">
+                                        ${equalizationData.transactions.map(transaction => `
+                                            <div class="col-md-8 mb-2">
+                                                <div class="alert ${transaction.amount > 0 ? 'alert-success' : 'alert-info'} py-2">
+                                                    <div class="d-flex justify-content-between align-items-center">
+                                                        <span>
+                                                            <strong>${transaction.from}</strong>
+                                                            <i class="fas fa-arrow-right mx-2"></i>
+                                                            <strong>${transaction.to}</strong>
+                                                        </span>
+                                                        <span class="fw-bold">
+                                                            <span class="rupee-symbol">₹</span>${Math.abs(transaction.amount).toFixed(2)}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                            <tfoot class="table-primary">
-                                <tr>
-                                    <td><strong>Total</strong></td>
-                                    <td>${trips.length}</td>
-                                    <td class="fw-bold">
-                                        <span class="rupee-symbol">₹</span>${totalAllExpenses.toFixed(2)}
-                                    </td>
-                                    <td>100%</td>
-                                </tr>
-                            </tfoot>
-                        </table>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            ` : `
+                                <div class="text-center mt-3">
+                                    <div class="alert alert-success">
+                                        <i class="fas fa-check-circle me-2"></i>
+                                        All expenses are perfectly balanced! No settlements needed.
+                                    </div>
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="card">
+                        <div class="card-header bg-primary text-white">
+                            <h6 class="mb-0"><i class="fas fa-list me-2"></i>Detailed Member Breakdown</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Member</th>
+                                            <th>Trips</th>
+                                            <th>Total Spent</th>
+                                            <th>Should Pay/Receive</th>
+                                            <th>Balance</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${equalizationData.memberBalances.map(member => `
+                                            <tr class="${member.isCurrentUser ? 'table-info' : ''}">
+                                                <td>
+                                                    <div class="d-flex align-items-center">
+                                                        <span class="badge ${member.isCurrentUser ? 'bg-info' : 'bg-primary'} me-2">
+                                                            ${member.isCurrentUser ? 'You' : 'Member'}
+                                                        </span>
+                                                        ${member.name}
+                                                    </div>
+                                                </td>
+                                                <td>${member.tripsCount}</td>
+                                                <td class="fw-bold">
+                                                    <span class="rupee-symbol">₹</span>${member.totalSpent.toFixed(2)}
+                                                </td>
+                                                <td class="fw-bold">
+                                                    <span class="rupee-symbol">₹</span>${member.shouldHavePaid.toFixed(2)}
+                                                </td>
+                                                <td class="fw-bold ${member.balance > 0 ? 'text-success' : member.balance < 0 ? 'text-danger' : 'text-dark'}">
+                                                    <span class="rupee-symbol">₹</span>${Math.abs(member.balance).toFixed(2)}
+                                                    ${member.balance > 0 ? '<i class="fas fa-arrow-up ms-1"></i>' : 
+                                                      member.balance < 0 ? '<i class="fas fa-arrow-down ms-1"></i>' : ''}
+                                                </td>
+                                                <td>
+                                                    <span class="badge ${member.balance === 0 ? 'bg-success' : 
+                                                                       member.balance > 0 ? 'bg-warning text-dark' : 
+                                                                       'bg-info text-dark'}">
+                                                        ${member.balance === 0 ? 'Balanced' :
+                                                          member.balance > 0 ? 'To Receive' : 'To Pay'}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                    <tfoot class="table-primary">
+                                        <tr>
+                                            <td><strong>Total</strong></td>
+                                            <td>${trips.length}</td>
+                                            <td class="fw-bold">
+                                                <span class="rupee-symbol">₹</span>${totalAllExpenses.toFixed(2)}
+                                            </td>
+                                            <td class="fw-bold">
+                                                <span class="rupee-symbol">₹</span>${totalAllExpenses.toFixed(2)}
+                                            </td>
+                                            <td></td>
+                                            <td></td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <div class="card">
-                        <div class="card-header bg-info text-white">
+                    <div class="card mb-4">
+                        <div class="card-header bg-success text-white">
                             <h6 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Expense Distribution</h6>
                         </div>
                         <div class="card-body">
                             <canvas id="memberExpenseChart" height="250"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-header bg-info text-white">
+                            <h6 class="mb-0"><i class="fas fa-percentage me-2"></i>Balance Overview</h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="balance-summary">
+                                ${equalizationData.memberBalances.map(member => `
+                                    <div class="d-flex justify-content-between align-items-center mb-2 p-2 border rounded ${member.isCurrentUser ? 'bg-light' : ''}">
+                                        <div>
+                                            <small class="fw-bold">${member.name}</small>
+                                            <br>
+                                            <small class="text-muted">${member.isCurrentUser ? '(You)' : ''}</small>
+                                        </div>
+                                        <div class="text-end">
+                                            <span class="badge ${member.balance > 0 ? 'bg-warning text-dark' : 
+                                                               member.balance < 0 ? 'bg-info text-dark' : 
+                                                               'bg-success'}">
+                                                ${member.balance > 0 ? 'Gets ₹' + Math.abs(member.balance).toFixed(2) :
+                                                  member.balance < 0 ? 'Pays ₹' + Math.abs(member.balance).toFixed(2) :
+                                                  'Settled'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1880,7 +2012,7 @@ async function calculateAndDisplayMemberExpenditure(trips) {
         `;
 
         // Render the pie chart
-        renderMemberExpenseChart(memberData);
+        renderMemberExpenseChart(equalizationData.memberBalances);
 
     } catch (error) {
         console.error('Error calculating member expenditure:', error);
@@ -1891,6 +2023,66 @@ async function calculateAndDisplayMemberExpenditure(trips) {
             </div>
         `;
     }
+}
+
+// Add the expense equalization calculation function
+function calculateExpenseEqualization(memberData) {
+    // Calculate total expenses
+    const totalExpenses = memberData.reduce((sum, member) => sum + member.totalSpent, 0);
+    
+    // Calculate average per person
+    const averagePerPerson = totalExpenses / memberData.length;
+    
+    // Calculate each member's balance (positive = should receive, negative = should pay)
+    const memberBalances = memberData.map(member => ({
+        ...member,
+        shouldHavePaid: averagePerPerson,
+        balance: member.totalSpent - averagePerPerson
+    }));
+    
+    // Sort members by balance (highest positive first, then highest negative)
+    const receivers = memberBalances.filter(m => m.balance > 0).sort((a, b) => b.balance - a.balance);
+    const payers = memberBalances.filter(m => m.balance < 0).sort((a, b) => a.balance - b.balance);
+    
+    // Calculate transactions to settle balances
+    const transactions = [];
+    
+    let receiverIndex = 0;
+    let payerIndex = 0;
+    
+    while (receiverIndex < receivers.length && payerIndex < payers.length) {
+        const receiver = receivers[receiverIndex];
+        const payer = payers[payerIndex];
+        
+        const amount = Math.min(receiver.balance, Math.abs(payer.balance));
+        
+        if (amount > 0.01) { // Only create transactions for amounts greater than 1 paisa
+            transactions.push({
+                from: payer.name,
+                to: receiver.name,
+                amount: amount
+            });
+            
+            // Update balances
+            receiver.balance -= amount;
+            payer.balance += amount;
+            
+            // Move to next receiver/payer if balance is settled
+            if (Math.abs(receiver.balance) < 0.01) receiverIndex++;
+            if (Math.abs(payer.balance) < 0.01) payerIndex++;
+        }
+    }
+    
+    // Calculate net balance (should be very close to 0 due to rounding)
+    const netBalance = memberBalances.reduce((sum, member) => sum + member.balance, 0);
+    
+    return {
+        totalExpenses,
+        averagePerPerson,
+        memberBalances,
+        transactions,
+        netBalance
+    };
 }
 
 function renderMemberExpenseChart(memberData) {
