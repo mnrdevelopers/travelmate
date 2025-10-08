@@ -180,3 +180,156 @@ function formatMinutesToDuration(totalMinutes) {
         return `${minutes} minute${minutes > 1 ? 's' : ''}`;
     }
 }
+
+// Add function to generate settlement actions
+function generateSettlementActions(equalizationData) {
+    const settlementSection = document.getElementById('quick-settlement-section');
+    const settlementActions = document.getElementById('settlement-actions');
+    
+    if (equalizationData.transactions.length === 0) {
+        settlementSection.style.display = 'none';
+        return;
+    }
+    
+    settlementSection.style.display = 'block';
+    
+    settlementActions.innerHTML = equalizationData.transactions.map((transaction, index) => {
+        const currentUser = auth.currentUser;
+        const involvesCurrentUser = transaction.from === 'You' || transaction.to === 'You';
+        
+        return `
+            <div class="col-md-6 col-lg-4 mb-3">
+                <div class="card h-100 ${involvesCurrentUser ? 'border-warning' : ''}">
+                    <div class="card-body">
+                        <div class="text-center mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div class="text-start">
+                                    <small class="text-muted">From</small>
+                                    <div class="fw-bold ${transaction.from === 'You' ? 'text-danger' : ''}">${transaction.from}</div>
+                                </div>
+                                <div class="px-3">
+                                    <i class="fas fa-arrow-right text-primary"></i>
+                                </div>
+                                <div class="text-end">
+                                    <small class="text-muted">To</small>
+                                    <div class="fw-bold ${transaction.to === 'You' ? 'text-success' : ''}">${transaction.to}</div>
+                                </div>
+                            </div>
+                            <h4 class="text-primary my-2">
+                                <span class="rupee-symbol">₹</span>${transaction.amount.toFixed(2)}
+                            </h4>
+                        </div>
+                        
+                        ${involvesCurrentUser ? `
+                            <div class="alert ${transaction.to === 'You' ? 'alert-success' : 'alert-warning'} py-2 mb-3">
+                                <small>
+                                    <i class="fas ${transaction.to === 'You' ? 'fa-arrow-circle-down' : 'fa-arrow-circle-up'} me-1"></i>
+                                    ${transaction.to === 'You' ? 'You will receive this amount' : 'You need to pay this amount'}
+                                </small>
+                            </div>
+                        ` : ''}
+                        
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-outline-primary btn-sm mark-settled-btn" data-transaction-index="${index}">
+                                <i class="fas fa-check me-1"></i>Mark as Settled
+                            </button>
+                            <button class="btn btn-outline-info btn-sm remind-btn" data-transaction="${JSON.stringify(transaction).replace(/"/g, '&quot;')}">
+                                <i class="fas fa-bell me-1"></i>Set Reminder
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    // Add event listeners for settlement actions
+    document.querySelectorAll('.mark-settled-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const index = this.getAttribute('data-transaction-index');
+            markTransactionAsSettled(index);
+        });
+    });
+    
+    document.querySelectorAll('.remind-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const transaction = JSON.parse(this.getAttribute('data-transaction'));
+            setSettlementReminder(transaction);
+        });
+    });
+    
+    // Add share functionality
+    document.getElementById('share-settlement-btn').addEventListener('click', () => {
+        shareSettlementPlan(equalizationData);
+    });
+    
+    document.getElementById('save-settlement-btn').addEventListener('click', () => {
+        saveSettlementAsPDF(equalizationData);
+    });
+}
+
+// Mark transaction as settled
+function markTransactionAsSettled(transactionIndex) {
+    // Store in localStorage for persistence
+    const settledTransactions = JSON.parse(localStorage.getItem('settledTransactions') || '{}');
+    settledTransactions[transactionIndex] = new Date().toISOString();
+    localStorage.setItem('settledTransactions', JSON.stringify(settledTransactions));
+    
+    showAlert('Transaction marked as settled!', 'success');
+    
+    // Reload the data to reflect changes
+    setTimeout(() => {
+        calculateAndDisplayMemberExpenditure(userTrips);
+    }, 1000);
+}
+
+// Set settlement reminder
+function setSettlementReminder(transaction) {
+    const reminderDate = prompt(`Set reminder date for settlement between ${transaction.from} and ${transaction.to} (YYYY-MM-DD):`, 
+        new Date().toISOString().split('T')[0]);
+    
+    if (reminderDate) {
+        const reminders = JSON.parse(localStorage.getItem('settlementReminders') || '[]');
+        reminders.push({
+            transaction,
+            reminderDate,
+            createdAt: new Date().toISOString()
+        });
+        localStorage.setItem('settlementReminders', JSON.stringify(reminders));
+        
+        showAlert(`Reminder set for ${reminderDate}`, 'info');
+    }
+}
+
+// Share settlement plan
+function shareSettlementPlan(equalizationData) {
+    let shareText = `🚗 TravelMate Settlement Plan\n\n`;
+    shareText += `Total Expenses: ₹${equalizationData.totalExpenses.toFixed(2)}\n`;
+    shareText += `Average per person: ₹${equalizationData.averagePerPerson.toFixed(2)}\n\n`;
+    shareText += `Settlement Transactions:\n\n`;
+    
+    equalizationData.transactions.forEach((transaction, index) => {
+        shareText += `${index + 1}. ${transaction.from} → ${transaction.to}: ₹${transaction.amount.toFixed(2)}\n`;
+    });
+    
+    shareText += `\nGenerated on ${new Date().toLocaleDateString()}`;
+    
+    if (navigator.share) {
+        navigator.share({
+            title: 'TravelMate Settlement Plan',
+            text: shareText
+        });
+    } else {
+        // Fallback: copy to clipboard
+        navigator.clipboard.writeText(shareText).then(() => {
+            showAlert('Settlement plan copied to clipboard!', 'success');
+        });
+    }
+}
+
+// Save as PDF (simplified version)
+function saveSettlementAsPDF(equalizationData) {
+    showAlert('PDF export feature would be implemented here!', 'info');
+    // In a real implementation, you would use a library like jsPDF
+    // This is a placeholder for the PDF functionality
+}
