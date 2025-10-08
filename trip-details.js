@@ -3,6 +3,12 @@ let currentTrip = null;
 let expenseChart = null;
 let paymentChart = null;
 let customCategories = [];
+let currentFilters = {
+    category: 'all',
+    payment: 'all',
+    member: 'all',
+    date: 'all'
+};
 
 document.addEventListener('DOMContentLoaded', function() {
     // Only setup event listeners, checkAuthState will handle the rest
@@ -17,6 +23,14 @@ function setupTripDetailsEventListeners() {
     document.getElementById('add-activity-btn').addEventListener('click', showAddActivityModal);
     document.getElementById('save-activity-btn').addEventListener('click', saveActivity);
     document.getElementById('calculate-route-btn').addEventListener('click', calculateRoute);
+
+     // Filter event listeners
+    document.getElementById('category-filter').addEventListener('change', applyExpenseFilters);
+    document.getElementById('payment-filter').addEventListener('change', applyExpenseFilters);
+    document.getElementById('member-filter').addEventListener('change', applyExpenseFilters);
+    document.getElementById('date-filter').addEventListener('change', applyExpenseFilters);
+    document.getElementById('clear-filters-btn').addEventListener('click', clearExpenseFilters);
+}
 
     // Add event listener for update trip button in trip details page
     document.getElementById('update-trip-btn-trip-details').addEventListener('click', updateTripFromDetails);
@@ -420,9 +434,20 @@ async function loadTripMembers(trip) {
     }
 }
 
-function loadTripExpenses(trip) {
+async function loadTripExpenses(trip) {
     const expensesList = document.getElementById('expenses-list');
     const emptyExpenses = document.getElementById('empty-expenses');
+    const memberFilter = document.getElementById('member-filter');
+    
+    // Populate member filter
+    memberFilter.innerHTML = '<option value="all">All Members</option>';
+    
+    if (trip.members && trip.members.length > 0) {
+        for (const memberId of trip.members) {
+            const memberName = await getMemberName(memberId);
+            memberFilter.innerHTML += `<option value="${memberId}">${memberName}</option>`;
+        }
+    }
     
     if (!trip.expenses || trip.expenses.length === 0) {
         expensesList.innerHTML = '';
@@ -432,19 +457,7 @@ function loadTripExpenses(trip) {
     }
     
     emptyExpenses.classList.add('d-none');
-    
-    // Sort expenses by date (newest first) but preserve original indices
-    const sortedExpenses = trip.expenses.map((expense, originalIndex) => ({
-        ...expense,
-        originalIndex // Store the original index for editing
-    })).sort((a, b) => new Date(b.date) - new Date(a.date));
-    
-    expensesList.innerHTML = '';
-    sortedExpenses.forEach((expense, displayIndex) => {
-        const expenseItem = createExpenseItem(expense, expense.originalIndex);
-        expensesList.appendChild(expenseItem);
-    });
-    
+    filterAndDisplayExpenses();
     updateBudgetSummary(trip);
     renderExpenseChart(trip);
     renderPaymentChart(trip);
@@ -1982,3 +1995,132 @@ function debugExpenses() {
     }
     console.log('=== END DEBUG INFO ===');
 }
+
+function applyExpenseFilters() {
+    currentFilters = {
+        category: document.getElementById('category-filter').value,
+        payment: document.getElementById('payment-filter').value,
+        member: document.getElementById('member-filter').value,
+        date: document.getElementById('date-filter').value
+    };
+    
+    filterAndDisplayExpenses();
+}
+
+function clearExpenseFilters() {
+    document.getElementById('category-filter').value = 'all';
+    document.getElementById('payment-filter').value = 'all';
+    document.getElementById('member-filter').value = 'all';
+    document.getElementById('date-filter').value = 'all';
+    
+    currentFilters = {
+        category: 'all',
+        payment: 'all',
+        member: 'all',
+        date: 'all'
+    };
+    
+    filterAndDisplayExpenses();
+}
+
+function filterAndDisplayExpenses() {
+    if (!currentTrip || !currentTrip.expenses) return;
+    
+    let filteredExpenses = [...currentTrip.expenses];
+    
+    // Apply category filter
+    if (currentFilters.category !== 'all') {
+        filteredExpenses = filteredExpenses.filter(expense => 
+            expense.category === currentFilters.category
+        );
+    }
+    
+    // Apply payment mode filter
+    if (currentFilters.payment !== 'all') {
+        filteredExpenses = filteredExpenses.filter(expense => 
+            expense.paymentMode === currentFilters.payment
+        );
+    }
+    
+    // Apply member filter
+    if (currentFilters.member !== 'all') {
+        filteredExpenses = filteredExpenses.filter(expense => 
+            expense.addedBy === currentFilters.member
+        );
+    }
+    
+    // Apply date filter
+    if (currentFilters.date !== 'all') {
+        const now = new Date();
+        filteredExpenses = filteredExpenses.filter(expense => {
+            const expenseDate = new Date(expense.date);
+            
+            switch(currentFilters.date) {
+                case 'today':
+                    return expenseDate.toDateString() === now.toDateString();
+                case 'week':
+                    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                    return expenseDate >= weekAgo;
+                case 'month':
+                    const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+                    return expenseDate >= monthAgo;
+                default:
+                    return true;
+            }
+        });
+    }
+    
+    displayFilteredExpenses(filteredExpenses);
+}
+
+function displayFilteredExpenses(expenses) {
+    const expensesList = document.getElementById('expenses-list');
+    const emptyExpenses = document.getElementById('empty-expenses');
+    
+    if (expenses.length === 0) {
+        expensesList.innerHTML = '';
+        emptyExpenses.classList.remove('d-none');
+        return;
+    }
+    
+    emptyExpenses.classList.add('d-none');
+    
+    // Sort expenses by date (newest first) but preserve original indices
+    const sortedExpenses = expenses.map((expense, originalIndex) => ({
+        ...expense,
+        originalIndex
+    })).sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    expensesList.innerHTML = '';
+    sortedExpenses.forEach((expense, displayIndex) => {
+        const expenseItem = createExpenseItem(expense, expense.originalIndex);
+        expensesList.appendChild(expenseItem);
+    });
+    
+    // Update summary with filtered data
+    updateFilteredBudgetSummary(expenses);
+}
+
+function updateFilteredBudgetSummary(expenses) {
+    const totalSpent = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+    const remaining = currentTrip.budget - totalSpent;
+    const progressPercent = Math.min((totalSpent / currentTrip.budget) * 100, 100);
+    
+    document.getElementById('summary-total-budget').innerHTML = `<span class="rupee-symbol">₹</span>${currentTrip.budget.toFixed(2)}`;
+    document.getElementById('summary-total-spent').innerHTML = `<span class="rupee-symbol">₹</span>${totalSpent.toFixed(2)}`;
+    document.getElementById('summary-remaining').innerHTML = `<span class="rupee-symbol">₹</span>${remaining.toFixed(2)}`;
+    
+    const progressBar = document.getElementById('summary-progress-bar');
+    progressBar.style.width = `${progressPercent}%`;
+    progressBar.textContent = `${progressPercent.toFixed(1)}%`;
+    
+    // Color code based on budget status
+    if (remaining < 0) {
+        progressBar.className = 'progress-bar bg-danger';
+    } else if (remaining < currentTrip.budget * 0.2) {
+        progressBar.className = 'progress-bar bg-warning';
+    } else {
+        progressBar.className = 'progress-bar bg-success';
+    }
+}
+
