@@ -361,24 +361,26 @@ function updateDashboardStats() {
         return startDate <= today && endDate >= today;
     }).length;
     
-    // Calculate total spent across all trips
+    // Calculate total spent across all trips - FIXED: Handle missing expenses array
     const totalSpent = userTrips.reduce((total, trip) => {
         const tripExpenses = trip.expenses ? trip.expenses.reduce((sum, expense) => sum + expense.amount, 0) : 0;
         return total + tripExpenses;
     }, 0);
     
-    // Calculate car-related expenses
+    // Calculate car-related expenses - FIXED: Handle missing expenses array
     const carExpenses = userTrips.reduce((total, trip) => {
         if (!trip.expenses) return total;
         
         const tripCarExpenses = trip.expenses.filter(expense => 
             expense.category === 'fuel' || 
-            expense.description.toLowerCase().includes('car') ||
-            expense.description.toLowerCase().includes('fuel') ||
-            expense.description.toLowerCase().includes('rental') ||
-            expense.description.toLowerCase().includes('maintenance') ||
-            expense.description.toLowerCase().includes('toll') ||
-            expense.description.toLowerCase().includes('parking')
+            (expense.description && (
+                expense.description.toLowerCase().includes('car') ||
+                expense.description.toLowerCase().includes('fuel') ||
+                expense.description.toLowerCase().includes('rental') ||
+                expense.description.toLowerCase().includes('maintenance') ||
+                expense.description.toLowerCase().includes('toll') ||
+                expense.description.toLowerCase().includes('parking')
+            ))
         ).reduce((sum, expense) => sum + expense.amount, 0);
         
         return total + tripCarExpenses;
