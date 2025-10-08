@@ -2142,6 +2142,7 @@ function renderMemberExpenseChart(memberData) {
 }
 
 // Add getMemberName function to dashboard.js
+// Enhanced getMemberName function
 async function getMemberName(memberId) {
     try {
         if (memberId === auth.currentUser.uid) return 'You';
