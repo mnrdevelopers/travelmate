@@ -96,7 +96,6 @@ function loadUserData() {
 }
 
 async function loadTripDetails() {
-    // Check if user is authenticated
     const user = auth.currentUser;
     if (!user) {
         console.log('User not authenticated, waiting for auth state...');
@@ -111,8 +110,8 @@ async function loadTripDetails() {
     }
     
     try {
-        // Load custom categories first - now user should be available
-        await loadCustomCategories();
+        // Load all members' custom categories first
+        window.allTripCategories = await loadAllMembersCustomCategories(currentTrip);
         
         // Refresh trip data from Firestore
         const tripDoc = await db.collection('trips').doc(currentTrip.id).get();
@@ -567,10 +566,15 @@ async function getMemberName(memberId) {
 }
 
 function getCategoryName(categoryId) {
-    // Check if it's a default category
+    // First check if it's a custom category in our loaded set
+    if (window.allTripCategories && window.allTripCategories[categoryId]) {
+        return window.allTripCategories[categoryId].name;
+    }
+    
+    // Then check default categories
     const defaultCategories = {
         'fuel': 'Fuel',
-        'hotel': 'Hotel', 
+        'hotel': 'Hotel',
         'food': 'Food',
         'activities': 'Activities'
     };
@@ -579,13 +583,14 @@ function getCategoryName(categoryId) {
         return defaultCategories[categoryId];
     }
     
-    // Check if it's a custom category
-    const customCategory = customCategories.find(cat => cat.id === categoryId);
-    if (customCategory) return customCategory.name;
+    // Fallback - show the ID but formatted nicely
+    if (categoryId.startsWith('custom_')) {
+        return 'Custom Category';
+    }
     
-    // Fallback
     return categoryId.charAt(0).toUpperCase() + categoryId.slice(1);
 }
+
 
 function handleCategoryChange(event) {
     if (event.target.value === 'other') {
@@ -904,8 +909,10 @@ async function saveExpense() {
     const category = document.getElementById('expense-category').value;
     const paymentMode = document.getElementById('expense-payment-mode').value;
     const date = document.getElementById('expense-date').value;
-    const isEditing = document.getElementById('save-expense-btn').dataset.editingIndex;
+    const saveBtn = document.getElementById('save-expense-btn');
+    const isEditing = saveBtn.dataset.editingIndex;
     
+    // Validation
     if (!description || !amount || !category || !date) {
         showToast('Please fill in all fields', 'warning');
         return;
@@ -916,29 +923,41 @@ async function saveExpense() {
         return;
     }
     
+    if (category === 'other') {
+        showToast('Please select a valid category', 'warning');
+        return;
+    }
+    
     const expense = {
         description: description.trim(),
-        amount,
-        category,
-        date,
-        paymentMode,
+        amount: amount,
+        category: category,
+        date: date,
+        paymentMode: paymentMode,
         addedBy: auth.currentUser.uid,
         addedAt: new Date().toISOString()
     };
     
     try {
-        document.getElementById('save-expense-btn').disabled = true;
-        document.getElementById('save-expense-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Saving...';
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Saving...';
         
         const tripDoc = await db.collection('trips').doc(currentTrip.id).get();
         const tripData = tripDoc.data();
         
-        let updatedExpenses;
+        let updatedExpenses = [...(tripData.expenses || [])];
+        
         if (isEditing !== undefined) {
-            updatedExpenses = [...tripData.expenses];
-            updatedExpenses[isEditing] = expense;
+            // Editing existing expense
+            const editIndex = parseInt(isEditing);
+            if (editIndex >= 0 && editIndex < updatedExpenses.length) {
+                updatedExpenses[editIndex] = expense;
+            } else {
+                throw new Error('Invalid expense index for editing');
+            }
         } else {
-            updatedExpenses = [...(tripData.expenses || []), expense];
+            // Adding new expense
+            updatedExpenses.push(expense);
         }
         
         await db.collection('trips').doc(currentTrip.id).update({
@@ -946,16 +965,20 @@ async function saveExpense() {
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         
+        // Update local data
         currentTrip.expenses = updatedExpenses;
         
+        // Close modal and reset
         const modal = bootstrap.Modal.getInstance(document.getElementById('addExpenseModal'));
         modal.hide();
         
         document.getElementById('add-expense-form').reset();
-        document.getElementById('save-expense-btn').innerHTML = 'Add Expense';
-        delete document.getElementById('save-expense-btn').dataset.editingIndex;
+        saveBtn.innerHTML = 'Add Expense';
+        delete saveBtn.dataset.editingIndex;
         
-        loadTripDetails();
+        // Reload the expenses to reflect changes
+        loadTripExpenses(currentTrip);
+        loadTripOverview(currentTrip);
         
         showToast(isEditing !== undefined ? 'Expense updated successfully!' : 'Expense added successfully!', 'success');
         
@@ -963,7 +986,7 @@ async function saveExpense() {
         console.error('Error saving expense:', error);
         showToast('Error saving expense. Please try again.', 'danger');
     } finally {
-        document.getElementById('save-expense-btn').disabled = false;
+        saveBtn.disabled = false;
     }
 }
 
@@ -1335,6 +1358,15 @@ function updateCategoryDropdown() {
     
     categorySelect.innerHTML = '';
     
+    // Add default categories
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Select Category';
+    defaultOption.disabled = true;
+    defaultOption.selected = true;
+    categorySelect.appendChild(defaultOption);
+    
+    // Add default categories
     const defaultCategories = [
         {value: 'fuel', text: 'Fuel'},
         {value: 'hotel', text: 'Hotel'},
@@ -1342,7 +1374,6 @@ function updateCategoryDropdown() {
         {value: 'activities', text: 'Activities'}
     ];
     
-    // Add default categories
     defaultCategories.forEach(category => {
         const option = document.createElement('option');
         option.value = category.value;
@@ -1350,28 +1381,32 @@ function updateCategoryDropdown() {
         categorySelect.appendChild(option);
     });
     
-    // Add custom categories
-    customCategories.forEach(category => {
-        const option = document.createElement('option');
-        option.value = category.id;
-        option.textContent = category.name;
-        option.style.color = category.color;
-        option.setAttribute('data-color', category.color);
-        categorySelect.appendChild(option);
-    });
+    // Add custom categories from all members
+    if (window.allTripCategories) {
+        Object.values(window.allTripCategories)
+            .filter(cat => cat.isCustom)
+            .forEach(category => {
+                const option = document.createElement('option');
+                option.value = category.id;
+                option.textContent = `${category.name} (by ${category.createdBy === auth.currentUser.uid ? 'You' : 'Member'})`;
+                if (category.color) {
+                    option.style.color = category.color;
+                }
+                option.setAttribute('data-color', category.color || '#6c757d');
+                categorySelect.appendChild(option);
+            });
+    }
     
     // Add "Other" option to create new categories
     const otherOption = document.createElement('option');
     otherOption.value = 'other';
-    otherOption.textContent = 'Other (Add Custom Category)';
+    otherOption.textContent = '+ Create New Category';
     otherOption.style.fontStyle = 'italic';
     categorySelect.appendChild(otherOption);
     
     // Restore previous selection if it exists
     if (currentSelection && categorySelect.querySelector(`[value="${currentSelection}"]`)) {
         categorySelect.value = currentSelection;
-    } else if (categorySelect.options.length > 0) {
-        categorySelect.selectedIndex = 0;
     }
 }
 
@@ -1808,4 +1843,64 @@ async function updateTripFromDetails() {
         updateBtn.disabled = false;
         updateBtn.innerHTML = '<i class="fas fa-save me-1"></i>Update Trip';
     }
+}
+
+async function loadAllMembersCustomCategories(trip) {
+    const allCategories = {};
+    
+    // Start with default categories
+    const defaultCategories = {
+        'fuel': 'Fuel',
+        'hotel': 'Hotel',
+        'food': 'Food', 
+        'activities': 'Activities'
+    };
+    
+    Object.keys(defaultCategories).forEach(catId => {
+        allCategories[catId] = {
+            id: catId,
+            name: defaultCategories[catId],
+            isDefault: true
+        };
+    });
+    
+    // Load custom categories from all members
+    const memberPromises = trip.members.map(async (memberId) => {
+        try {
+            const userDoc = await db.collection('users').doc(memberId).get();
+            if (userDoc.exists && userDoc.data().customCategories) {
+                userDoc.data().customCategories.forEach(cat => {
+                    if (!allCategories[cat.id]) {
+                        allCategories[cat.id] = {
+                            ...cat,
+                            createdBy: memberId,
+                            isCustom: true
+                        };
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Error loading categories for member:', memberId, error);
+        }
+    });
+    
+    await Promise.all(memberPromises);
+    return allCategories;
+}
+
+function resetExpenseModal() {
+    document.getElementById('add-expense-form').reset();
+    document.getElementById('expense-date').valueAsDate = new Date();
+    
+    const saveBtn = document.getElementById('save-expense-btn');
+    saveBtn.innerHTML = 'Add Expense';
+    saveBtn.disabled = false;
+    delete saveBtn.dataset.editingIndex;
+}
+
+// Update showAddExpenseModal:
+function showAddExpenseModal() {
+    resetExpenseModal();
+    const modal = new bootstrap.Modal(document.getElementById('addExpenseModal'));
+    modal.show();
 }
