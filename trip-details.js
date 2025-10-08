@@ -30,7 +30,6 @@ function setupTripDetailsEventListeners() {
     document.getElementById('member-filter').addEventListener('change', applyExpenseFilters);
     document.getElementById('date-filter').addEventListener('change', applyExpenseFilters);
     document.getElementById('clear-filters-btn').addEventListener('click', clearExpenseFilters);
-}
 
     // Add event listener for update trip button in trip details page
     document.getElementById('update-trip-btn-trip-details').addEventListener('click', updateTripFromDetails);
