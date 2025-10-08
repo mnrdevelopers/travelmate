@@ -2014,6 +2014,9 @@ async function calculateAndDisplayMemberExpenditure(trips) {
         // Render the pie chart
         renderMemberExpenseChart(equalizationData.memberBalances);
 
+        // Generate settlement actions
+        generateSettlementActions(equalizationData);
+
     } catch (error) {
         console.error('Error calculating member expenditure:', error);
         memberStatsElement.innerHTML = `
