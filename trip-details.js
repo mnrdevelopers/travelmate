@@ -46,14 +46,23 @@ function setupEnhancedCRUDEventListeners() {
     
     // Dynamic event listeners for edit/delete buttons
     document.addEventListener('click', function(e) {
+        // Handle expense edit
         if (e.target.classList.contains('edit-expense-btn') || e.target.closest('.edit-expense-btn')) {
-            const expenseId = e.target.dataset.expenseId || e.target.closest('.edit-expense-btn').dataset.expenseId;
-            editExpense(expenseId);
+            const btn = e.target.classList.contains('edit-expense-btn') ? e.target : e.target.closest('.edit-expense-btn');
+            const expenseIndex = btn.dataset.expenseIndex;
+            console.log('Edit button clicked, index:', expenseIndex);
+            editExpense(expenseIndex);
         }
+        
+        // Handle expense delete
         if (e.target.classList.contains('delete-expense-btn') || e.target.closest('.delete-expense-btn')) {
-            const expenseId = e.target.dataset.expenseId || e.target.closest('.delete-expense-btn').dataset.expenseId;
-            deleteExpense(expenseId);
+            const btn = e.target.classList.contains('delete-expense-btn') ? e.target : e.target.closest('.delete-expense-btn');
+            const expenseIndex = btn.dataset.expenseIndex;
+            console.log('Delete button clicked, index:', expenseIndex);
+            deleteExpense(expenseIndex);
         }
+        
+        // Handle activity edit/delete (existing code)
         if (e.target.classList.contains('edit-activity-btn') || e.target.closest('.edit-activity-btn')) {
             const activityId = e.target.dataset.activityId || e.target.closest('.edit-activity-btn').dataset.activityId;
             editActivity(activityId);
@@ -473,10 +482,12 @@ function createExpenseItem(expense, index) {
                     <div class="fw-bold fs-5"><span class="rupee-symbol">₹</span>${expense.amount.toFixed(2)}</div>
                     <div class="mt-2">
                         ${expense.addedBy === auth.currentUser.uid ? `
-                            <button class="btn btn-sm btn-outline-primary edit-expense-btn me-1" data-expense-id="${index}">
+                            <button class="btn btn-sm btn-outline-primary edit-expense-btn me-1" 
+                                    data-expense-index="${index}">
                                 <i class="fas fa-edit"></i>
                             </button>
-                            <button class="btn btn-sm btn-outline-danger delete-expense-btn" data-expense-id="${index}">
+                            <button class="btn btn-sm btn-outline-danger delete-expense-btn" 
+                                    data-expense-index="${index}">
                                 <i class="fas fa-trash"></i>
                             </button>
                         ` : ''}
@@ -486,9 +497,7 @@ function createExpenseItem(expense, index) {
         </div>
     `;
     
-    // Load member name asynchronously
     loadMemberNameForExpense(expenseItem, expense.addedBy);
-    
     return expenseItem;
 }
 
@@ -1367,25 +1376,44 @@ function updateCategoryDropdown() {
 }
 
 async function editExpense(expenseIndex) {
+    console.log('Editing expense index:', expenseIndex);
+    
+    if (!currentTrip || !currentTrip.expenses || !currentTrip.expenses[expenseIndex]) {
+        console.error('Expense not found at index:', expenseIndex);
+        showToast('Expense not found', 'danger');
+        return;
+    }
+    
     const expense = currentTrip.expenses[expenseIndex];
+    console.log('Expense data:', expense);
     
-    document.getElementById('expense-description').value = expense.description;
-    document.getElementById('expense-amount').value = expense.amount;
-    document.getElementById('expense-category').value = expense.category;
-    document.getElementById('expense-payment-mode').value = expense.paymentMode;
-    document.getElementById('expense-date').value = expense.date;
+    // Populate the modal with expense data
+    document.getElementById('expense-description').value = expense.description || '';
+    document.getElementById('expense-amount').value = expense.amount || '';
+    document.getElementById('expense-category').value = expense.category || 'fuel';
+    document.getElementById('expense-payment-mode').value = expense.paymentMode || 'cash';
+    document.getElementById('expense-date').value = expense.date || new Date().toISOString().split('T')[0];
     
-    document.getElementById('save-expense-btn').innerHTML = 'Update Expense';
-    document.getElementById('save-expense-btn').dataset.editingIndex = expenseIndex;
+    // Update button to show it's in edit mode
+    const saveBtn = document.getElementById('save-expense-btn');
+    saveBtn.innerHTML = 'Update Expense';
+    saveBtn.dataset.editingIndex = expenseIndex;
     
     const modal = new bootstrap.Modal(document.getElementById('addExpenseModal'));
     modal.show();
 }
 
 async function deleteExpense(expenseIndex) {
+    console.log('Deleting expense index:', expenseIndex);
+    
     if (!confirm('Are you sure you want to delete this expense?')) return;
 
     try {
+        if (!currentTrip || !currentTrip.expenses) {
+            showToast('No expenses found', 'warning');
+            return;
+        }
+        
         const updatedExpenses = currentTrip.expenses.filter((_, index) => index !== parseInt(expenseIndex));
         
         await db.collection('trips').doc(currentTrip.id).update({
