@@ -433,12 +433,15 @@ function loadTripExpenses(trip) {
     
     emptyExpenses.classList.add('d-none');
     
-    // Sort expenses by date (newest first)
-    const sortedExpenses = [...trip.expenses].sort((a, b) => new Date(b.date) - new Date(a.date));
+    // Sort expenses by date (newest first) but preserve original indices
+    const sortedExpenses = trip.expenses.map((expense, originalIndex) => ({
+        ...expense,
+        originalIndex // Store the original index for editing
+    })).sort((a, b) => new Date(b.date) - new Date(a.date));
     
     expensesList.innerHTML = '';
-    sortedExpenses.forEach((expense, index) => {
-        const expenseItem = createExpenseItem(expense, index);
+    sortedExpenses.forEach((expense, displayIndex) => {
+        const expenseItem = createExpenseItem(expense, expense.originalIndex);
         expensesList.appendChild(expenseItem);
     });
     
@@ -447,10 +450,10 @@ function loadTripExpenses(trip) {
     renderPaymentChart(trip);
 }
 
-function createExpenseItem(expense, index) {
+function createExpenseItem(expense, originalIndex) {
     const expenseItem = document.createElement('div');
     expenseItem.className = 'expense-item card mb-3';
-    expenseItem.dataset.expenseId = index;
+    expenseItem.dataset.expenseId = originalIndex;
     
     const categoryClass = `category-${expense.category}`;
     const categoryName = getCategoryName(expense.category);
@@ -482,11 +485,11 @@ function createExpenseItem(expense, index) {
                     <div class="mt-2">
                         ${expense.addedBy === auth.currentUser.uid ? `
                             <button class="btn btn-sm btn-outline-primary edit-expense-btn me-1" 
-                                    data-expense-index="${index}">
+                                    data-expense-index="${originalIndex}">
                                 <i class="fas fa-edit"></i>
                             </button>
                             <button class="btn btn-sm btn-outline-danger delete-expense-btn" 
-                                    data-expense-index="${index}">
+                                    data-expense-index="${originalIndex}">
                                 <i class="fas fa-trash"></i>
                             </button>
                         ` : ''}
@@ -1410,14 +1413,29 @@ function updateCategoryDropdown() {
 async function editExpense(expenseIndex) {
     console.log('Editing expense index:', expenseIndex);
     
-    if (!currentTrip || !currentTrip.expenses || !currentTrip.expenses[expenseIndex]) {
-        console.error('Expense not found at index:', expenseIndex);
+    if (!currentTrip || !currentTrip.expenses) {
+        console.error('No expenses found in current trip');
+        showToast('No expenses found', 'danger');
+        return;
+    }
+    
+    const expenseIndexNum = parseInt(expenseIndex);
+    
+    if (isNaN(expenseIndexNum) || expenseIndexNum < 0 || expenseIndexNum >= currentTrip.expenses.length) {
+        console.error('Invalid expense index:', expenseIndexNum, 'Available indices: 0 to', currentTrip.expenses.length - 1);
+        showToast('Invalid expense selection', 'danger');
+        return;
+    }
+    
+    const expense = currentTrip.expenses[expenseIndexNum];
+    
+    if (!expense) {
+        console.error('Expense not found at index:', expenseIndexNum);
         showToast('Expense not found', 'danger');
         return;
     }
     
-    const expense = currentTrip.expenses[expenseIndex];
-    console.log('Expense data:', expense);
+    console.log('Editing expense:', expense);
     
     // Populate the modal with expense data
     document.getElementById('expense-description').value = expense.description || '';
@@ -1429,7 +1447,7 @@ async function editExpense(expenseIndex) {
     // Update button to show it's in edit mode
     const saveBtn = document.getElementById('save-expense-btn');
     saveBtn.innerHTML = 'Update Expense';
-    saveBtn.dataset.editingIndex = expenseIndex;
+    saveBtn.dataset.editingIndex = expenseIndexNum;
     
     const modal = new bootstrap.Modal(document.getElementById('addExpenseModal'));
     modal.show();
@@ -1438,19 +1456,26 @@ async function editExpense(expenseIndex) {
 async function deleteExpense(expenseIndex) {
     if (!confirm('Are you sure you want to delete this expense?')) return;
 
+    const expenseIndexNum = parseInt(expenseIndex);
+    
+    if (isNaN(expenseIndexNum) || expenseIndexNum < 0) {
+        console.error('Invalid expense index for deletion:', expenseIndex);
+        showToast('Invalid expense selection', 'danger');
+        return;
+    }
+
     try {
         // Get fresh trip data
         const tripDoc = await db.collection('trips').doc(currentTrip.id).get();
         const tripData = tripDoc.data();
         
         const currentExpenses = tripData.expenses || [];
-        const deleteIndex = parseInt(expenseIndex);
         
-        if (deleteIndex < 0 || deleteIndex >= currentExpenses.length) {
-            throw new Error('Invalid expense index');
+        if (expenseIndexNum >= currentExpenses.length) {
+            throw new Error('Expense index out of bounds');
         }
         
-        const updatedExpenses = currentExpenses.filter((_, index) => index !== deleteIndex);
+        const updatedExpenses = currentExpenses.filter((_, index) => index !== expenseIndexNum);
         
         await db.collection('trips').doc(currentTrip.id).update({
             expenses: updatedExpenses,
@@ -1900,7 +1925,11 @@ function resetExpenseModal() {
     const saveBtn = document.getElementById('save-expense-btn');
     saveBtn.innerHTML = 'Add Expense';
     saveBtn.disabled = false;
-    delete saveBtn.dataset.editingIndex;
+    
+    // Important: Clear the editing index
+    if (saveBtn.dataset.editingIndex) {
+        delete saveBtn.dataset.editingIndex;
+    }
 }
 
 // Update showAddExpenseModal:
@@ -1938,4 +1967,18 @@ async function migrateExpensesToArrayFormat() {
     } catch (error) {
         console.error('Error migrating expenses:', error);
     }
+}
+
+function debugExpenses() {
+    console.log('=== EXPENSE DEBUG INFO ===');
+    console.log('Current Trip:', currentTrip);
+    console.log('Expenses Array:', currentTrip?.expenses);
+    console.log('Expenses Count:', currentTrip?.expenses?.length);
+    
+    if (currentTrip?.expenses) {
+        currentTrip.expenses.forEach((expense, index) => {
+            console.log(`Expense [${index}]:`, expense);
+        });
+    }
+    console.log('=== END DEBUG INFO ===');
 }
