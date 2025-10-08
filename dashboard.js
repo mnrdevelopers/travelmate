@@ -225,7 +225,10 @@ async function loadUserTrips() {
         updateDashboardStats();
         loadUpcomingTrips();
         loadRecentCalculations();
-        loadFuelTrackingData(); // Add this line
+        loadFuelTrackingData();
+        
+        // Add member expenditure statistics
+        updateMemberExpenditureStats(userTrips);
         
     } catch (error) {
         console.error('Error loading trips:', error);
@@ -1701,5 +1704,262 @@ async function clearTripFuelData(tripId) {
     } catch (error) {
         console.error('Error clearing fuel data:', error);
         showToast('Error clearing fuel data', 'danger');
+    }
+}
+
+// Add member expenditure statistics to dashboard
+function updateMemberExpenditureStats(trips) {
+    const memberStatsContainer = document.createElement('div');
+    memberStatsContainer.className = 'row mb-4';
+    memberStatsContainer.innerHTML = `
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-users me-2"></i>Member Expenditure Statistics</h5>
+                </div>
+                <div class="card-body">
+                    <div id="member-expenditure-stats">
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-users fa-3x mb-3"></i>
+                            <p>No expenditure data available yet</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Insert after car expense breakdown section
+    const carExpenseSection = document.querySelector('.row.mb-4');
+    if (carExpenseSection) {
+        carExpenseSection.parentNode.insertBefore(memberStatsContainer, carExpenseSection.nextSibling);
+    }
+
+    calculateAndDisplayMemberExpenditure(trips);
+}
+
+async function calculateAndDisplayMemberExpenditure(trips) {
+    const memberStatsElement = document.getElementById('member-expenditure-stats');
+    
+    if (!trips || trips.length === 0) {
+        memberStatsElement.innerHTML = `
+            <div class="text-center text-muted py-4">
+                <i class="fas fa-users fa-3x mb-3"></i>
+                <p>No trips available</p>
+            </div>
+        `;
+        return;
+    }
+
+    try {
+        // Collect all unique members across all trips
+        const allMembers = new Set();
+        const memberExpenses = {};
+        const memberTripCount = {};
+
+        // Initialize member data
+        for (const trip of trips) {
+            if (trip.members) {
+                trip.members.forEach(memberId => {
+                    allMembers.add(memberId);
+                    if (!memberExpenses[memberId]) {
+                        memberExpenses[memberId] = 0;
+                        memberTripCount[memberId] = 0;
+                    }
+                    memberTripCount[memberId]++;
+                });
+            }
+        }
+
+        // Calculate expenses for each member
+        for (const trip of trips) {
+            if (trip.expenses) {
+                for (const expense of trip.expenses) {
+                    if (memberExpenses[expense.addedBy] !== undefined) {
+                        memberExpenses[expense.addedBy] += expense.amount;
+                    }
+                }
+            }
+        }
+
+        // Get member names
+        const memberData = [];
+        for (const memberId of allMembers) {
+            const memberName = await getMemberName(memberId);
+            const totalSpent = memberExpenses[memberId] || 0;
+            const tripsCount = memberTripCount[memberId] || 0;
+            
+            memberData.push({
+                id: memberId,
+                name: memberName,
+                totalSpent: totalSpent,
+                tripsCount: tripsCount,
+                isCurrentUser: memberId === auth.currentUser.uid
+            });
+        }
+
+        // Sort by total spent (descending)
+        memberData.sort((a, b) => b.totalSpent - a.totalSpent);
+
+        // Calculate total across all members
+        const totalAllExpenses = memberData.reduce((sum, member) => sum + member.totalSpent, 0);
+
+        if (memberData.length === 0) {
+            memberStatsElement.innerHTML = `
+                <div class="text-center text-muted py-4">
+                    <i class="fas fa-users fa-3x mb-3"></i>
+                    <p>No expenditure data available</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Display member statistics
+        memberStatsElement.innerHTML = `
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Member</th>
+                                    <th>Trips</th>
+                                    <th>Total Spent</th>
+                                    <th>Percentage</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${memberData.map(member => `
+                                    <tr class="${member.isCurrentUser ? 'table-info' : ''}">
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <span class="badge bg-primary me-2">${member.isCurrentUser ? 'You' : 'Member'}</span>
+                                                ${member.name}
+                                            </div>
+                                        </td>
+                                        <td>${member.tripsCount}</td>
+                                        <td class="fw-bold text-success">
+                                            <span class="rupee-symbol">₹</span>${member.totalSpent.toFixed(2)}
+                                        </td>
+                                        <td>
+                                            <div class="progress" style="height: 20px;">
+                                                <div class="progress-bar ${member.isCurrentUser ? 'bg-info' : 'bg-success'}" 
+                                                     role="progressbar" 
+                                                     style="width: ${totalAllExpenses > 0 ? (member.totalSpent / totalAllExpenses * 100) : 0}%">
+                                                    ${totalAllExpenses > 0 ? ((member.totalSpent / totalAllExpenses * 100).toFixed(1)) : 0}%
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                            <tfoot class="table-primary">
+                                <tr>
+                                    <td><strong>Total</strong></td>
+                                    <td>${trips.length}</td>
+                                    <td class="fw-bold">
+                                        <span class="rupee-symbol">₹</span>${totalAllExpenses.toFixed(2)}
+                                    </td>
+                                    <td>100%</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header bg-info text-white">
+                            <h6 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Expense Distribution</h6>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="memberExpenseChart" height="250"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Render the pie chart
+        renderMemberExpenseChart(memberData);
+
+    } catch (error) {
+        console.error('Error calculating member expenditure:', error);
+        memberStatsElement.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                Error loading member statistics
+            </div>
+        `;
+    }
+}
+
+function renderMemberExpenseChart(memberData) {
+    const ctx = document.getElementById('memberExpenseChart').getContext('2d');
+    
+    const labels = memberData.map(member => 
+        member.name.length > 15 ? member.name.substring(0, 15) + '...' : member.name
+    );
+    const data = memberData.map(member => member.totalSpent);
+    
+    // Generate distinct colors
+    const backgroundColors = memberData.map((member, index) => {
+        if (member.isCurrentUser) return '#17a2b8'; // Info color for current user
+        const colors = ['#28a745', '#ffc107', '#dc3545', '#6f42c1', '#fd7e14', '#20c997'];
+        return colors[index % colors.length];
+    });
+
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: backgroundColors,
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 15,
+                        usePointStyle: true
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.raw || 0;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = Math.round((value / total) * 100);
+                            return `${label}: ₹${value.toFixed(2)} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Add getMemberName function to dashboard.js
+async function getMemberName(memberId) {
+    try {
+        if (memberId === auth.currentUser.uid) return 'You';
+        
+        const userDoc = await db.collection('users').doc(memberId).get();
+        if (userDoc.exists) {
+            const userData = userDoc.data();
+            return userData.name || userData.displayName || userData.email || 'Traveler';
+        }
+        
+        return 'Traveler';
+    } catch (error) {
+        console.error('Error getting member name:', error);
+        return 'Traveler';
     }
 }
