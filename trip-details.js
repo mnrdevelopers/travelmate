@@ -1909,3 +1909,33 @@ function showAddExpenseModal() {
     const modal = new bootstrap.Modal(document.getElementById('addExpenseModal'));
     modal.show();
 }
+
+// Add this to utils.js for data migration if needed
+async function migrateExpensesToArrayFormat() {
+    try {
+        const tripsSnapshot = await db.collection('trips')
+            .where('members', 'array-contains', auth.currentUser.uid)
+            .get();
+        
+        const migrationPromises = [];
+        
+        tripsSnapshot.forEach(doc => {
+            const tripData = doc.data();
+            
+            // If expenses don't exist as array, initialize them
+            if (!tripData.expenses) {
+                migrationPromises.push(
+                    db.collection('trips').doc(doc.id).update({
+                        expenses: [],
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    })
+                );
+            }
+        });
+        
+        await Promise.all(migrationPromises);
+        console.log('Expense migration completed');
+    } catch (error) {
+        console.error('Error migrating expenses:', error);
+    }
+}
