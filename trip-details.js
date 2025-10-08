@@ -909,10 +909,8 @@ async function saveExpense() {
     const category = document.getElementById('expense-category').value;
     const paymentMode = document.getElementById('expense-payment-mode').value;
     const date = document.getElementById('expense-date').value;
-    const saveBtn = document.getElementById('save-expense-btn');
-    const isEditing = saveBtn.dataset.editingIndex;
+    const isEditing = document.getElementById('save-expense-btn').dataset.editingIndex;
     
-    // Validation
     if (!description || !amount || !category || !date) {
         showToast('Please fill in all fields', 'warning');
         return;
@@ -923,62 +921,61 @@ async function saveExpense() {
         return;
     }
     
-    if (category === 'other') {
-        showToast('Please select a valid category', 'warning');
-        return;
-    }
-    
     const expense = {
         description: description.trim(),
-        amount: amount,
-        category: category,
-        date: date,
-        paymentMode: paymentMode,
+        amount,
+        category,
+        date,
+        paymentMode,
         addedBy: auth.currentUser.uid,
         addedAt: new Date().toISOString()
     };
     
     try {
-        saveBtn.disabled = true;
-        saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Saving...';
+        document.getElementById('save-expense-btn').disabled = true;
+        document.getElementById('save-expense-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Saving...';
         
+        // Get fresh trip data to ensure we have the latest expenses array
         const tripDoc = await db.collection('trips').doc(currentTrip.id).get();
         const tripData = tripDoc.data();
         
-        let updatedExpenses = [...(tripData.expenses || [])];
+        // Ensure expenses array exists
+        const currentExpenses = tripData.expenses || [];
+        let updatedExpenses;
         
         if (isEditing !== undefined) {
             // Editing existing expense
+            updatedExpenses = [...currentExpenses];
             const editIndex = parseInt(isEditing);
+            
             if (editIndex >= 0 && editIndex < updatedExpenses.length) {
                 updatedExpenses[editIndex] = expense;
             } else {
-                throw new Error('Invalid expense index for editing');
+                throw new Error('Invalid expense index');
             }
         } else {
             // Adding new expense
-            updatedExpenses.push(expense);
+            updatedExpenses = [...currentExpenses, expense];
         }
         
+        // Update the trip document with the new expenses array
         await db.collection('trips').doc(currentTrip.id).update({
             expenses: updatedExpenses,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         
-        // Update local data
+        // Update local trip data
         currentTrip.expenses = updatedExpenses;
         
-        // Close modal and reset
         const modal = bootstrap.Modal.getInstance(document.getElementById('addExpenseModal'));
         modal.hide();
         
         document.getElementById('add-expense-form').reset();
-        saveBtn.innerHTML = 'Add Expense';
-        delete saveBtn.dataset.editingIndex;
+        document.getElementById('save-expense-btn').innerHTML = 'Add Expense';
+        delete document.getElementById('save-expense-btn').dataset.editingIndex;
         
-        // Reload the expenses to reflect changes
-        loadTripExpenses(currentTrip);
-        loadTripOverview(currentTrip);
+        // Reload trip details to reflect changes
+        loadTripDetails();
         
         showToast(isEditing !== undefined ? 'Expense updated successfully!' : 'Expense added successfully!', 'success');
         
@@ -986,7 +983,7 @@ async function saveExpense() {
         console.error('Error saving expense:', error);
         showToast('Error saving expense. Please try again.', 'danger');
     } finally {
-        saveBtn.disabled = false;
+        document.getElementById('save-expense-btn').disabled = false;
     }
 }
 
@@ -1439,30 +1436,38 @@ async function editExpense(expenseIndex) {
 }
 
 async function deleteExpense(expenseIndex) {
-    console.log('Deleting expense index:', expenseIndex);
-    
     if (!confirm('Are you sure you want to delete this expense?')) return;
 
     try {
-        if (!currentTrip || !currentTrip.expenses) {
-            showToast('No expenses found', 'warning');
-            return;
+        // Get fresh trip data
+        const tripDoc = await db.collection('trips').doc(currentTrip.id).get();
+        const tripData = tripDoc.data();
+        
+        const currentExpenses = tripData.expenses || [];
+        const deleteIndex = parseInt(expenseIndex);
+        
+        if (deleteIndex < 0 || deleteIndex >= currentExpenses.length) {
+            throw new Error('Invalid expense index');
         }
         
-        const updatedExpenses = currentTrip.expenses.filter((_, index) => index !== parseInt(expenseIndex));
+        const updatedExpenses = currentExpenses.filter((_, index) => index !== deleteIndex);
         
         await db.collection('trips').doc(currentTrip.id).update({
             expenses: updatedExpenses,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         
+        // Update local trip data
         currentTrip.expenses = updatedExpenses;
+        
+        // Reload the display
         loadTripDetails();
+        
         showToast('Expense deleted successfully!', 'success');
         
     } catch (error) {
         console.error('Error deleting expense:', error);
-        showToast('Error deleting expense', 'danger');
+        showToast('Error deleting expense. Please try again.', 'danger');
     }
 }
 
