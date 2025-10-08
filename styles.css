@@ -725,3 +725,41 @@ html, body {
 .fuel-price-trend {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
+
+/* Filter Section Styles */
+.filter-section .card {
+    border: 1px solid #e3f2fd;
+    background-color: #f8fdff;
+}
+
+.filter-section .form-label {
+    font-weight: 600;
+    color: #1976d2;
+}
+
+/* Member Statistics Styles */
+.member-stats-table .progress {
+    background-color: #e9ecef;
+    border-radius: 10px;
+}
+
+.member-stats-table .table-info {
+    background-color: #d1ecf1 !important;
+}
+
+/* Expense Filter Badges */
+.filter-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .filter-section .row > div {
+        margin-bottom: 1rem;
+    }
+    
+    .member-stats-table .table-responsive {
+        font-size: 0.875rem;
+    }
+}
