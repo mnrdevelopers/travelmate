@@ -763,3 +763,50 @@ html, body {
         font-size: 0.875rem;
     }
 }
+
+/* Settlement Styles */
+.settlement-card {
+    transition: transform 0.2s ease-in-out;
+}
+
+.settlement-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.balance-positive {
+    background: linear-gradient(45deg, #28a745, #20c997);
+    color: white;
+}
+
+.balance-negative {
+    background: linear-gradient(45deg, #dc3545, #fd7e14);
+    color: white;
+}
+
+.balance-neutral {
+    background: linear-gradient(45deg, #6c757d, #a0a0a0);
+    color: white;
+}
+
+/* Transaction animations */
+@keyframes pulse-settlement {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+    100% { transform: scale(1); }
+}
+
+.settlement-pulse {
+    animation: pulse-settlement 2s infinite;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+    .settlement-actions .col-md-6 {
+        margin-bottom: 1rem;
+    }
+    
+    .member-stats-table {
+        font-size: 0.8rem;
+    }
+}
