@@ -1319,11 +1319,28 @@ function copyTripCode() {
 
 async function handleLogout() {
     try {
+        // Show loading state
+        const logoutBtn = document.getElementById('logout-btn');
+        const originalText = logoutBtn.innerHTML;
+        logoutBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Signing out...';
+        logoutBtn.disabled = true;
+        
         await auth.signOut();
-        navigateTo('auth.html');
+        
+        // Show success message
+        showToast('Signed out successfully!', 'success');
+        
+        // The auth state listener will automatically show public dashboard
+        // No need to navigate away
+        
     } catch (error) {
         console.error('Logout error:', error);
-        showAlert('Error during logout. Please try again.', 'danger');
+        showToast('Error during sign out', 'danger');
+    } finally {
+        // Reset button state
+        const logoutBtn = document.getElementById('logout-btn');
+        logoutBtn.disabled = false;
+        logoutBtn.innerHTML = '<i class="fas fa-sign-out-alt me-1"></i>Logout';
     }
 }
 
