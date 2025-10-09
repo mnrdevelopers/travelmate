@@ -12,13 +12,24 @@ function setupAuthEventListeners() {
 
 // Add this function to auth.js
 function checkAuthStateAndRedirect() {
+    // Check if we've already processed redirects in this session
+    if (hasAuthRedirectBeenChecked()) {
+        return;
+    }
+    
     auth.onAuthStateChanged(user => {
         if (user) {
-            // User is signed in, redirect to dashboard
+            // User is signed in, set flag and redirect to dashboard
+            setAuthRedirectFlag();
             console.log('User already logged in, redirecting to dashboard');
-            navigateTo('dashboard.html');
+            
+            // Small delay to ensure everything is loaded
+            setTimeout(() => {
+                navigateTo('dashboard.html');
+            }, 500);
         }
-        // If user is not signed in, stay on auth page (default behavior)
+        // If user is not signed in, DO NOT redirect - stay on current page
+        // This allows public dashboard to remain visible
     }, error => {
         console.error('Auth state error:', error);
         showAuthMessage('Authentication error. Please refresh the page.', 'danger');
