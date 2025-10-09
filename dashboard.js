@@ -221,26 +221,53 @@ function initializeApp() {
 }
 
 function checkAuthState() {
+    // Show loading overlay immediately
+    showLoadingOverlay();
+    
     auth.onAuthStateChanged(async (user) => {
         if (user) {
-            // User is signed in - show private dashboard
+            // User is signed in
+            console.log('User is logged in');
             currentUser = user;
-            loadUserData();
+            await loadUserData();
             await loadCustomCategories();
-            loadUserTrips();
+            await loadUserTrips();
             showPrivateDashboard();
-            updateNavigationBasedOnAuth(true); // Update nav for logged-in user
+            updateNavigationBasedOnAuth(true);
         } else {
-            // User is signed out - show public dashboard
-            console.log('User signed out, showing public dashboard');
+            // User is signed out
+            console.log('User is not logged in, showing public dashboard');
             showPublicDashboard();
-            updateNavigationBasedOnAuth(false); // Update nav for public user
+            updateNavigationBasedOnAuth(false);
             
             // Clear any user-specific data
             currentUser = null;
             userTrips = [];
         }
+        
+        // Hide loading overlay after everything is set up
+        hideLoadingOverlay();
+    }, (error) => {
+        console.error('Auth state error:', error);
+        // On error, show public dashboard as fallback
+        showPublicDashboard();
+        updateNavigationBasedOnAuth(false);
+        hideLoadingOverlay();
     });
+}
+
+function showLoadingOverlay() {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+        overlay.classList.remove('hidden');
+    }
+}
+
+function hideLoadingOverlay() {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+    }
 }
 
 function loadUserData() {
