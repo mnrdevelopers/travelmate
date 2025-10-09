@@ -5,8 +5,22 @@ let carExpenseChart = null;
 let fuelPriceChart = null;
 
 document.addEventListener('DOMContentLoaded', function() {
-    checkAuthState();
+    // Initially hide both dashboards until auth state is determined
+    document.getElementById('public-dashboard').classList.add('d-none');
+    const privateDashboard = document.querySelector('.container.mt-4');
+    if (privateDashboard) {
+        privateDashboard.classList.add('d-none');
+    }
+    
+    // Set up event listeners
     setupDashboardEventListeners();
+    
+    // Protect navigation items
+    setupProtectedNavigation();
+    
+    // Check auth state (this will show the appropriate dashboard)
+    checkAuthState();
+});
 
     const carCalcLink = document.querySelector('a[href="car-calculations.html"]');
     if (carCalcLink) {
@@ -221,12 +235,21 @@ function initializeApp() {
 }
 
 function checkAuthState() {
-    // Show loading overlay immediately
     showLoadingOverlay();
     
+    // Set a timeout as fallback (5 seconds)
+    const authTimeout = setTimeout(() => {
+        console.warn('Auth check timeout, showing public dashboard');
+        showPublicDashboard();
+        updateNavigationBasedOnAuth(false);
+        hideLoadingOverlay();
+    }, 5000);
+    
     auth.onAuthStateChanged(async (user) => {
+        // Clear the timeout since we got a response
+        clearTimeout(authTimeout);
+        
         if (user) {
-            // User is signed in
             console.log('User is logged in');
             currentUser = user;
             await loadUserData();
@@ -235,21 +258,17 @@ function checkAuthState() {
             showPrivateDashboard();
             updateNavigationBasedOnAuth(true);
         } else {
-            // User is signed out
             console.log('User is not logged in, showing public dashboard');
             showPublicDashboard();
             updateNavigationBasedOnAuth(false);
-            
-            // Clear any user-specific data
             currentUser = null;
             userTrips = [];
         }
         
-        // Hide loading overlay after everything is set up
         hideLoadingOverlay();
     }, (error) => {
+        clearTimeout(authTimeout);
         console.error('Auth state error:', error);
-        // On error, show public dashboard as fallback
         showPublicDashboard();
         updateNavigationBasedOnAuth(false);
         hideLoadingOverlay();
@@ -2270,23 +2289,37 @@ async function getMemberName(memberId) {
 
 // Public Dashboard functionality
 function showPublicDashboard() {
+    // Hide loading overlay
+    hideLoadingOverlay();
+    
+    // Show public dashboard
     document.getElementById('public-dashboard').classList.remove('d-none');
+    
+    // Hide private dashboard
     const privateDashboard = document.querySelector('.container.mt-4');
     if (privateDashboard) {
         privateDashboard.classList.add('d-none');
     }
-    // Show public navigation items, hide private ones
-    updateNavigationBasedOnAuth(false);
+    
+    // Hide navigation for public view (optional)
+    document.querySelector('nav').classList.add('d-none');
 }
 
 function showPrivateDashboard() {
+    // Hide loading overlay
+    hideLoadingOverlay();
+    
+    // Hide public dashboard
     document.getElementById('public-dashboard').classList.add('d-none');
+    
+    // Show private dashboard
     const privateDashboard = document.querySelector('.container.mt-4');
     if (privateDashboard) {
         privateDashboard.classList.remove('d-none');
     }
-    // Show private navigation items
-    updateNavigationBasedOnAuth(true);
+    
+    // Show navigation for private view
+    document.querySelector('nav').classList.remove('d-none');
 }
 
 function showAuthModal() {
@@ -2303,8 +2336,8 @@ function updateNavigationBasedOnAuth(isLoggedIn) {
     
     if (!navAuthSection) return;
     
-    if (isLoggedIn) {
-        // User is logged in - show user info and logout
+    if (isLoggedIn && currentUser) {
+        // User is logged in
         navAuthSection.innerHTML = `
             <img id="user-avatar" class="user-avatar me-2" src="${currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || 'User')}&background=4361ee&color=fff`}" alt="User Avatar">
             <span class="me-3" id="user-name">${currentUser.displayName || 'User'}</span>
@@ -2317,11 +2350,48 @@ function updateNavigationBasedOnAuth(isLoggedIn) {
         document.getElementById('logout-btn').addEventListener('click', handleLogout);
         
     } else {
-        // User is not logged in - show login button
+        // User is not logged in
         navAuthSection.innerHTML = `
-            <button class="btn btn-primary btn-sm" onclick="showAuthModal()">
+            <button class="btn btn-primary btn-sm" id="login-btn">
                 <i class="fas fa-sign-in-alt me-1"></i>Sign In
             </button>
         `;
+        
+        // Attach login event listener
+        document.getElementById('login-btn').addEventListener('click', showAuthModal);
+    }
+}
+
+function setupProtectedNavigation() {
+    // Update car calculator link to handle auth
+    const carCalcLink = document.querySelector('a[href="car-calculations.html"]');
+    if (carCalcLink) {
+        carCalcLink.addEventListener('click', function(e) {
+            if (!auth.currentUser) {
+                e.preventDefault();
+                showAuthModal();
+            }
+        });
+    }
+    
+    // Update create first trip button
+    const createFirstTripBtn = document.getElementById('create-first-trip-btn');
+    if (createFirstTripBtn) {
+        createFirstTripBtn.addEventListener('click', function(e) {
+            if (!auth.currentUser) {
+                e.preventDefault();
+                showAuthModal();
+            }
+        });
+    }
+    
+    const navProfile = document.getElementById('nav-profile');
+    if (navProfile) {
+        navProfile.addEventListener('click', function(e) {
+            if (!auth.currentUser) {
+                e.preventDefault();
+                showAuthModal();
+            }
+        });
     }
 }
