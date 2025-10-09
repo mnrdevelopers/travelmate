@@ -20,27 +20,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Check auth state (this will show the appropriate dashboard)
     checkAuthState();
-});
-
-    const carCalcLink = document.querySelector('a[href="car-calculations.html"]');
-    if (carCalcLink) {
-        carCalcLink.addEventListener('click', function(e) {
-            if (!auth.currentUser) {
-                e.preventDefault();
-                showAuthModal();
-            }
-        });
-    }
-
-    const createFirstTripBtn = document.getElementById('create-first-trip-btn');
-    if (createFirstTripBtn) {
-        createFirstTripBtn.addEventListener('click', function(e) {
-            if (!auth.currentUser) {
-                e.preventDefault();
-                showAuthModal();
-            }
-        });
-    }
     
     initializeApp();
 });
@@ -75,7 +54,7 @@ function setupDashboardEventListeners() {
         }
     });
 
-     const navProfile = document.getElementById('nav-profile');
+    const navProfile = document.getElementById('nav-profile');
     if (navProfile) {
         navProfile.addEventListener('click', function(e) {
             if (!auth.currentUser) {
