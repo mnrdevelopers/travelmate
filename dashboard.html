@@ -11,42 +11,38 @@
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-light sticky-top">
-        <div class="container">
-            <a class="navbar-brand fw-bold" href="#">
-                <i class="fas fa-map-marked-alt me-2 text-primary"></i>TravelMate
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-               <ul class="navbar-nav me-auto">
-    <li class="nav-item">
-        <a class="nav-link active" href="dashboard.html">
-            <i class="fas fa-home me-1"></i>Dashboard
+  <nav class="navbar navbar-expand-lg navbar-light sticky-top">
+    <div class="container">
+        <a class="navbar-brand fw-bold" href="dashboard.html">
+            <i class="fas fa-map-marked-alt me-2 text-primary"></i>TravelMate
         </a>
-    </li>
-                   <li class="nav-item">
-    <a class="nav-link" href="car-calculations.html">
-        <i class="fas fa-calculator me-1"></i>Car Calculator
-    </a>
-</li>
-    <li class="nav-item">
-        <a class="nav-link" href="#" id="nav-profile">
-            <i class="fas fa-user me-1"></i>Profile
-        </a>
-    </li>
-</ul>
-                <div class="d-flex align-items-center">
-                    <img id="user-avatar" class="user-avatar me-2" src="" alt="User Avatar">
-                    <span class="me-3" id="user-name">User</span>
-                    <button class="btn btn-outline-primary btn-sm" id="logout-btn">
-                        <i class="fas fa-sign-out-alt me-1"></i>Logout
-                    </button>
-                </div>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link active" href="dashboard.html">
+                        <i class="fas fa-home me-1"></i>Home
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#features">
+                        <i class="fas fa-star me-1"></i>Features
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#how-it-works">
+                        <i class="fas fa-play-circle me-1"></i>How It Works
+                    </a>
+                </li>
+            </ul>
+            <div class="d-flex align-items-center" id="nav-auth-section">
+                <!-- This will be populated dynamically based on auth state -->
             </div>
         </div>
-    </nav>
+    </div>
+</nav>
 
     <!-- Public Dashboard View (for non-logged in users) -->
 <div id="public-dashboard" class="d-none">
