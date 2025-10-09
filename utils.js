@@ -333,3 +333,25 @@ function saveSettlementAsPDF(equalizationData) {
     // In a real implementation, you would use a library like jsPDF
     // This is a placeholder for the PDF functionality
 }
+
+// Add these functions to utils.js
+function setAuthRedirectFlag() {
+    sessionStorage.setItem('authRedirectChecked', 'true');
+}
+
+function hasAuthRedirectBeenChecked() {
+    return sessionStorage.getItem('authRedirectChecked') === 'true';
+}
+
+function clearAuthRedirectFlag() {
+    sessionStorage.removeItem('authRedirectChecked');
+}
+
+// Update navigateTo function to handle auth redirects
+function navigateTo(page) {
+    // Clear redirect flag when navigating away from auth page
+    if (page !== 'auth.html') {
+        clearAuthRedirectFlag();
+    }
+    window.location.href = page;
+}
