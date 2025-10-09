@@ -1,6 +1,7 @@
 // Authentication functionality - Google Sign-In Only
 document.addEventListener('DOMContentLoaded', function() {
     checkAuthState();
+    checkAuthStateAndRedirect();
     setupAuthEventListeners();
 });
 
@@ -8,6 +9,27 @@ function setupAuthEventListeners() {
     // Only Google Sign-In button
     document.getElementById('google-signin-btn').addEventListener('click', handleGoogleSignIn);
 }
+
+// Add this function to auth.js
+function checkAuthStateAndRedirect() {
+    auth.onAuthStateChanged(user => {
+        if (user) {
+            // User is signed in, redirect to dashboard
+            console.log('User already logged in, redirecting to dashboard');
+            navigateTo('dashboard.html');
+        }
+        // If user is not signed in, stay on auth page (default behavior)
+    }, error => {
+        console.error('Auth state error:', error);
+        showAuthMessage('Authentication error. Please refresh the page.', 'danger');
+    });
+}
+
+// Update the DOMContentLoaded event listener
+document.addEventListener('DOMContentLoaded', function() {
+    checkAuthStateAndRedirect(); // Check if user is already logged in
+    setupAuthEventListeners();
+});
 
 function checkAuthState() {
     auth.onAuthStateChanged(user => {
@@ -139,24 +161,3 @@ function getMessageIcon(type) {
         default: return 'info-circle';
     }
 }
-
-// Add this function to auth.js
-function checkAuthStateAndRedirect() {
-    auth.onAuthStateChanged(user => {
-        if (user) {
-            // User is signed in, redirect to dashboard
-            console.log('User already logged in, redirecting to dashboard');
-            navigateTo('dashboard.html');
-        }
-        // If user is not signed in, stay on auth page (default behavior)
-    }, error => {
-        console.error('Auth state error:', error);
-        showAuthMessage('Authentication error. Please refresh the page.', 'danger');
-    });
-}
-
-// Update the DOMContentLoaded event listener
-document.addEventListener('DOMContentLoaded', function() {
-    checkAuthStateAndRedirect(); // Check if user is already logged in
-    setupAuthEventListeners();
-});
