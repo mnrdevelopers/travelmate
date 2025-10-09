@@ -1582,7 +1582,8 @@ function addLeaveTripButton() {
 
 function handleLogout() {
     auth.signOut().then(() => {
-        navigateTo('auth.html');
+        // Redirect to dashboard (which will show public view) instead of auth page
+        navigateTo('dashboard.html');
     }).catch((error) => {
         console.error('Logout error:', error);
         showToast('Error logging out', 'danger');
