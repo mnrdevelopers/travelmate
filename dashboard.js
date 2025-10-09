@@ -81,7 +81,6 @@ function setupDashboardEventListeners() {
             }
         });
     });
-});
     
     // Profile operations
     setupProfileEventListeners();
