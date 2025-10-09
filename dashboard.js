@@ -229,16 +229,19 @@ function checkAuthState() {
             await loadCustomCategories();
             loadUserTrips();
             showPrivateDashboard();
+            updateNavigationBasedOnAuth(true); // Update nav for logged-in user
         } else {
-            // User is signed out - show public dashboard (NOT redirect to auth)
+            // User is signed out - show public dashboard
             console.log('User signed out, showing public dashboard');
             showPublicDashboard();
+            updateNavigationBasedOnAuth(false); // Update nav for public user
             
             // Clear any user-specific data
             currentUser = null;
             userTrips = [];
         }
     });
+}
 }
 
 function loadUserData() {
@@ -2242,14 +2245,22 @@ async function getMemberName(memberId) {
 // Public Dashboard functionality
 function showPublicDashboard() {
     document.getElementById('public-dashboard').classList.remove('d-none');
-    document.querySelector('.container.mt-4').classList.add('d-none'); // Hide private dashboard
-    document.querySelector('nav').classList.add('d-none'); // Hide navigation for public view
+    const privateDashboard = document.querySelector('.container.mt-4');
+    if (privateDashboard) {
+        privateDashboard.classList.add('d-none');
+    }
+    // Show public navigation items, hide private ones
+    updateNavigationBasedOnAuth(false);
 }
 
 function showPrivateDashboard() {
     document.getElementById('public-dashboard').classList.add('d-none');
-    document.querySelector('.container.mt-4').classList.remove('d-none');
-    document.querySelector('nav').classList.remove('d-none');
+    const privateDashboard = document.querySelector('.container.mt-4');
+    if (privateDashboard) {
+        privateDashboard.classList.remove('d-none');
+    }
+    // Show private navigation items
+    updateNavigationBasedOnAuth(true);
 }
 
 function showAuthModal() {
@@ -2259,4 +2270,32 @@ function showAuthModal() {
 
 function redirectToAuth() {
     navigateTo('auth.html');
+}
+
+function updateNavigationBasedOnAuth(isLoggedIn) {
+    const navAuthSection = document.getElementById('nav-auth-section');
+    
+    if (!navAuthSection) return;
+    
+    if (isLoggedIn) {
+        // User is logged in - show user info and logout
+        navAuthSection.innerHTML = `
+            <img id="user-avatar" class="user-avatar me-2" src="${currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || 'User')}&background=4361ee&color=fff`}" alt="User Avatar">
+            <span class="me-3" id="user-name">${currentUser.displayName || 'User'}</span>
+            <button class="btn btn-outline-primary btn-sm" id="logout-btn">
+                <i class="fas fa-sign-out-alt me-1"></i>Logout
+            </button>
+        `;
+        
+        // Re-attach logout event listener
+        document.getElementById('logout-btn').addEventListener('click', handleLogout);
+        
+    } else {
+        // User is not logged in - show login button
+        navAuthSection.innerHTML = `
+            <button class="btn btn-primary btn-sm" onclick="showAuthModal()">
+                <i class="fas fa-sign-in-alt me-1"></i>Sign In
+            </button>
+        `;
+    }
 }
