@@ -36,20 +36,17 @@
                 <button class="btn btn-light btn-lg" onclick="navigateTo('auth.html')">
                     Get Started <i class="fas fa-arrow-right ms-2"></i>
                 </button>
+                 <div class="mt-2">
+        <small>
+            <a href="dashboard.html" class="text-light">Skip intro</a>
+        </small>
+    </div>
             </div>
         </div>
     </div>
 
     <script src="utils.js"></script>
-    
-    <script>
-        // Auto redirect to auth after 3 seconds
-        setTimeout(() => {
-            navigateTo('auth.html');
-        }, 3000);
-    </script>
-
-    <script>
+  <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function() {
       navigator.serviceWorker.register('sw.js')
@@ -61,6 +58,25 @@
       });
     });
   }
+</script>
+
+    <script>
+    // Smooth progress bar animation
+    const progressBar = document.getElementById('splash-progress-bar');
+    let progress = 0;
+    const progressInterval = setInterval(() => {
+        progress += 3.33; // 100% in 3 seconds
+        progressBar.style.width = `${Math.min(progress, 100)}%`;
+        
+        if (progress >= 100) {
+            clearInterval(progressInterval);
+        }
+    }, 100);
+
+    // Auto redirect to dashboard after 3 seconds
+    setTimeout(() => {
+        navigateTo('dashboard.html');
+    }, 3000);
 </script>
 </body>
 </html>
