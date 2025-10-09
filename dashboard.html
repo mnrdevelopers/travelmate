@@ -776,5 +776,21 @@
     <script src="firebase-config.js"></script>
     <script src="utils.js"></script>
     <script src="dashboard.js"></script>
+    <script>
+// Add this script to handle navigation for non-logged in users
+document.addEventListener('DOMContentLoaded', function() {
+    // Check all navigation links that require auth
+    const authRequiredLinks = document.querySelectorAll('a[href="car-calculations.html"], .nav-link[href="#"]');
+    
+    authRequiredLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+            if (!auth.currentUser) {
+                e.preventDefault();
+                showAuthModal();
+            }
+        });
+    });
+});
+</script>
 </body>
 </html>
