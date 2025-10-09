@@ -242,7 +242,6 @@ function checkAuthState() {
         }
     });
 }
-}
 
 function loadUserData() {
     if (!currentUser) return;
