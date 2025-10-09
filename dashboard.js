@@ -223,15 +223,20 @@ function initializeApp() {
 function checkAuthState() {
     auth.onAuthStateChanged(async (user) => {
         if (user) {
+            // User is signed in - show private dashboard
             currentUser = user;
             loadUserData();
             await loadCustomCategories();
             loadUserTrips();
             showPrivateDashboard();
         } else {
-            // Show public dashboard for non-logged in users
+            // User is signed out - show public dashboard (NOT redirect to auth)
+            console.log('User signed out, showing public dashboard');
             showPublicDashboard();
-            console.log('User not logged in, showing public dashboard');
+            
+            // Clear any user-specific data
+            currentUser = null;
+            userTrips = [];
         }
     });
 }
