@@ -2166,3 +2166,108 @@ async function getMemberName(memberId) {
         return 'Traveler';
     }
 }
+
+// Public Dashboard functionality
+function showPublicDashboard() {
+    document.getElementById('public-dashboard').classList.remove('d-none');
+    document.querySelector('.container.mt-4').classList.add('d-none'); // Hide private dashboard
+    document.querySelector('nav').classList.add('d-none'); // Hide navigation for public view
+}
+
+function showPrivateDashboard() {
+    document.getElementById('public-dashboard').classList.add('d-none');
+    document.querySelector('.container.mt-4').classList.remove('d-none');
+    document.querySelector('nav').classList.remove('d-none');
+}
+
+function showAuthModal() {
+    const modal = new bootstrap.Modal(document.getElementById('authModal'));
+    modal.show();
+}
+
+function redirectToAuth() {
+    navigateTo('auth.html');
+}
+
+// Update the checkAuthState function
+function checkAuthState() {
+    auth.onAuthStateChanged(async (user) => {
+        if (user) {
+            currentUser = user;
+            loadUserData();
+            await loadCustomCategories();
+            loadUserTrips();
+            showPrivateDashboard();
+        } else {
+            // Show public dashboard for non-logged in users
+            showPublicDashboard();
+            console.log('User not logged in, showing public dashboard');
+        }
+    });
+}
+
+// Update trip creation to redirect to auth for non-logged in users
+function showCreateTripModal() {
+    if (!auth.currentUser) {
+        showAuthModal();
+        return;
+    }
+    
+    // Original create trip modal code...
+    document.getElementById('create-trip-form').reset();
+    document.getElementById('distance-results').classList.add('d-none');
+    document.getElementById('calculate-distance').checked = false;
+    
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    document.getElementById('start-date').value = today.toISOString().split('T')[0];
+    document.getElementById('end-date').value = tomorrow.toISOString().split('T')[0];
+    
+    const modal = new bootstrap.Modal(document.getElementById('createTripModal'));
+    modal.show();
+}
+
+// Update join trip to redirect to auth
+function showJoinTripModal() {
+    if (!auth.currentUser) {
+        showAuthModal();
+        return;
+    }
+    
+    // Original join trip modal code...
+    document.getElementById('join-trip-message').classList.add('d-none');
+    document.getElementById('trip-code').value = '';
+    
+    const modal = new bootstrap.Modal(document.getElementById('joinTripModal'));
+    modal.show();
+}
+
+// Update car calculator navigation
+document.addEventListener('DOMContentLoaded', function() {
+    // Update car calculator link to handle auth
+    const carCalcLink = document.querySelector('a[href="car-calculations.html"]');
+    if (carCalcLink) {
+        carCalcLink.addEventListener('click', function(e) {
+            if (!auth.currentUser) {
+                e.preventDefault();
+                showAuthModal();
+            }
+        });
+    }
+    
+    // Update create first trip button
+    const createFirstTripBtn = document.getElementById('create-first-trip-btn');
+    if (createFirstTripBtn) {
+        createFirstTripBtn.addEventListener('click', function(e) {
+            if (!auth.currentUser) {
+                e.preventDefault();
+                showAuthModal();
+            }
+        });
+    }
+    
+    checkAuthState();
+    setupDashboardEventListeners();
+});
