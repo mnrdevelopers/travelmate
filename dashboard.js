@@ -7,6 +7,27 @@ let fuelPriceChart = null;
 document.addEventListener('DOMContentLoaded', function() {
     checkAuthState();
     setupDashboardEventListeners();
+
+    const carCalcLink = document.querySelector('a[href="car-calculations.html"]');
+    if (carCalcLink) {
+        carCalcLink.addEventListener('click', function(e) {
+            if (!auth.currentUser) {
+                e.preventDefault();
+                showAuthModal();
+            }
+        });
+    }
+
+    const createFirstTripBtn = document.getElementById('create-first-trip-btn');
+    if (createFirstTripBtn) {
+        createFirstTripBtn.addEventListener('click', function(e) {
+            if (!auth.currentUser) {
+                e.preventDefault();
+                showAuthModal();
+            }
+        });
+    }
+    
     initializeApp();
 });
 
@@ -39,6 +60,28 @@ function setupDashboardEventListeners() {
             document.getElementById('edit-distance-results').classList.add('d-none');
         }
     });
+
+     const navProfile = document.getElementById('nav-profile');
+    if (navProfile) {
+        navProfile.addEventListener('click', function(e) {
+            if (!auth.currentUser) {
+                e.preventDefault();
+                showAuthModal();
+            }
+        });
+    }
+    
+    // Protect any other navigation links
+    const protectedLinks = document.querySelectorAll('.nav-link[href="#"]');
+    protectedLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+            if (!auth.currentUser) {
+                e.preventDefault();
+                showAuthModal();
+            }
+        });
+    });
+});
     
     // Profile operations
     setupProfileEventListeners();
@@ -179,21 +222,17 @@ function initializeApp() {
 }
 
 function checkAuthState() {
-    // Clear redirect flag when on dashboard
-    clearAuthRedirectFlag();
-    
     auth.onAuthStateChanged(async (user) => {
         if (user) {
             currentUser = user;
             loadUserData();
             await loadCustomCategories();
             loadUserTrips();
+            showPrivateDashboard();
         } else {
-            console.log('User not logged in, redirecting to auth page');
-            // Small delay to show loading state if any
-            setTimeout(() => {
-                navigateTo('auth.html');
-            }, 500);
+            // Show public dashboard for non-logged in users
+            showPublicDashboard();
+            console.log('User not logged in, showing public dashboard');
         }
     });
 }
@@ -804,6 +843,12 @@ function createTripCard(trip) {
 }
 
 function showCreateTripModal() {
+    if (!auth.currentUser) {
+        showAuthModal();
+        return;
+    }
+    
+    // Original create trip modal code...
     document.getElementById('create-trip-form').reset();
     document.getElementById('distance-results').classList.add('d-none');
     document.getElementById('calculate-distance').checked = false;
@@ -856,6 +901,12 @@ function showDeleteTripModal(trip) {
 }
 
 function showJoinTripModal() {
+    if (!auth.currentUser) {
+        showAuthModal();
+        return;
+    }
+    
+    // Original join trip modal code...
     document.getElementById('join-trip-message').classList.add('d-none');
     document.getElementById('trip-code').value = '';
     
@@ -2188,86 +2239,3 @@ function showAuthModal() {
 function redirectToAuth() {
     navigateTo('auth.html');
 }
-
-// Update the checkAuthState function
-function checkAuthState() {
-    auth.onAuthStateChanged(async (user) => {
-        if (user) {
-            currentUser = user;
-            loadUserData();
-            await loadCustomCategories();
-            loadUserTrips();
-            showPrivateDashboard();
-        } else {
-            // Show public dashboard for non-logged in users
-            showPublicDashboard();
-            console.log('User not logged in, showing public dashboard');
-        }
-    });
-}
-
-// Update trip creation to redirect to auth for non-logged in users
-function showCreateTripModal() {
-    if (!auth.currentUser) {
-        showAuthModal();
-        return;
-    }
-    
-    // Original create trip modal code...
-    document.getElementById('create-trip-form').reset();
-    document.getElementById('distance-results').classList.add('d-none');
-    document.getElementById('calculate-distance').checked = false;
-    
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    document.getElementById('start-date').value = today.toISOString().split('T')[0];
-    document.getElementById('end-date').value = tomorrow.toISOString().split('T')[0];
-    
-    const modal = new bootstrap.Modal(document.getElementById('createTripModal'));
-    modal.show();
-}
-
-// Update join trip to redirect to auth
-function showJoinTripModal() {
-    if (!auth.currentUser) {
-        showAuthModal();
-        return;
-    }
-    
-    // Original join trip modal code...
-    document.getElementById('join-trip-message').classList.add('d-none');
-    document.getElementById('trip-code').value = '';
-    
-    const modal = new bootstrap.Modal(document.getElementById('joinTripModal'));
-    modal.show();
-}
-
-// Update car calculator navigation
-document.addEventListener('DOMContentLoaded', function() {
-    // Update car calculator link to handle auth
-    const carCalcLink = document.querySelector('a[href="car-calculations.html"]');
-    if (carCalcLink) {
-        carCalcLink.addEventListener('click', function(e) {
-            if (!auth.currentUser) {
-                e.preventDefault();
-                showAuthModal();
-            }
-        });
-    }
-    
-    // Update create first trip button
-    const createFirstTripBtn = document.getElementById('create-first-trip-btn');
-    if (createFirstTripBtn) {
-        createFirstTripBtn.addEventListener('click', function(e) {
-            if (!auth.currentUser) {
-                e.preventDefault();
-                showAuthModal();
-            }
-        });
-    }
-    
-    checkAuthState();
-    setupDashboardEventListeners();
-});
