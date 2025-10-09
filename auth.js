@@ -57,27 +57,23 @@ async function ensureUserProfile(user) {
         };
         
         if (!userDoc.exists) {
-            // Create new user profile
             userData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
             userData.firstLogin = firebase.firestore.FieldValue.serverTimestamp();
             await db.collection('users').doc(user.uid).set(userData);
             console.log('New user profile created:', user.uid, user.displayName);
         } else {
-            // Update existing user profile
             await db.collection('users').doc(user.uid).update(userData);
             console.log('User profile updated:', user.uid, user.displayName);
         }
         
-        // Redirect to dashboard after profile is ensured
         showAuthMessage('Welcome to TravelMate! Redirecting...', 'success');
         setTimeout(() => {
-            navigateTo('dashboard.html');
+            navigateTo('dashboard.html'); // Always go to dashboard after login
         }, 1500);
         
     } catch (error) {
         console.error('Error ensuring user profile:', error);
         showAuthMessage('Welcome! Redirecting to dashboard...', 'info');
-        // Still redirect to dashboard even if profile creation fails
         setTimeout(() => {
             navigateTo('dashboard.html');
         }, 1000);
