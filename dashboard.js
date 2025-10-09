@@ -179,6 +179,9 @@ function initializeApp() {
 }
 
 function checkAuthState() {
+    // Clear redirect flag when on dashboard
+    clearAuthRedirectFlag();
+    
     auth.onAuthStateChanged(async (user) => {
         if (user) {
             currentUser = user;
@@ -186,9 +189,11 @@ function checkAuthState() {
             await loadCustomCategories();
             loadUserTrips();
         } else {
-            // User is not signed in, redirect to auth page
             console.log('User not logged in, redirecting to auth page');
-            navigateTo('auth.html');
+            // Small delay to show loading state if any
+            setTimeout(() => {
+                navigateTo('auth.html');
+            }, 500);
         }
     });
 }
