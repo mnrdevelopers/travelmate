@@ -22,6 +22,20 @@
             </div>
             <h1>TravelMate</h1>
             <p>Plan your trips together</p>
+            
+            <!-- Features Preview -->
+            <div class="splash-features mt-3">
+                <div class="feature-item text-light small">
+                    <i class="fas fa-users me-2"></i>Group Travel
+                </div>
+                <div class="feature-item text-light small mt-1">
+                    <i class="fas fa-rupee-sign me-2"></i>Expense Tracking
+                </div>
+                <div class="feature-item text-light small mt-1">
+                    <i class="fas fa-route me-2"></i>Route Planning
+                </div>
+            </div>
+            
             <div class="mt-4">
                 <lottie-player 
                     src="https://assets1.lottiefiles.com/packages/lf20_sk5h1kfn.json" 
@@ -32,51 +46,62 @@
                     autoplay>
                 </lottie-player>
             </div>
+            
+            <!-- Action Buttons -->
             <div class="mt-4">
-                <button class="btn btn-light btn-lg" onclick="navigateTo('auth.html')">
-                    Get Started <i class="fas fa-arrow-right ms-2"></i>
+                <button class="btn btn-light btn-lg" onclick="navigateTo('dashboard.html')">
+                    Explore Features <i class="fas fa-arrow-right ms-2"></i>
                 </button>
-                 <div class="mt-2">
-        <small>
-            <a href="dashboard.html" class="text-light">Skip intro</a>
-        </small>
-    </div>
+                <div class="mt-2">
+                    <small>
+                        <a href="dashboard.html" class="text-light">Skip intro</a>
+                    </small>
+                </div>
+            </div>
+            
+            <!-- Loading Progress -->
+            <div class="splash-progress mt-3">
+                <div class="progress" style="width: 100px; height: 4px; margin: 0 auto;">
+                    <div class="progress-bar bg-light" role="progressbar" style="width: 0%" id="splash-progress-bar"></div>
+                </div>
+                <small class="text-light mt-1 d-block">Loading amazing features...</small>
             </div>
         </div>
     </div>
 
     <script src="utils.js"></script>
-  <script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function() {
-      navigator.serviceWorker.register('sw.js')
-      .then(function(registration) {
-        console.log('ServiceWorker registration successful:', registration);
-      })
-      .catch(function(error) {
-        console.log('ServiceWorker registration failed:', error);
-      });
-    });
-  }
-</script>
+    
+    <script>
+        // Smooth progress bar animation
+        const progressBar = document.getElementById('splash-progress-bar');
+        let progress = 0;
+        const progressInterval = setInterval(() => {
+            progress += 3.33; // 100% in 3 seconds
+            progressBar.style.width = `${Math.min(progress, 100)}%`;
+            
+            if (progress >= 100) {
+                clearInterval(progressInterval);
+            }
+        }, 100);
+
+        // Auto redirect to dashboard after 3 seconds
+        setTimeout(() => {
+            navigateTo('dashboard.html');
+        }, 3000);
+    </script>
 
     <script>
-    // Smooth progress bar animation
-    const progressBar = document.getElementById('splash-progress-bar');
-    let progress = 0;
-    const progressInterval = setInterval(() => {
-        progress += 3.33; // 100% in 3 seconds
-        progressBar.style.width = `${Math.min(progress, 100)}%`;
-        
-        if (progress >= 100) {
-            clearInterval(progressInterval);
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('sw.js')
+                .then(function(registration) {
+                    console.log('ServiceWorker registration successful:', registration);
+                })
+                .catch(function(error) {
+                    console.log('ServiceWorker registration failed:', error);
+                });
+            });
         }
-    }, 100);
-
-    // Auto redirect to dashboard after 3 seconds
-    setTimeout(() => {
-        navigateTo('dashboard.html');
-    }, 3000);
-</script>
+    </script>
 </body>
 </html>
