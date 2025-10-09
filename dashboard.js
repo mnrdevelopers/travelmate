@@ -25,45 +25,55 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function setupDashboardEventListeners() {
-    // Trip management
-    document.getElementById('create-trip-btn').addEventListener('click', showCreateTripModal);
-    document.getElementById('create-first-trip-btn').addEventListener('click', showCreateTripModal);
-    document.getElementById('join-trip-btn').addEventListener('click', showJoinTripModal);
-    document.getElementById('save-trip-btn').addEventListener('click', saveTrip);
-    document.getElementById('update-trip-btn').addEventListener('click', updateTrip);
-    document.getElementById('confirm-delete-trip-btn').addEventListener('click', deleteTrip);
-    document.getElementById('join-trip-code-btn').addEventListener('click', joinTripWithCode);
-    document.getElementById('logout-btn').addEventListener('click', handleLogout);
-    document.getElementById('copy-code-btn').addEventListener('click', copyTripCode);
-    document.getElementById('nav-profile').addEventListener('click', showProfileModal);
+    // Trip management - only add listeners if elements exist
+    const createTripBtn = document.getElementById('create-trip-btn');
+    const createFirstTripBtn = document.getElementById('create-first-trip-btn');
+    const joinTripBtn = document.getElementById('join-trip-btn');
+    const saveTripBtn = document.getElementById('save-trip-btn');
+    const updateTripBtn = document.getElementById('update-trip-btn');
+    const confirmDeleteTripBtn = document.getElementById('confirm-delete-trip-btn');
+    const joinTripCodeBtn = document.getElementById('join-trip-code-btn');
+    const logoutBtn = document.getElementById('logout-btn');
+    const copyCodeBtn = document.getElementById('copy-code-btn');
+    const navProfile = document.getElementById('nav-profile');
+    const calculateDistance = document.getElementById('calculate-distance');
+    const editCalculateDistance = document.getElementById('edit-calculate-distance');
+
+    // Add event listeners only if elements exist
+    if (createTripBtn) createTripBtn.addEventListener('click', showCreateTripModal);
+    if (createFirstTripBtn) createFirstTripBtn.addEventListener('click', showCreateTripModal);
+    if (joinTripBtn) joinTripBtn.addEventListener('click', showJoinTripModal);
+    if (saveTripBtn) saveTripBtn.addEventListener('click', saveTrip);
+    if (updateTripBtn) updateTripBtn.addEventListener('click', updateTrip);
+    if (confirmDeleteTripBtn) confirmDeleteTripBtn.addEventListener('click', deleteTrip);
+    if (joinTripCodeBtn) joinTripCodeBtn.addEventListener('click', joinTripWithCode);
+    if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
+    if (copyCodeBtn) copyCodeBtn.addEventListener('click', copyTripCode);
+    if (navProfile) navProfile.addEventListener('click', showProfileModal);
     
     // Distance calculation
-    document.getElementById('calculate-distance').addEventListener('change', function() {
-        if (this.checked) {
-            calculateDistance();
-        } else {
-            document.getElementById('distance-results').classList.add('d-none');
-        }
-    });
-    
-    document.getElementById('edit-calculate-distance').addEventListener('change', function() {
-        if (this.checked) {
-            calculateEditDistance();
-        } else {
-            document.getElementById('edit-distance-results').classList.add('d-none');
-        }
-    });
-
-    const navProfile = document.getElementById('nav-profile');
-    if (navProfile) {
-        navProfile.addEventListener('click', function(e) {
-            if (!auth.currentUser) {
-                e.preventDefault();
-                showAuthModal();
+    if (calculateDistance) {
+        calculateDistance.addEventListener('change', function() {
+            if (this.checked) {
+                calculateDistance();
+            } else {
+                const distanceResults = document.getElementById('distance-results');
+                if (distanceResults) distanceResults.classList.add('d-none');
             }
         });
     }
     
+    if (editCalculateDistance) {
+        editCalculateDistance.addEventListener('change', function() {
+            if (this.checked) {
+                calculateEditDistance();
+            } else {
+                const editDistanceResults = document.getElementById('edit-distance-results');
+                if (editDistanceResults) editDistanceResults.classList.add('d-none');
+            }
+        });
+    }
+
     // Protect any other navigation links
     const protectedLinks = document.querySelectorAll('.nav-link[href="#"]');
     protectedLinks.forEach(link => {
@@ -207,10 +217,17 @@ async function leaveAllTrips() {
 
 function initializeApp() {
     const today = new Date().toISOString().split('T')[0];
-    document.getElementById('start-date').min = today;
-    document.getElementById('end-date').min = today;
-    document.getElementById('edit-start-date').min = today;
-    document.getElementById('edit-end-date').min = today;
+    
+    // Only set min dates if elements exist
+    const startDate = document.getElementById('start-date');
+    const endDate = document.getElementById('end-date');
+    const editStartDate = document.getElementById('edit-start-date');
+    const editEndDate = document.getElementById('edit-end-date');
+    
+    if (startDate) startDate.min = today;
+    if (endDate) endDate.min = today;
+    if (editStartDate) editStartDate.min = today;
+    if (editEndDate) editEndDate.min = today;
 }
 
 function checkAuthState() {
