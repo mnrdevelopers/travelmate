@@ -93,10 +93,10 @@ function setupEnhancedCRUDEventListeners() {
 function checkAuthState() {
     auth.onAuthStateChanged(async (user) => {
         if (!user) {
+            // User is not signed in, redirect to auth page
             navigateTo('auth.html');
         } else {
             loadUserData();
-            // Wait for user to be fully set before loading trip details
             await loadTripDetails();
         }
     });
