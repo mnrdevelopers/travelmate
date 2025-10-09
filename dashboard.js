@@ -183,9 +183,11 @@ function checkAuthState() {
         if (user) {
             currentUser = user;
             loadUserData();
-            await loadCustomCategories(); // Add this line
+            await loadCustomCategories();
             loadUserTrips();
         } else {
+            // User is not signed in, redirect to auth page
+            console.log('User not logged in, redirecting to auth page');
             navigateTo('auth.html');
         }
     });
