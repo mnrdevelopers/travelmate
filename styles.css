@@ -974,3 +974,87 @@ html, body {
         max-height: 150px;
     }
 }
+
+/* Professional Category System Styles */
+.category-selector {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 15px;
+    background-color: #f8f9fa;
+}
+
+.category-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.category-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 5px;
+    border-radius: 8px;
+    background-color: white;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+    min-height: 80px;
+}
+
+.category-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.category-item.selected {
+    border-color: #4361ee;
+    background-color: #eef2ff;
+}
+
+.category-icon {
+    font-size: 1.5rem;
+    margin-bottom: 5px;
+}
+
+.category-name {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #495057;
+    line-height: 1.2;
+}
+
+.category-item.selected .category-name {
+    color: #4361ee;
+    font-weight: 600;
+}
+
+/* Category-specific colors */
+.category-transportation .category-icon { color: #4361ee; }
+.category-accommodation .category-icon { color: #06d6a0; }
+.category-food .category-icon { color: #ef476f; }
+.category-activities .category-icon { color: #118ab2; }
+.category-shopping .category-icon { color: #7209b7; }
+.category-health .category-icon { color: #f72585; }
+.category-communication .category-icon { color: #3a0ca3; }
+.category-services .category-icon { color: #4cc9f0; }
+.category-transport-rental .category-icon { color: #560bad; }
+.category-travel-docs .category-icon { color: #480ca8; }
+.category-emergency .category-icon { color: #e63946; }
+.category-misc .category-icon { color: #6c757d; }
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .category-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 576px) {
+    .category-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
