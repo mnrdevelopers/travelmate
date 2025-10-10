@@ -83,269 +83,279 @@
             </li>
         </ul>
         
-        <div class="tab-content" id="trip-tab-content">
-                      <!-- Overview Tab -->
-                <div class="tab-pane fade show active" id="overview">
-                    <div class="row">
-                        <div class="col-md-8">
-                            <h4>Trip Information</h4>
-                            <div class="card mb-4">
-                                <div class="card-body">
-                                    <div class="row">
-                                        <div class="col-sm-6 mb-3">
-                                            <strong><i class="fas fa-map-marker-alt me-2 text-primary"></i>Start Location:</strong>
-                                            <span id="overview-start-location">-</span>
-                                        </div>
-                                        <div class="col-sm-6 mb-3">
-                                            <strong><i class="fas fa-flag-checkered me-2 text-primary"></i>Destination:</strong>
-                                            <span id="overview-destination">-</span>
-                                        </div>
-                                        <div class="col-sm-6 mb-3">
-                                            <strong><i class="fas fa-calendar-alt me-2 text-primary"></i>Dates:</strong>
-                                            <span id="overview-dates">-</span>
-                                        </div>
-                                        <div class="col-sm-6 mb-3">
-                                            <strong><i class="fas fa-road me-2 text-primary"></i>Distance:</strong>
-                                            <span id="overview-distance">-</span>
-                                        </div>
-                                        <div class="col-sm-6 mb-3">
-                                            <strong><i class="fas fa-rupee-sign me-2 text-primary"></i>Total Budget:</strong>
-                                            <span id="overview-budget">-</span>
-                                        </div>
-                                        <div class="col-sm-6 mb-3">
-                                            <strong><i class="fas fa-wallet me-2 text-primary"></i>Remaining Budget:</strong>
-                                            <span id="overview-remaining">-</span>
-                                        </div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <strong>Budget Progress:</strong>
-                                        <div class="progress mt-2">
-                                            <div id="budget-progress-bar" class="progress-bar" role="progressbar" style="width: 0%"></div>
-                                        </div>
-                                        <div class="mt-2" id="budget-status"></div>
-                                    </div>
-                                    <div class="mt-3 pt-3 border-top" id="trip-actions-section">
-                                      <!-- Leave/Delete buttons will be added here dynamically -->
-                                    </div>
-                                </div>
+      <div class="tab-content" id="trip-tab-content">
+
+    <!-- Overview Tab -->
+    <div class="tab-pane fade show active" id="overview">
+        <div class="row">
+            <!-- Left Column: Trip Information -->
+            <div class="col-md-8">
+                <h4>Trip Information</h4>
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-sm-6 mb-3">
+                                <strong><i class="fas fa-map-marker-alt me-2 text-primary"></i>Start Location:</strong>
+                                <span id="overview-start-location">-</span>
+                            </div>
+                            <div class="col-sm-6 mb-3">
+                                <strong><i class="fas fa-flag-checkered me-2 text-primary"></i>Destination:</strong>
+                                <span id="overview-destination">-</span>
+                            </div>
+                            <div class="col-sm-6 mb-3">
+                                <strong><i class="fas fa-calendar-alt me-2 text-primary"></i>Dates:</strong>
+                                <span id="overview-dates">-</span>
+                            </div>
+                            <div class="col-sm-6 mb-3">
+                                <strong><i class="fas fa-road me-2 text-primary"></i>Distance:</strong>
+                                <span id="overview-distance">-</span>
+                            </div>
+                            <div class="col-sm-6 mb-3">
+                                <strong><i class="fas fa-rupee-sign me-2 text-primary"></i>Total Budget:</strong>
+                                <span id="overview-budget">-</span>
+                            </div>
+                            <div class="col-sm-6 mb-3">
+                                <strong><i class="fas fa-wallet me-2 text-primary"></i>Remaining Budget:</strong>
+                                <span id="overview-remaining">-</span>
                             </div>
                         </div>
-                        <div class="col-md-4">
-                            <h4>Trip Members</h4>
-                            <div class="card">
-                                <div class="card-body">
-                                    <div id="members-list">
-                                        <!-- Members will be loaded here -->
-                                    </div>
-                                </div>
+
+                        <div class="mb-3">
+                            <strong>Budget Progress:</strong>
+                            <div class="progress mt-2">
+                                <div id="budget-progress-bar" class="progress-bar" role="progressbar" style="width: 0%"></div>
                             </div>
+                            <div class="mt-2" id="budget-status"></div>
                         </div>
-                    </div>
-                </div>
-                
-        <!-- Expenses Tab -->
-<div class="tab-pane fade" id="expenses">
-    <div class="row">
-        <!-- Left Column: Expenses & Filters -->
-        <div class="col-md-8">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h4>Expenses</h4>
-                <button class="btn btn-primary" id="add-expense-btn">
-                    <i class="fas fa-plus me-1"></i>Add Expense
-                </button>
-            </div>
 
-            <!-- Filters Section -->
-            <div class="row mb-3">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-body py-2">
-                            <div class="row align-items-center">
-                                <div class="col-md-3 mb-2 mb-md-0">
-                                    <label class="form-label small fw-bold">Filter by Category</label>
-                                    <select class="form-select form-select-sm" id="category-filter">
-                                        <option value="all">All Categories</option>
-                                        <option value="fuel">Fuel</option>
-                                        <option value="hotel">Hotel</option>
-                                        <option value="food">Food</option>
-                                        <option value="activities">Activities</option>
-                                        <option value="other">Other</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-3 mb-2 mb-md-0">
-                                    <label class="form-label small fw-bold">Filter by Payment Mode</label>
-                                    <select class="form-select form-select-sm" id="payment-filter">
-                                        <option value="all">All Payment Modes</option>
-                                        <option value="cash">Cash</option>
-                                        <option value="upi">UPI</option>
-                                        <option value="card">Card</option>
-                                        <option value="other">Other</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-3 mb-2 mb-md-0">
-                                    <label class="form-label small fw-bold">Filter by Member</label>
-                                    <select class="form-select form-select-sm" id="member-filter">
-                                        <option value="all">All Members</option>
-                                        <!-- Members populated dynamically -->
-                                    </select>
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label small fw-bold">Date Range</label>
-                                    <select class="form-select form-select-sm" id="date-filter">
-                                        <option value="all">All Dates</option>
-                                        <option value="today">Today</option>
-                                        <option value="week">This Week</option>
-                                        <option value="month">This Month</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div class="row mt-2">
-                                <div class="col-12 text-end">
-                                    <button class="btn btn-outline-secondary btn-sm" id="clear-filters-btn">
-                                        <i class="fas fa-times me-1"></i>Clear Filters
-                                    </button>
-                                </div>
-                            </div>
+                        <div class="mt-3 pt-3 border-top" id="trip-actions-section">
+                            <!-- Leave/Delete buttons will be added here dynamically -->
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Expenses List -->
-            <div id="expenses-list">
-                <!-- Expenses will be loaded here -->
-            </div>
-
-            <!-- Empty State -->
-            <div id="empty-expenses" class="empty-state text-center py-5 d-none">
-                <div class="empty-icon mb-4">
-                    <i class="fas fa-receipt fa-2x"></i>
-                </div>
-                <h4>No expenses yet</h4>
-                <p>Start adding expenses to track your spending!</p>
-            </div>
-        </div>
-
-       <!-- Right Column: Summary & Charts -->
-<div class="col-md-4">
-    <!-- Budget Summary -->
-    <h4>Budget Summary</h4>
-    <div class="card mb-4">
-        <div class="card-body">
-            <div class="mb-3">
-                <strong>Total Budget:</strong>
-                <span id="summary-total-budget" class="float-end">
-                    <span class="rupee-symbol">₹</span>0
-                </span>
-            </div>
-            <div class="mb-3">
-                <strong>Total Spent:</strong>
-                <span id="summary-total-spent" class="float-end">
-                    <span class="rupee-symbol">₹</span>0
-                </span>
-            </div>
-            <div class="mb-3">
-                <strong>Remaining:</strong>
-                <span id="summary-remaining" class="float-end">
-                    <span class="rupee-symbol">₹</span>0
-                </span>
-            </div>
-            <div class="progress mt-3">
-                <div id="summary-progress-bar" class="progress-bar" role="progressbar" style="width: 0%"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Spending by Category -->
-    <h4>Spending by Category</h4>
-    <div class="card mb-4">
-        <div class="card-body">
-            <canvas id="expense-chart" height="250"></canvas>
-        </div>
-    </div>
-
-    <!-- Spending by Payment Mode -->
-    <h4>Spending by Payment Mode</h4>
-    <div class="card mb-4">
-        <div class="card-body">
-            <canvas id="payment-chart" height="200"></canvas>
-        </div>
-    </div>
-
-    <!-- Member Expenditure Section -->
-    <h4>Member Expenditure</h4>
-    <div class="card mb-4">
-        <div class="card-body">
-            <div id="member-expenditure-stats">
-                <div class="text-center text-muted py-4">
-                    <i class="fas fa-users fa-2x mb-3"></i>
-                    <p>No expenditure data yet</p>
-                    <small>Expenses will appear here as members add them</small>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Settlement Summary -->
-    <h4>Settlement Summary</h4>
-    <div class="card">
-        <div class="card-body">
-            <div id="settlement-summary">
-                <div class="text-center text-muted py-3">
-                    <i class="fas fa-balance-scale fa-2x mb-2"></i>
-                    <p>Balances will calculate automatically</p>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-                
-                <!-- Itinerary Tab -->
-                <div class="tab-pane fade" id="itinerary">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h4>Itinerary</h4>
-                        <button class="btn btn-primary" id="add-activity-btn">
-                            <i class="fas fa-plus me-1"></i>Add Activity
-                        </button>
-                    </div>
-                    
-                    <div id="itinerary-days">
-                        <!-- Itinerary will be loaded here -->
-                    </div>
-                    
-                    <div id="empty-itinerary" class="empty-state">
-    <div class="empty-icon mb-4">
-        <i class="fas fa-route"></i>
-    </div>
-    <h4>No activities planned yet</h4>
-    <p>Start adding activities to your itinerary!</p>
-</div>
-                </div>
-                
-                <!-- Route Tab -->
-                <div class="tab-pane fade" id="route">
-                    <h4>Travel Route</h4>
-                    <div class="card mb-4">
-                        <div class="card-body">
-                            <div id="route-details">
-                                <!-- Route details will be loaded here -->
-                            </div>
-                          <div id="empty-route" class="empty-state">
-    <div class="empty-icon mb-4">
-        <i class="fas fa-map-marked-alt"></i>
-    </div>
-    <h4>No route information</h4>
-    <p>Calculate distance to see route details</p>
-    <button class="btn btn-primary mt-2" id="calculate-route-btn">
-        <i class="fas fa-route me-1"></i>Calculate Route
-    </button>
-</div>
+            <!-- Right Column: Trip Members -->
+            <div class="col-md-4">
+                <h4>Trip Members</h4>
+                <div class="card">
+                    <div class="card-body">
+                        <div id="members-list">
+                            <!-- Members will be loaded here -->
                         </div>
                     </div>
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Expenses Tab -->
+    <div class="tab-pane fade" id="expenses">
+        <div class="row">
+            <!-- Left Column: Expenses & Filters -->
+            <div class="col-md-8">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h4>Expenses</h4>
+                    <button class="btn btn-primary" id="add-expense-btn">
+                        <i class="fas fa-plus me-1"></i>Add Expense
+                    </button>
+                </div>
+
+                <!-- Filters Section -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body py-2">
+                                <div class="row align-items-center">
+                                    <div class="col-md-3 mb-2 mb-md-0">
+                                        <label class="form-label small fw-bold">Filter by Category</label>
+                                        <select class="form-select form-select-sm" id="category-filter">
+                                            <option value="all">All Categories</option>
+                                            <option value="fuel">Fuel</option>
+                                            <option value="hotel">Hotel</option>
+                                            <option value="food">Food</option>
+                                            <option value="activities">Activities</option>
+                                            <option value="other">Other</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3 mb-2 mb-md-0">
+                                        <label class="form-label small fw-bold">Filter by Payment Mode</label>
+                                        <select class="form-select form-select-sm" id="payment-filter">
+                                            <option value="all">All Payment Modes</option>
+                                            <option value="cash">Cash</option>
+                                            <option value="upi">UPI</option>
+                                            <option value="card">Card</option>
+                                            <option value="other">Other</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3 mb-2 mb-md-0">
+                                        <label class="form-label small fw-bold">Filter by Member</label>
+                                        <select class="form-select form-select-sm" id="member-filter">
+                                            <option value="all">All Members</option>
+                                            <!-- Members populated dynamically -->
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label small fw-bold">Date Range</label>
+                                        <select class="form-select form-select-sm" id="date-filter">
+                                            <option value="all">All Dates</option>
+                                            <option value="today">Today</option>
+                                            <option value="week">This Week</option>
+                                            <option value="month">This Month</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="row mt-2">
+                                    <div class="col-12 text-end">
+                                        <button class="btn btn-outline-secondary btn-sm" id="clear-filters-btn">
+                                            <i class="fas fa-times me-1"></i>Clear Filters
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Expenses List -->
+                <div id="expenses-list">
+                    <!-- Expenses will be loaded here -->
+                </div>
+
+                <!-- Empty State -->
+                <div id="empty-expenses" class="empty-state text-center py-5 d-none">
+                    <div class="empty-icon mb-4">
+                        <i class="fas fa-receipt fa-2x"></i>
+                    </div>
+                    <h4>No expenses yet</h4>
+                    <p>Start adding expenses to track your spending!</p>
+                </div>
+            </div>
+
+            <!-- Right Column: Summary & Charts -->
+            <div class="col-md-4">
+
+                <!-- Budget Summary -->
+                <h4>Budget Summary</h4>
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <strong>Total Budget:</strong>
+                            <span id="summary-total-budget" class="float-end">
+                                <span class="rupee-symbol">₹</span>0
+                            </span>
+                        </div>
+                        <div class="mb-3">
+                            <strong>Total Spent:</strong>
+                            <span id="summary-total-spent" class="float-end">
+                                <span class="rupee-symbol">₹</span>0
+                            </span>
+                        </div>
+                        <div class="mb-3">
+                            <strong>Remaining:</strong>
+                            <span id="summary-remaining" class="float-end">
+                                <span class="rupee-symbol">₹</span>0
+                            </span>
+                        </div>
+                        <div class="progress mt-3">
+                            <div id="summary-progress-bar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Spending by Category -->
+                <h4>Spending by Category</h4>
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <canvas id="expense-chart" height="250"></canvas>
+                    </div>
+                </div>
+
+                <!-- Spending by Payment Mode -->
+                <h4>Spending by Payment Mode</h4>
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <canvas id="payment-chart" height="200"></canvas>
+                    </div>
+                </div>
+
+                <!-- Member Expenditure Section -->
+                <h4>Member Expenditure</h4>
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <div id="member-expenditure-stats">
+                            <div class="text-center text-muted py-4">
+                                <i class="fas fa-users fa-2x mb-3"></i>
+                                <p>No expenditure data yet</p>
+                                <small>Expenses will appear here as members add them</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settlement Summary -->
+                <h4>Settlement Summary</h4>
+                <div class="card">
+                    <div class="card-body">
+                        <div id="settlement-summary">
+                            <div class="text-center text-muted py-3">
+                                <i class="fas fa-balance-scale fa-2x mb-2"></i>
+                                <p>Balances will calculate automatically</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div> <!-- End Right Column -->
+        </div>
+    </div>
+
+    <!-- Itinerary Tab -->
+    <div class="tab-pane fade" id="itinerary">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4>Itinerary</h4>
+            <button class="btn btn-primary" id="add-activity-btn">
+                <i class="fas fa-plus me-1"></i>Add Activity
+            </button>
+        </div>
+
+        <div id="itinerary-days">
+            <!-- Itinerary will be loaded here -->
+        </div>
+
+        <div id="empty-itinerary" class="empty-state">
+            <div class="empty-icon mb-4">
+                <i class="fas fa-route"></i>
+            </div>
+            <h4>No activities planned yet</h4>
+            <p>Start adding activities to your itinerary!</p>
+        </div>
+    </div>
+
+    <!-- Route Tab -->
+    <div class="tab-pane fade" id="route">
+        <h4>Travel Route</h4>
+        <div class="card mb-4">
+            <div class="card-body">
+                <div id="route-details">
+                    <!-- Route details will be loaded here -->
+                </div>
+
+                <div id="empty-route" class="empty-state">
+                    <div class="empty-icon mb-4">
+                        <i class="fas fa-map-marked-alt"></i>
+                    </div>
+                    <h4>No route information</h4>
+                    <p>Calculate distance to see route details</p>
+                    <button class="btn btn-primary mt-2" id="calculate-route-btn">
+                        <i class="fas fa-route me-1"></i>Calculate Route
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div> 
 
     <!-- Edit Trip Modal for Trip Details Page -->
 <div class="modal fade" id="editTripModal" tabindex="-1">
