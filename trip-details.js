@@ -839,7 +839,7 @@ function renderPaymentChart(trip) {
     });
 }
 
-function loadTripItinerary(trip) {
+async function loadTripItinerary(trip) {
     const itineraryDays = document.getElementById('itinerary-days');
     const emptyItinerary = document.getElementById('empty-itinerary');
     
@@ -851,12 +851,21 @@ function loadTripItinerary(trip) {
     
     emptyItinerary.classList.add('d-none');
     
+    // Pre-load all member names first
+    const memberNames = {};
+    const memberPromises = trip.members.map(async (memberId) => {
+        const name = await getMemberName(memberId);
+        memberNames[memberId] = name;
+    });
+    
+    await Promise.all(memberPromises);
+    
     // Group activities by day while preserving original indices
     const activitiesByDay = {};
     trip.itinerary.forEach((activity, originalIndex) => {
         if (!activity || !activity.day) {
             console.warn('Invalid activity skipped:', activity);
-            return; // Skip invalid activities
+            return;
         }
         
         const day = activity.day.toString();
@@ -865,7 +874,7 @@ function loadTripItinerary(trip) {
         }
         activitiesByDay[day].push({
             ...activity,
-            originalIndex: originalIndex // Store the original array index
+            originalIndex: originalIndex
         });
     });
     
@@ -894,6 +903,8 @@ function loadTripItinerary(trip) {
                 <div class="card-body">
                     ${sortedActivities.map(activity => {
                         const canEdit = activity.addedBy === auth.currentUser.uid;
+                        const memberName = memberNames[activity.addedBy] || 'Traveler';
+                        
                         return `
                             <div class="d-flex align-items-start mb-3 p-3 border rounded activity-item">
                                 <div class="me-3 text-center flex-shrink-0">
@@ -907,20 +918,20 @@ function loadTripItinerary(trip) {
                                     <div class="d-flex justify-content-between align-items-center">
                                         <small class="text-muted">
                                             <i class="fas fa-user me-1"></i>
-                                            <span class="activity-added-by">Loading...</span>
+                                            <span class="activity-added-by">${memberName}</span>
                                         </small>
                                         ${canEdit ? `
                                             <div>
-                                               <button class="btn btn-sm btn-outline-primary edit-activity-btn me-1" 
-        data-activity-index="${activity.originalIndex}"
-        title="Edit Activity">
-    <i class="fas fa-edit"></i> Edit
-</button>
-<button class="btn btn-sm btn-outline-danger delete-activity-btn" 
-        data-activity-index="${activity.originalIndex}"
-        title="Delete Activity">
-    <i class="fas fa-trash"></i> Delete
-</button>
+                                                <button class="btn btn-sm btn-outline-primary edit-activity-btn me-1" 
+                                                        data-activity-index="${activity.originalIndex}"
+                                                        title="Edit Activity">
+                                                    <i class="fas fa-edit"></i> Edit
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-danger delete-activity-btn" 
+                                                        data-activity-index="${activity.originalIndex}"
+                                                        title="Delete Activity">
+                                                    <i class="fas fa-trash"></i> Delete
+                                                </button>
                                             </div>
                                         ` : ''}
                                     </div>
@@ -932,38 +943,7 @@ function loadTripItinerary(trip) {
             `;
             
             itineraryDays.appendChild(dayCard);
-            
-            // Load member names for each activity
-            setTimeout(() => {
-                sortedActivities.forEach(activity => {
-                    loadMemberNameForActivity(dayCard, activity.addedBy, activity.originalIndex);
-                });
-            }, 100);
         });
-}
-
-async function loadMemberNameForActivity(dayCard, memberId, activityIndex) {
-    // Find the activity element using the correct selector
-    const activityElement = dayCard.querySelector(`.activity-item .edit-activity-btn[data-activity-index="${activityIndex}"]`)?.closest('.activity-item');
-    
-    if (!activityElement) {
-        console.warn('Activity element not found for index:', activityIndex);
-        return;
-    }
-    
-    const addedByElement = activityElement.querySelector('.activity-added-by');
-    if (!addedByElement) {
-        console.warn('Added by element not found for activity index:', activityIndex);
-        return;
-    }
-    
-    try {
-        const memberName = await getMemberName(memberId);
-        addedByElement.textContent = memberName;
-    } catch (error) {
-        console.error('Error loading member name for activity:', error);
-        addedByElement.textContent = 'Traveler';
-    }
 }
 
 function loadTripRoute(trip) {
