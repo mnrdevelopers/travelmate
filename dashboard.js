@@ -266,16 +266,21 @@ function checkAuthState() {
             console.log('User is logged in');
             currentUser = user;
             
-            // Only try to load user data if we're showing private dashboard
             try {
                 await loadUserData();
                 await loadCustomCategories();
                 await loadUserTrips();
                 showPrivateDashboard();
                 updateNavigationBasedOnAuth(true);
+                
+                // Show welcome back message if this is a login
+                if (sessionStorage.getItem('justLoggedIn')) {
+                    showToast(`Welcome back, ${user.displayName || 'Traveler'}!`, 'success');
+                    sessionStorage.removeItem('justLoggedIn');
+                }
+                
             } catch (error) {
                 console.error('Error loading user data:', error);
-                // Fallback to public dashboard if there's an error
                 showPublicDashboard();
                 updateNavigationBasedOnAuth(false);
             }
@@ -298,16 +303,29 @@ function checkAuthState() {
 }
 
 function showLoadingOverlay() {
-    const overlay = document.getElementById('loading-overlay');
-    if (overlay) {
-        overlay.classList.remove('hidden');
+    let overlay = document.getElementById('loading-overlay');
+    if (!overlay) {
+        // Create loading overlay if it doesn't exist
+        overlay = document.createElement('div');
+        overlay.id = 'loading-overlay';
+        overlay.className = 'loading-overlay';
+        overlay.innerHTML = `
+            <div class="loading-content">
+                <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;"></div>
+                <p class="mt-3">Loading...</p>
+            </div>
+        `;
+        document.body.appendChild(overlay);
     }
+    overlay.classList.remove('hidden');
+    overlay.style.display = 'flex';
 }
 
 function hideLoadingOverlay() {
     const overlay = document.getElementById('loading-overlay');
     if (overlay) {
         overlay.classList.add('hidden');
+        overlay.style.display = 'none';
     }
 }
 
@@ -1400,9 +1418,14 @@ async function handleLogout() {
     try {
         // Show loading state
         const logoutBtn = document.getElementById('logout-btn');
-        const originalText = logoutBtn.innerHTML;
-        logoutBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Signing out...';
-        logoutBtn.disabled = true;
+        if (logoutBtn) {
+            const originalText = logoutBtn.innerHTML;
+            logoutBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Signing out...';
+            logoutBtn.disabled = true;
+        }
+        
+        // Show loading overlay during logout
+        showLoadingOverlay();
         
         await auth.signOut();
         
@@ -1418,8 +1441,13 @@ async function handleLogout() {
     } finally {
         // Reset button state
         const logoutBtn = document.getElementById('logout-btn');
-        logoutBtn.disabled = false;
-        logoutBtn.innerHTML = '<i class="fas fa-sign-out-alt me-1"></i>Logout';
+        if (logoutBtn) {
+            logoutBtn.disabled = false;
+            logoutBtn.innerHTML = '<i class="fas fa-sign-out-alt me-1"></i>Logout';
+        }
+        
+        // Ensure loading overlay is hidden
+        hideLoadingOverlay();
     }
 }
 
@@ -2498,5 +2526,60 @@ function setupProtectedNavigation() {
                 showAuthModal();
             }
         });
+    }
+}
+
+function showToast(message, type = 'info') {
+    // Create toast container if it doesn't exist
+    let toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toast-container';
+        toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+        document.body.appendChild(toastContainer);
+    }
+    
+    const toastId = 'toast-' + Date.now();
+    
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-bg-${type} border-0`;
+    toast.id = toastId;
+    toast.setAttribute('role', 'alert');
+    toast.setAttribute('aria-live', 'assertive');
+    toast.setAttribute('aria-atomic', 'true');
+    
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">
+                <i class="fas ${getToastIcon(type)} me-2"></i>
+                ${message}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+    `;
+    
+    toastContainer.appendChild(toast);
+    
+    const bsToast = new bootstrap.Toast(toast, {
+        autohide: true,
+        delay: 3000
+    });
+    
+    bsToast.show();
+    
+    toast.addEventListener('hidden.bs.toast', () => {
+        if (toast.parentNode) {
+            toast.remove();
+        }
+    });
+}
+
+function getToastIcon(type) {
+    switch(type) {
+        case 'success': return 'fa-check-circle';
+        case 'danger': return 'fa-exclamation-triangle';
+        case 'warning': return 'fa-exclamation-circle';
+        case 'info': return 'fa-info-circle';
+        default: return 'fa-info-circle';
     }
 }
