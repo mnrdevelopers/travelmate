@@ -843,16 +843,11 @@ function loadTripItinerary(trip) {
     const activitiesByDay = {};
     trip.itinerary.forEach((activity, index) => {
         if (!activitiesByDay[activity.day]) activitiesByDay[activity.day] = [];
-        activitiesByDay[activity.day].push({...activity, index});
-    });
-    
-    // Sort activities by time within each day
-    Object.keys(activitiesByDay).forEach(day => {
-        activitiesByDay[day].sort((a, b) => a.time.localeCompare(b.time));
+        activitiesByDay[activity.day].push({...activity, originalIndex: index});
     });
     
     itineraryDays.innerHTML = '';
-    Object.keys(activitiesByDay).sort().forEach(day => {
+    Object.keys(activitiesByDay).sort((a, b) => parseInt(a) - parseInt(b)).forEach(day => {
         const dayCard = document.createElement('div');
         dayCard.className = 'card itinerary-card mb-4';
         
@@ -862,7 +857,7 @@ function loadTripItinerary(trip) {
             </div>
             <div class="card-body">
                 ${activitiesByDay[day].map(activity => `
-                    <div class="d-flex align-items-start mb-3 p-3 border rounded">
+                    <div class="d-flex align-items-start mb-3 p-3 border rounded activity-item" data-activity-index="${activity.originalIndex}">
                         <div class="me-3 text-center">
                             <div class="bg-primary text-white rounded p-2" style="width: 70px;">
                                 <div class="fw-bold">${activity.time}</div>
@@ -873,11 +868,11 @@ function loadTripItinerary(trip) {
                             ${activity.notes ? `<p class="mb-0 text-muted">${activity.notes}</p>` : ''}
                             ${activity.addedBy === auth.currentUser.uid ? `
                                 <div class="mt-2">
-                                    <button class="btn btn-sm btn-outline-primary edit-activity-btn me-1" data-activity-id="${activity.index}">
-                                        <i class="fas fa-edit"></i>
+                                    <button class="btn btn-sm btn-outline-primary edit-activity-btn me-1" data-activity-index="${activity.originalIndex}">
+                                        <i class="fas fa-edit"></i> Edit
                                     </button>
-                                    <button class="btn btn-sm btn-outline-danger delete-activity-btn" data-activity-id="${activity.index}">
-                                        <i class="fas fa-trash"></i>
+                                    <button class="btn btn-sm btn-outline-danger delete-activity-btn" data-activity-index="${activity.originalIndex}">
+                                        <i class="fas fa-trash"></i> Delete
                                     </button>
                                 </div>
                             ` : ''}
@@ -895,31 +890,82 @@ function loadTripRoute(trip) {
     const routeDetails = document.getElementById('route-details');
     const emptyRoute = document.getElementById('empty-route');
     
-    if (trip.route) {
+    if (trip.route && trip.route.distance) {
         emptyRoute.classList.add('d-none');
+        
+        // Handle both Firestore timestamp and regular date
+        let calculatedDate = 'Unknown date';
+        if (trip.route.calculatedAt) {
+            if (typeof trip.route.calculatedAt.toDate === 'function') {
+                calculatedDate = trip.route.calculatedAt.toDate().toLocaleDateString();
+            } else if (trip.route.calculatedAt instanceof Date) {
+                calculatedDate = trip.route.calculatedAt.toLocaleDateString();
+            } else {
+                calculatedDate = new Date(trip.route.calculatedAt).toLocaleDateString();
+            }
+        }
+        
         routeDetails.innerHTML = `
             <div class="distance-info">
-                <h5><i class="fas fa-route me-2"></i>Route Information</h5>
-                <div class="row mt-3">
+                <h5><i class="fas fa-route me-2 text-primary"></i>Route Information</h5>
+                <div class="row mt-4">
                     <div class="col-md-6">
-                        <p><strong>From:</strong> ${trip.startLocation}</p>
-                        <p><strong>To:</strong> ${trip.destination}</p>
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6><i class="fas fa-map-marker-alt me-2 text-success"></i>Start</h6>
+                                <p class="mb-0">${trip.startLocation}</p>
+                            </div>
+                        </div>
                     </div>
                     <div class="col-md-6">
-                        <p><strong>Distance:</strong> ${trip.route.distance}</p>
-                        <p><strong>Travel Time:</strong> ${trip.route.duration}</p>
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6><i class="fas fa-flag-checkered me-2 text-danger"></i>Destination</h6>
+                                <p class="mb-0">${trip.destination}</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                ${trip.route.calculatedAt ? `
-                    <div class="mt-2">
-                        <small class="text-muted">
-                            <i class="fas fa-clock me-1"></i>
-                            Calculated on ${new Date(trip.route.calculatedAt.toDate()).toLocaleDateString()}
-                        </small>
+                <div class="row mt-4">
+                    <div class="col-md-6">
+                        <div class="card bg-primary text-white">
+                            <div class="card-body text-center">
+                                <h6><i class="fas fa-road me-2"></i>Distance</h6>
+                                <h4 class="mb-0">${trip.route.distance}</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card bg-info text-white">
+                            <div class="card-body text-center">
+                                <h6><i class="fas fa-clock me-2"></i>Travel Time</h6>
+                                <h4 class="mb-0">${trip.route.duration}</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                ${trip.route.simulated ? `
+                    <div class="alert alert-warning mt-3">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Simulated Data:</strong> This is estimated distance as route service was unavailable.
                     </div>
                 ` : ''}
+                <div class="mt-3 text-center">
+                    <small class="text-muted">
+                        <i class="fas fa-clock me-1"></i>
+                        Calculated on ${calculatedDate}
+                    </small>
+                </div>
+                <div class="text-center mt-3">
+                    <button class="btn btn-primary" id="recalculate-route-btn">
+                        <i class="fas fa-redo me-1"></i>Recalculate Route
+                    </button>
+                </div>
             </div>
         `;
+        
+        // Add event listener for recalculate button
+        document.getElementById('recalculate-route-btn').addEventListener('click', calculateRoute);
     } else {
         routeDetails.innerHTML = '';
         emptyRoute.classList.remove('d-none');
