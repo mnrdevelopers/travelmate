@@ -58,13 +58,13 @@ function setupEnhancedCRUDEventListeners() {
         saveCategoryBtn.addEventListener('click', saveCustomCategory);
     }
     
-    // Dynamic event listeners for edit/delete buttons
+    // Single event delegation for all dynamic buttons
     document.addEventListener('click', function(e) {
         // Handle expense edit
         if (e.target.classList.contains('edit-expense-btn') || e.target.closest('.edit-expense-btn')) {
             const btn = e.target.classList.contains('edit-expense-btn') ? e.target : e.target.closest('.edit-expense-btn');
             const expenseIndex = btn.dataset.expenseIndex;
-            console.log('Edit button clicked, index:', expenseIndex);
+            console.log('Edit expense clicked, index:', expenseIndex);
             editExpense(expenseIndex);
         }
         
@@ -72,17 +72,14 @@ function setupEnhancedCRUDEventListeners() {
         if (e.target.classList.contains('delete-expense-btn') || e.target.closest('.delete-expense-btn')) {
             const btn = e.target.classList.contains('delete-expense-btn') ? e.target : e.target.closest('.delete-expense-btn');
             const expenseIndex = btn.dataset.expenseIndex;
-            console.log('Delete button clicked, index:', expenseIndex);
+            console.log('Delete expense clicked, index:', expenseIndex);
             deleteExpense(expenseIndex);
         }
         
-        // Enhanced activity event listeners
-    document.addEventListener('click', function(e) {
-        // Handle activity edit - use event delegation with more specific targeting
-        const editBtn = e.target.closest('.edit-activity-btn');
-        if (editBtn) {
-            e.preventDefault();
-            const activityIndex = editBtn.dataset.activityIndex;
+        // Handle activity edit
+        if (e.target.classList.contains('edit-activity-btn') || e.target.closest('.edit-activity-btn')) {
+            const btn = e.target.classList.contains('edit-activity-btn') ? e.target : e.target.closest('.edit-activity-btn');
+            const activityIndex = btn.dataset.activityIndex;
             console.log('Edit activity clicked, index:', activityIndex);
             if (activityIndex !== undefined) {
                 editActivity(parseInt(activityIndex));
@@ -90,16 +87,16 @@ function setupEnhancedCRUDEventListeners() {
         }
         
         // Handle activity delete
-        const deleteBtn = e.target.closest('.delete-activity-btn');
-        if (deleteBtn) {
-            e.preventDefault();
-            const activityIndex = deleteBtn.dataset.activityIndex;
+        if (e.target.classList.contains('delete-activity-btn') || e.target.closest('.delete-activity-btn')) {
+            const btn = e.target.classList.contains('delete-activity-btn') ? e.target : e.target.closest('.delete-activity-btn');
+            const activityIndex = btn.dataset.activityIndex;
             console.log('Delete activity clicked, index:', activityIndex);
             if (activityIndex !== undefined) {
                 deleteActivity(parseInt(activityIndex));
             }
         }
-    });
+        
+        // Handle leave trip
         if (e.target.classList.contains('leave-trip-btn') || e.target.closest('.leave-trip-btn')) {
             leaveCurrentTrip();
         }
@@ -914,16 +911,16 @@ function loadTripItinerary(trip) {
                                         </small>
                                         ${canEdit ? `
                                             <div>
-                                                <button class="btn btn-sm btn-outline-primary edit-activity-btn me-1" 
-                                                        data-activity-index="${activity.originalIndex}"
-                                                        title="Edit Activity">
-                                                    <i class="fas fa-edit"></i> Edit
-                                                </button>
-                                                <button class="btn btn-sm btn-outline-danger delete-activity-btn" 
-                                                        data-activity-index="${activity.originalIndex}"
-                                                        title="Delete Activity">
-                                                    <i class="fas fa-trash"></i> Delete
-                                                </button>
+                                               <button class="btn btn-sm btn-outline-primary edit-activity-btn me-1" 
+        data-activity-index="${activity.originalIndex}"
+        title="Edit Activity">
+    <i class="fas fa-edit"></i> Edit
+</button>
+<button class="btn btn-sm btn-outline-danger delete-activity-btn" 
+        data-activity-index="${activity.originalIndex}"
+        title="Delete Activity">
+    <i class="fas fa-trash"></i> Delete
+</button>
                                             </div>
                                         ` : ''}
                                     </div>
@@ -1662,9 +1659,15 @@ async function deleteExpense(expenseIndex) {
 async function editActivity(activityIndex) {
     console.log('Editing activity, index:', activityIndex);
     
-    // Add comprehensive validation
-    if (!currentTrip || !currentTrip.itinerary) {
-        console.error('No trip or itinerary data available');
+    // Enhanced validation
+    if (!currentTrip) {
+        console.error('No current trip available');
+        showToast('No trip data found', 'warning');
+        return;
+    }
+    
+    if (!currentTrip.itinerary) {
+        console.error('No itinerary data available');
         showToast('No itinerary data found', 'warning');
         return;
     }
@@ -1677,7 +1680,13 @@ async function editActivity(activityIndex) {
     
     const activityIndexNum = parseInt(activityIndex);
     
-    if (isNaN(activityIndexNum) || activityIndexNum < 0 || activityIndexNum >= currentTrip.itinerary.length) {
+    if (isNaN(activityIndexNum)) {
+        console.error('Activity index is not a number:', activityIndex);
+        showToast('Invalid activity index', 'warning');
+        return;
+    }
+    
+    if (activityIndexNum < 0 || activityIndexNum >= currentTrip.itinerary.length) {
         console.error('Activity index out of bounds:', activityIndexNum, 'Available:', currentTrip.itinerary.length);
         showToast('Activity not found', 'warning');
         return;
@@ -1691,17 +1700,35 @@ async function editActivity(activityIndex) {
         return;
     }
     
-    console.log('Activity data:', activity);
+    console.log('Activity data to edit:', activity);
     
     // Validate required fields
     if (!activity.day || !activity.time || !activity.place) {
-        console.error('Invalid activity data:', activity);
-        showToast('Invalid activity data', 'warning');
+        console.error('Invalid activity data - missing required fields:', activity);
+        showToast('Invalid activity data - missing required information', 'warning');
         return;
     }
     
     try {
-        // Populate the modal with activity data
+        // First, populate the day dropdown
+        const daySelect = document.getElementById('activity-day');
+        daySelect.innerHTML = '';
+        
+        if (currentTrip) {
+            const startDate = new Date(currentTrip.startDate);
+            const endDate = new Date(currentTrip.endDate);
+            const days = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+            
+            for (let i = 1; i <= days; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                const dayDate = new Date(startDate.getTime() + (i-1) * 24 * 60 * 60 * 1000);
+                option.textContent = `Day ${i} (${formatDate(dayDate.toISOString().split('T')[0])})`;
+                daySelect.appendChild(option);
+            }
+        }
+        
+        // Now populate the form with activity data
         document.getElementById('activity-day').value = activity.day;
         document.getElementById('activity-time').value = activity.time;
         document.getElementById('activity-place').value = activity.place;
@@ -1726,7 +1753,7 @@ async function deleteActivity(activityIndex) {
     
     if (!confirm('Are you sure you want to delete this activity?')) return;
 
-    // Validate input
+    // Enhanced validation
     if (activityIndex === undefined || activityIndex === null) {
         console.error('Invalid activity index for deletion:', activityIndex);
         showToast('Invalid activity selection', 'warning');
@@ -1735,8 +1762,14 @@ async function deleteActivity(activityIndex) {
 
     const activityIndexNum = parseInt(activityIndex);
     
-    if (isNaN(activityIndexNum) || activityIndexNum < 0) {
-        console.error('Invalid activity index for deletion:', activityIndex);
+    if (isNaN(activityIndexNum)) {
+        console.error('Activity index for deletion is not a number:', activityIndex);
+        showToast('Invalid activity selection', 'danger');
+        return;
+    }
+
+    if (activityIndexNum < 0) {
+        console.error('Activity index for deletion is negative:', activityIndexNum);
         showToast('Invalid activity selection', 'danger');
         return;
     }
@@ -1751,6 +1784,14 @@ async function deleteActivity(activityIndex) {
         if (activityIndexNum >= currentItinerary.length) {
             console.error('Activity index out of bounds:', activityIndexNum, 'Available:', currentItinerary.length);
             showToast('Activity not found', 'danger');
+            return;
+        }
+        
+        // Get activity details for confirmation message
+        const activityToDelete = currentItinerary[activityIndexNum];
+        const activityDetails = activityToDelete ? `${activityToDelete.place} on Day ${activityToDelete.day}` : 'this activity';
+        
+        if (!confirm(`Are you sure you want to delete "${activityDetails}"?`)) {
             return;
         }
         
