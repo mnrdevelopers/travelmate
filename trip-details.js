@@ -201,8 +201,8 @@ function setupTripDetailsEventListeners() {
     setupEnhancedCRUDEventListeners();
 }
 
-function setupEnhancedCRUDEventListeners() { 
-   // Single event delegation for all dynamic buttons
+function setupEnhancedCRUDEventListeners() {
+    // Single event delegation for all dynamic buttons
     document.addEventListener('click', function(e) {
         // Handle expense edit
         if (e.target.classList.contains('edit-expense-btn') || e.target.closest('.edit-expense-btn')) {
@@ -243,6 +243,12 @@ function setupEnhancedCRUDEventListeners() {
         // Handle leave trip
         if (e.target.classList.contains('leave-trip-btn') || e.target.closest('.leave-trip-btn')) {
             leaveCurrentTrip();
+        }
+        
+        // Handle share settlement plan
+        if (e.target.id === 'share-settlement-btn' || e.target.closest('#share-settlement-btn')) {
+            console.log('Share settlement button clicked');
+            shareSettlementPlan();
         }
     });
 }
@@ -2797,7 +2803,7 @@ function calculateAndDisplaySettlement(memberData, averagePerPerson) {
             `).join('')}
         </div>
         <div class="text-center mt-2">
-            <button class="btn btn-outline-primary btn-sm" id="share-settlement-btn">
+            <button class="btn btn-outline-primary btn-sm" onclick="shareSettlementPlan()">
                 <i class="fas fa-share-alt me-1"></i>Share Plan
             </button>
         </div>
@@ -2805,9 +2811,12 @@ function calculateAndDisplaySettlement(memberData, averagePerPerson) {
 }
 
 function shareSettlementPlan() {
+    console.log('Share settlement plan clicked');
+    
     const settlementElement = document.getElementById('settlement-summary');
     
     if (!settlementElement) {
+        console.error('Settlement summary element not found');
         showToast('Settlement summary not found', 'warning');
         return;
     }
@@ -2819,32 +2828,44 @@ function shareSettlementPlan() {
         return;
     }
     
-    let shareText = `Settlement Plan for ${currentTrip.name}:\n\n`;
+    let shareText = `💰 Settlement Plan for ${currentTrip.name} 💰\n\n`;
+    shareText += `Trip Code: ${currentTrip.code}\n`;
+    shareText += `Generated on: ${new Date().toLocaleDateString()}\n\n`;
+    shareText += `SETTLEMENTS NEEDED:\n`;
+    shareText += '─'.repeat(30) + '\n\n';
     
-    transactionElements.forEach(transaction => {
+    let totalSettlements = 0;
+    
+    transactionElements.forEach((transaction, index) => {
         const strongElements = transaction.querySelectorAll('strong');
         const amountElement = transaction.querySelector('.text-success');
         
-        // Check if all required elements exist
         if (strongElements.length >= 2 && amountElement) {
             const from = strongElements[0].textContent;
             const to = strongElements[1].textContent;
-            const amount = amountElement.textContent;
+            const amount = amountElement.textContent.replace('₹', '').trim();
             
-            shareText += `${from} → ${to}: ${amount}\n`;
+            shareText += `${index + 1}. ${from} → ${to}: ₹${amount}\n`;
+            totalSettlements++;
         }
     });
     
-    shareText += `\nTrip Code: ${currentTrip.code}`;
+    shareText += `\nTotal settlements: ${totalSettlements}`;
+    shareText += `\n\nHappy travels! 🚗✈️`;
+    
+    console.log('Share text prepared:', shareText);
     
     // Copy to clipboard
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(shareText).then(() => {
-            showToast('Settlement plan copied to clipboard!', 'success');
-        }).catch(() => {
+            showToast('Settlement plan copied to clipboard! 📋', 'success');
+            console.log('Settlement plan copied successfully');
+        }).catch((err) => {
+            console.error('Clipboard API failed:', err);
             useFallbackCopy(shareText);
         });
     } else {
+        console.log('Clipboard API not available, using fallback');
         useFallbackCopy(shareText);
     }
 }
