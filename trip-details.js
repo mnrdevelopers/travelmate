@@ -10,6 +10,152 @@ let currentFilters = {
     date: 'all'
 };
 
+// Professional category system with icons (Add this at the top with other variables)
+const professionalCategories = [
+    // Transportation
+    { id: 'fuel', name: 'Fuel', icon: 'fas fa-gas-pump', group: 'transportation' },
+    { id: 'public-transport', name: 'Public Transport', icon: 'fas fa-bus', group: 'transportation' },
+    { id: 'taxi', name: 'Taxi/Ride Share', icon: 'fas fa-taxi', group: 'transportation' },
+    { id: 'flight', name: 'Flights', icon: 'fas fa-plane', group: 'transportation' },
+    { id: 'train', name: 'Train', icon: 'fas fa-train', group: 'transportation' },
+    { id: 'parking', name: 'Parking', icon: 'fas fa-parking', group: 'transportation' },
+    { id: 'tolls', name: 'Tolls', icon: 'fas fa-road', group: 'transportation' },
+    
+    // Accommodation
+    { id: 'hotel', name: 'Hotel', icon: 'fas fa-hotel', group: 'accommodation' },
+    { id: 'hostel', name: 'Hostel', icon: 'fas fa-bed', group: 'accommodation' },
+    { id: 'rental', name: 'Vacation Rental', icon: 'fas fa-home', group: 'accommodation' },
+    { id: 'camping', name: 'Camping', icon: 'fas fa-campground', group: 'accommodation' },
+    
+    // Food & Dining
+    { id: 'restaurant', name: 'Restaurant', icon: 'fas fa-utensils', group: 'food' },
+    { id: 'groceries', name: 'Groceries', icon: 'fas fa-shopping-basket', group: 'food' },
+    { id: 'cafe', name: 'Cafe', icon: 'fas fa-coffee', group: 'food' },
+    { id: 'street-food', name: 'Street Food', icon: 'fas fa-hotdog', group: 'food' },
+    { id: 'alcohol', name: 'Alcohol', icon: 'fas fa-wine-glass-alt', group: 'food' },
+    
+    // Activities & Entertainment
+    { id: 'sightseeing', name: 'Sightseeing', icon: 'fas fa-binoculars', group: 'activities' },
+    { id: 'museum', name: 'Museums', icon: 'fas fa-landmark', group: 'activities' },
+    { id: 'tours', name: 'Tours', icon: 'fas fa-map-signs', group: 'activities' },
+    { id: 'adventure', name: 'Adventure', icon: 'fas fa-hiking', group: 'activities' },
+    { id: 'events', name: 'Events/Shows', icon: 'fas fa-ticket-alt', group: 'activities' },
+    { id: 'sports', name: 'Sports', icon: 'fas fa-running', group: 'activities' },
+    
+    // Shopping
+    { id: 'souvenirs', name: 'Souvenirs', icon: 'fas fa-gift', group: 'shopping' },
+    { id: 'clothing', name: 'Clothing', icon: 'fas fa-tshirt', group: 'shopping' },
+    { id: 'electronics', name: 'Electronics', icon: 'fas fa-mobile-alt', group: 'shopping' },
+    
+    // Health & Wellness
+    { id: 'medical', name: 'Medical', icon: 'fas fa-first-aid', group: 'health' },
+    { id: 'pharmacy', name: 'Pharmacy', icon: 'fas fa-pills', group: 'health' },
+    { id: 'spa', name: 'Spa/Wellness', icon: 'fas fa-spa', group: 'health' },
+    
+    // Communication
+    { id: 'sim-card', name: 'SIM Card', icon: 'fas fa-sim-card', group: 'communication' },
+    { id: 'internet', name: 'Internet', icon: 'fas fa-wifi', group: 'communication' },
+    
+    // Services
+    { id: 'laundry', name: 'Laundry', icon: 'fas fa-tshirt', group: 'services' },
+    { id: 'storage', name: 'Luggage Storage', icon: 'fas fa-suitcase', group: 'services' },
+    { id: 'tips', name: 'Tips', icon: 'fas fa-hand-holding-usd', group: 'services' },
+    
+    // Transport Rental
+    { id: 'car-rental', name: 'Car Rental', icon: 'fas fa-car', group: 'transport-rental' },
+    { id: 'bike-rental', name: 'Bike Rental', icon: 'fas fa-bicycle', group: 'transport-rental' },
+    { id: 'scooter-rental', name: 'Scooter Rental', icon: 'fas fa-motorcycle', group: 'transport-rental' },
+    
+    // Travel Documents
+    { id: 'visa', name: 'Visa Fees', icon: 'fas fa-passport', group: 'travel-docs' },
+    { id: 'travel-insurance', name: 'Travel Insurance', icon: 'fas fa-shield-alt', group: 'travel-docs' },
+    
+    // Emergency
+    { id: 'emergency', name: 'Emergency', icon: 'fas fa-exclamation-triangle', group: 'emergency' },
+    
+    // Miscellaneous
+    { id: 'miscellaneous', name: 'Miscellaneous', icon: 'fas fa-ellipsis-h', group: 'misc' }
+];
+
+// Initialize category system
+function initCategorySystem() {
+    const categoryGrid = document.getElementById('category-grid');
+    const categorySelect = document.getElementById('expense-category');
+    
+    if (!categoryGrid) {
+        console.log('Category grid not found, skipping initialization');
+        return;
+    }
+    
+    // Clear existing options
+    categorySelect.innerHTML = '';
+    
+    // Add default option
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Select Category';
+    defaultOption.disabled = true;
+    defaultOption.selected = true;
+    categorySelect.appendChild(defaultOption);
+    
+    // Display initial categories (first 12 for better UX)
+    const initialCategories = professionalCategories.slice(0, 12);
+    renderCategoryGrid(initialCategories, categoryGrid, categorySelect);
+    
+    // Add event listener for "Show More" button
+    const showMoreBtn = document.getElementById('show-more-categories');
+    if (showMoreBtn) {
+        showMoreBtn.addEventListener('click', function() {
+            renderCategoryGrid(professionalCategories, categoryGrid, categorySelect);
+            this.style.display = 'none';
+        });
+    }
+    
+    // Update hidden select when category is clicked
+    categoryGrid.addEventListener('click', function(e) {
+        const categoryItem = e.target.closest('.category-item');
+        if (categoryItem) {
+            const categoryId = categoryItem.dataset.categoryId;
+            
+            // Update select value
+            categorySelect.value = categoryId;
+            
+            // Update visual selection
+            document.querySelectorAll('.category-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            categoryItem.classList.add('selected');
+        }
+    });
+}
+
+function renderCategoryGrid(categories, gridElement, selectElement) {
+    gridElement.innerHTML = '';
+    
+    categories.forEach(category => {
+        // Create grid item
+        const categoryItem = document.createElement('div');
+        categoryItem.className = `category-item category-${category.group}`;
+        categoryItem.dataset.categoryId = category.id;
+        categoryItem.title = category.name;
+        
+        categoryItem.innerHTML = `
+            <div class="category-icon">
+                <i class="${category.icon}"></i>
+            </div>
+            <div class="category-name">${category.name}</div>
+        `;
+        
+        gridElement.appendChild(categoryItem);
+        
+        // Also add to select dropdown (for form submission)
+        const option = document.createElement('option');
+        option.value = category.id;
+        option.textContent = category.name;
+        selectElement.appendChild(option);
+    });
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // Only setup event listeners, checkAuthState will handle the rest
     checkAuthState();
@@ -617,16 +763,10 @@ function getCategoryName(categoryId) {
         return window.allTripCategories[categoryId].name;
     }
     
-    // Then check default categories
-    const defaultCategories = {
-        'fuel': 'Fuel',
-        'hotel': 'Hotel',
-        'food': 'Food',
-        'activities': 'Activities'
-    };
-    
-    if (defaultCategories[categoryId]) {
-        return defaultCategories[categoryId];
+    // Then check professional categories
+    const category = professionalCategories.find(cat => cat.id === categoryId);
+    if (category) {
+        return category.name;
     }
     
     // Fallback - show the ID but formatted nicely
@@ -635,33 +775,6 @@ function getCategoryName(categoryId) {
     }
     
     return categoryId.charAt(0).toUpperCase() + categoryId.slice(1);
-}
-
-
-function handleCategoryChange(event) {
-    if (event.target.value === 'other') {
-        showCustomCategoryModal();
-        setTimeout(() => event.target.value = 'fuel', 100);
-    }
-}
-
-async function deleteCustomCategory(categoryId) {
-    if (!confirm('Are you sure you want to delete this custom category?')) return;
-    
-    try {
-        const categoryToDelete = customCategories.find(cat => cat.id === categoryId);
-        if (!categoryToDelete) return;
-        
-        await db.collection('users').doc(auth.currentUser.uid).update({
-            customCategories: firebase.firestore.FieldValue.arrayRemove(categoryToDelete)
-        });
-        
-        await loadCustomCategories();
-        showToast('Custom category deleted successfully!', 'success');
-    } catch (error) {
-        console.error('Error deleting custom category:', error);
-        showToast('Error deleting category', 'danger');
-    }
 }
 
 function updateBudgetSummary(trip) {
@@ -1375,79 +1488,6 @@ async function calculateRoute() {
     }
 }
 
-// Enhanced CRUD Operations
-function showCustomCategoryModal() {
-    document.getElementById('custom-category-form').reset();
-    document.getElementById('category-color').value = '#6c757d';
-    
-    const modal = new bootstrap.Modal(document.getElementById('customCategoryModal'));
-    modal.show();
-    
-    setTimeout(() => document.getElementById('category-name').focus(), 500);
-}
-
-async function saveCustomCategory() {
-    const name = document.getElementById('category-name').value.trim();
-    const color = document.getElementById('category-color').value;
-    
-    if (!name) {
-        showToast('Please enter category name', 'warning');
-        return;
-    }
-
-    try {
-        document.getElementById('save-category-btn').disabled = true;
-        document.getElementById('save-category-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Adding...';
-
-        const category = {
-            id: 'custom_' + Date.now(),
-            name: name,
-            color: color,
-            createdBy: auth.currentUser.uid,
-            createdAt: new Date().toISOString() // Use client timestamp instead of serverTimestamp
-        };
-
-        // Save to Firestore
-        await db.collection('users').doc(auth.currentUser.uid).update({
-            customCategories: firebase.firestore.FieldValue.arrayUnion(category)
-        });
-
-        // Update local array
-        await loadCustomCategories();
-        
-        const categorySelect = document.getElementById('expense-category');
-        categorySelect.value = category.id;
-        
-        const modal = bootstrap.Modal.getInstance(document.getElementById('customCategoryModal'));
-        modal.hide();
-        
-        showToast('Custom category added and selected!', 'success');
-        
-    } catch (error) {
-        console.error('Error saving category:', error);
-        
-        // If user document doesn't exist, create it first
-        if (error.code === 'not-found') {
-            try {
-                await db.collection('users').doc(auth.currentUser.uid).set({
-                    customCategories: [category],
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                await loadCustomCategories();
-                showToast('Custom category added and selected!', 'success');
-            } catch (createError) {
-                console.error('Error creating user document:', createError);
-                showToast('Error adding category', 'danger');
-            }
-        } else {
-            showToast('Error adding category', 'danger');
-        }
-    } finally {
-        document.getElementById('save-category-btn').disabled = false;
-        document.getElementById('save-category-btn').innerHTML = 'Add Category';
-    }
-}
-
 async function loadCustomCategories() {
     const user = auth.currentUser;
     
@@ -1582,9 +1622,24 @@ async function editExpense(expenseIndex) {
     // Populate the modal with expense data
     document.getElementById('expense-description').value = expense.description || '';
     document.getElementById('expense-amount').value = expense.amount || '';
-    document.getElementById('expense-category').value = expense.category || 'fuel';
     document.getElementById('expense-payment-mode').value = expense.paymentMode || 'cash';
     document.getElementById('expense-date').value = expense.date || new Date().toISOString().split('T')[0];
+    
+    // Initialize category system first
+    initCategorySystem();
+    
+    // Set category in both the grid and select
+    document.getElementById('expense-category').value = expense.category || '';
+    
+    // Update visual selection in grid
+    setTimeout(() => {
+        document.querySelectorAll('.category-item').forEach(item => {
+            item.classList.remove('selected');
+            if (item.dataset.categoryId === expense.category) {
+                item.classList.add('selected');
+            }
+        });
+    }, 100);
     
     // Update button to show it's in edit mode
     const saveBtn = document.getElementById('save-expense-btn');
@@ -2206,7 +2261,20 @@ function resetExpenseModal() {
 
 // Update showAddExpenseModal:
 function showAddExpenseModal() {
-    resetExpenseModal();
+    document.getElementById('expense-date').valueAsDate = new Date();
+    document.getElementById('add-expense-form').reset();
+    
+    // Reset category selection
+    document.querySelectorAll('.category-item').forEach(item => {
+        item.classList.remove('selected');
+    });
+    
+    document.getElementById('save-expense-btn').innerHTML = 'Add Expense';
+    delete document.getElementById('save-expense-btn').dataset.editingIndex;
+    
+    // Initialize category system
+    initCategorySystem();
+    
     const modal = new bootstrap.Modal(document.getElementById('addExpenseModal'));
     modal.show();
 }
