@@ -500,50 +500,34 @@ function loadUpcomingTrips() {
     }).join('');
 }
 
+// In dashboard.js, update the statistics section to be more descriptive
 function updateDashboardStats() {
     const totalTrips = userTrips.length;
     const today = new Date();
     
-    // Count active trips (trips that are currently ongoing)
+    // Count trips by status
+    const upcomingTrips = userTrips.filter(trip => new Date(trip.startDate) > today).length;
     const activeTrips = userTrips.filter(trip => {
         const startDate = new Date(trip.startDate);
         const endDate = new Date(trip.endDate);
         return startDate <= today && endDate >= today;
     }).length;
-    
-    // Calculate total spent across all trips - FIXED: Handle missing expenses array
-    const totalSpent = userTrips.reduce((total, trip) => {
-        const tripExpenses = trip.expenses ? trip.expenses.reduce((sum, expense) => sum + expense.amount, 0) : 0;
-        return total + tripExpenses;
-    }, 0);
-    
-    // Calculate car-related expenses - FIXED: Handle missing expenses array
-    const carExpenses = userTrips.reduce((total, trip) => {
-        if (!trip.expenses) return total;
-        
-        const tripCarExpenses = trip.expenses.filter(expense => 
-            expense.category === 'fuel' || 
-            (expense.description && (
-                expense.description.toLowerCase().includes('car') ||
-                expense.description.toLowerCase().includes('fuel') ||
-                expense.description.toLowerCase().includes('rental') ||
-                expense.description.toLowerCase().includes('maintenance') ||
-                expense.description.toLowerCase().includes('toll') ||
-                expense.description.toLowerCase().includes('parking')
-            ))
-        ).reduce((sum, expense) => sum + expense.amount, 0);
-        
-        return total + tripCarExpenses;
-    }, 0);
+    const completedTrips = userTrips.filter(trip => new Date(trip.endDate) < today).length;
     
     // Update DOM elements
     document.getElementById('total-trips-count').textContent = totalTrips;
     document.getElementById('active-trips-count').textContent = activeTrips;
-    document.getElementById('total-spent-amount').textContent = totalSpent.toFixed(2);
-    document.getElementById('car-expenses-amount').textContent = carExpenses.toFixed(2);
     
-    // Update car expense chart
-    updateCarExpenseChart(userTrips);
+    // Update the other cards to show trip status breakdown
+    document.getElementById('total-spent-amount').textContent = upcomingTrips;
+    document.getElementById('car-expenses-amount').textContent = completedTrips;
+    
+    // Update card titles to be more descriptive
+    const totalSpentCard = document.querySelector('.card.bg-warning .card-title');
+    const carExpensesCard = document.querySelector('.card.bg-info .card-title');
+    
+    if (totalSpentCard) totalSpentCard.textContent = 'Upcoming Trips';
+    if (carExpensesCard) carExpensesCard.textContent = 'Completed Trips';
 }
 
 // Update car expense chart
@@ -819,11 +803,12 @@ function createTripCard(trip) {
     const endDate = new Date(trip.endDate);
     const today = new Date();
     
+    // Calculate trip-specific statistics
     const totalSpent = trip.expenses ? trip.expenses.reduce((sum, expense) => sum + expense.amount, 0) : 0;
     const progressPercent = Math.min((totalSpent / trip.budget) * 100, 100);
     const remaining = trip.budget - totalSpent;
     
-    // Calculate car expenses for this trip
+    // Calculate car expenses for THIS trip only
     const carExpenses = trip.expenses ? trip.expenses.filter(expense => 
         expense.category === 'fuel' || 
         expense.description.toLowerCase().includes('car') ||
@@ -881,18 +866,24 @@ function createTripCard(trip) {
                     <i class="fas fa-map-marker-alt me-2"></i>${trip.startLocation} → ${trip.destination}
                 </p>
                 
-                <!-- Budget Progress -->
+                <!-- Trip-specific Budget Progress -->
                 <div class="mb-3">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span>Budget: <span class="rupee-symbol">₹</span>${trip.budget.toFixed(2)}</span>
-                        <span>Spent: <span class="rupee-symbol">₹</span>${totalSpent.toFixed(2)}</span>
+                        <small>Budget: <span class="rupee-symbol">₹</span>${trip.budget.toFixed(2)}</small>
+                        <small>Spent: <span class="rupee-symbol">₹</span>${totalSpent.toFixed(2)}</small>
                     </div>
-                    <div class="progress mb-2" style="height: 10px;">
+                    <div class="progress mb-2" style="height: 8px;">
                         <div class="progress-bar ${progressBarClass}" role="progressbar" style="width: ${progressPercent}%"></div>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <small class="text-muted">${progressPercent.toFixed(1)}% used</small>
+                        <small class="${remaining < 0 ? 'text-danger' : 'text-success'}">
+                            ${remaining < 0 ? 'Over budget' : 'Remaining: ₹' + remaining.toFixed(2)}
+                        </small>
                     </div>
                 </div>
                 
-                <!-- Car Expense Info -->
+                <!-- Trip-specific Car Expense Info -->
                 ${carExpenses > 0 ? `
                 <div class="mb-3 p-2 bg-light rounded">
                     <div class="d-flex justify-content-between align-items-center">
@@ -905,6 +896,20 @@ function createTripCard(trip) {
                     </div>
                 </div>
                 ` : ''}
+                
+                <!-- Trip-specific Expense Summary -->
+                <div class="mb-3">
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <small class="text-muted d-block">Total Expenses</small>
+                            <strong class="text-primary"><span class="rupee-symbol">₹</span>${totalSpent.toFixed(2)}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Expense Count</small>
+                            <strong class="text-info">${trip.expenses ? trip.expenses.length : 0}</strong>
+                        </div>
+                    </div>
+                </div>
                 
                 <div class="d-flex justify-content-between align-items-center">
                     <button class="btn btn-outline-primary btn-sm view-trip-btn">
