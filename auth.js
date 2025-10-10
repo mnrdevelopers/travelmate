@@ -119,7 +119,9 @@ async function handleGoogleSignIn() {
             email: user.email,
             photoURL: user.photoURL
         });
-        
+
+         // ADD THIS LINE - Set flag to show welcome message
+        sessionStorage.setItem('justLoggedIn', 'true');
         // Profile creation and redirect will happen in ensureUserProfile
         
     } catch (error) {
