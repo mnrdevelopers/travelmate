@@ -2411,3 +2411,6 @@ function useFallbackCopy(text) {
         document.body.removeChild(textArea);
     }
 }
+
+// Make function available globally for inline onclick
+window.shareSettlementPlan = shareSettlementPlan;
