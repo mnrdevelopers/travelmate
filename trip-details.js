@@ -452,6 +452,8 @@ async function loadTripExpenses(trip) {
         expensesList.innerHTML = '';
         emptyExpenses.classList.remove('d-none');
         updateBudgetSummary(trip);
+        // Load member expenditure even with no expenses
+        loadMemberExpenditure(trip);
         return;
     }
     
@@ -460,6 +462,22 @@ async function loadTripExpenses(trip) {
     updateBudgetSummary(trip);
     renderExpenseChart(trip);
     renderPaymentChart(trip);
+    loadMemberExpenditure(trip);
+}
+
+async function loadMemberExpenditure(trip) {
+    try {
+        const memberData = await calculateTripMemberExpenditure(trip);
+        displayMemberExpenditure(memberData);
+    } catch (error) {
+        console.error('Error loading member expenditure:', error);
+        document.getElementById('member-expenditure-stats').innerHTML = `
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                Error loading member statistics
+            </div>
+        `;
+    }
 }
 
 function createExpenseItem(expense, originalIndex) {
@@ -993,6 +1011,11 @@ async function saveExpense() {
         loadTripDetails();
         
         showToast(isEditing !== undefined ? 'Expense updated successfully!' : 'Expense added successfully!', 'success');
+
+        // After successful save, reload member expenditure
+        await loadMemberExpenditure(currentTrip);
+        
+        showToast(isEditing !== undefined ? 'Expense updated successfully!' : 'Expense added successfully!', 'success');
         
     } catch (error) {
         console.error('Error saving expense:', error);
@@ -1499,6 +1522,11 @@ async function deleteExpense(expenseIndex) {
         
         // Reload the display
         loadTripDetails();
+        
+        showToast('Expense deleted successfully!', 'success');
+
+         // After successful delete, reload member expenditure
+        await loadMemberExpenditure(currentTrip);
         
         showToast('Expense deleted successfully!', 'success');
         
@@ -2124,3 +2152,230 @@ function updateFilteredBudgetSummary(expenses) {
     }
 }
 
+// Add to trip-details.js
+
+function calculateTripMemberExpenditure(trip) {
+    const memberExpenses = {};
+    const memberData = [];
+    
+    // Initialize member expenses
+    trip.members.forEach(memberId => {
+        memberExpenses[memberId] = 0;
+    });
+    
+    // Calculate expenses for each member
+    if (trip.expenses) {
+        trip.expenses.forEach(expense => {
+            if (memberExpenses[expense.addedBy] !== undefined) {
+                memberExpenses[expense.addedBy] += expense.amount;
+            }
+        });
+    }
+    
+    // Prepare member data for display
+    const promises = trip.members.map(async (memberId) => {
+        const memberName = await getMemberName(memberId);
+        const totalSpent = memberExpenses[memberId] || 0;
+        
+        return {
+            id: memberId,
+            name: memberName,
+            totalSpent: totalSpent,
+            isCurrentUser: memberId === auth.currentUser.uid
+        };
+    });
+    
+    return Promise.all(promises);
+}
+
+function displayMemberExpenditure(memberData) {
+    const memberStatsElement = document.getElementById('member-expenditure-stats');
+    
+    if (!memberData || memberData.length === 0) {
+        memberStatsElement.innerHTML = `
+            <div class="text-center text-muted py-3">
+                <i class="fas fa-users fa-2x mb-2"></i>
+                <p>No members in this trip</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Calculate total expenses
+    const totalExpenses = memberData.reduce((sum, member) => sum + member.totalSpent, 0);
+    const averagePerPerson = totalExpenses / memberData.length;
+    
+    // Sort by amount spent (descending)
+    memberData.sort((a, b) => b.totalSpent - a.totalSpent);
+    
+    if (totalExpenses === 0) {
+        memberStatsElement.innerHTML = `
+            <div class="text-center text-muted py-3">
+                <i class="fas fa-receipt fa-2x mb-2"></i>
+                <p>No expenses recorded yet</p>
+                <small>Start adding expenses to see member breakdown</small>
+            </div>
+        `;
+        return;
+    }
+    
+    memberStatsElement.innerHTML = `
+        <div class="mb-3 text-center">
+            <h5 class="text-primary"><span class="rupee-symbol">₹</span>${totalExpenses.toFixed(2)}</h5>
+            <small class="text-muted">Total Trip Expenses</small>
+        </div>
+        
+        <div class="member-expense-list">
+            ${memberData.map(member => {
+                const percentage = totalExpenses > 0 ? (member.totalSpent / totalExpenses * 100) : 0;
+                const balance = member.totalSpent - averagePerPerson;
+                
+                return `
+                    <div class="d-flex justify-content-between align-items-center mb-3 p-2 border rounded ${member.isCurrentUser ? 'bg-light' : ''}">
+                        <div class="flex-grow-1">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <strong class="${member.isCurrentUser ? 'text-primary' : ''}">
+                                    ${member.name} ${member.isCurrentUser ? '(You)' : ''}
+                                </strong>
+                                <span class="fw-bold"><span class="rupee-symbol">₹</span>${member.totalSpent.toFixed(2)}</span>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                <div class="progress-bar ${member.isCurrentUser ? 'bg-primary' : 'bg-success'}" 
+                                     style="width: ${percentage}%"></div>
+                            </div>
+                            <div class="d-flex justify-content-between mt-1">
+                                <small class="text-muted">${percentage.toFixed(1)}%</small>
+                                <small class="${balance > 0 ? 'text-warning' : balance < 0 ? 'text-info' : 'text-success'}">
+                                    ${balance > 0 ? `+₹${Math.abs(balance).toFixed(2)}` : 
+                                      balance < 0 ? `-₹${Math.abs(balance).toFixed(2)}` : 'Balanced'}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+        
+        <div class="text-center mt-3">
+            <small class="text-muted">
+                <i class="fas fa-info-circle me-1"></i>
+                Average per person: <span class="rupee-symbol">₹</span>${averagePerPerson.toFixed(2)}
+            </small>
+        </div>
+    `;
+    
+    // Calculate and display settlement summary
+    calculateAndDisplaySettlement(memberData, averagePerPerson);
+}
+
+function calculateAndDisplaySettlement(memberData, averagePerPerson) {
+    const settlementElement = document.getElementById('settlement-summary');
+    
+    // Calculate balances
+    const memberBalances = memberData.map(member => ({
+        ...member,
+        balance: member.totalSpent - averagePerPerson
+    }));
+    
+    // Separate receivers and payers
+    const receivers = memberBalances.filter(m => m.balance > 0).sort((a, b) => b.balance - a.balance);
+    const payers = memberBalances.filter(m => m.balance < 0).sort((a, b) => a.balance - b.balance);
+    
+    // Calculate transactions
+    const transactions = [];
+    let receiverIndex = 0;
+    let payerIndex = 0;
+    
+    while (receiverIndex < receivers.length && payerIndex < payers.length) {
+        const receiver = receivers[receiverIndex];
+        const payer = payers[payerIndex];
+        
+        const amount = Math.min(receiver.balance, Math.abs(payer.balance));
+        
+        if (amount > 0.01) {
+            transactions.push({
+                from: payer.name,
+                to: receiver.name,
+                amount: amount
+            });
+            
+            receiver.balance -= amount;
+            payer.balance += amount;
+            
+            if (Math.abs(receiver.balance) < 0.01) receiverIndex++;
+            if (Math.abs(payer.balance) < 0.01) payerIndex++;
+        }
+    }
+    
+    if (transactions.length === 0) {
+        settlementElement.innerHTML = `
+            <div class="text-center text-success py-3">
+                <i class="fas fa-check-circle fa-2x mb-2"></i>
+                <p>All expenses are balanced!</p>
+                <small>No settlements needed</small>
+            </div>
+        `;
+        return;
+    }
+    
+    settlementElement.innerHTML = `
+        <h6 class="text-center mb-3">Settlements Needed</h6>
+        <div class="settlement-list">
+            ${transactions.map(transaction => `
+                <div class="alert alert-info py-2 mb-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>
+                            <strong>${transaction.from}</strong>
+                            <i class="fas fa-arrow-right mx-2 text-muted"></i>
+                            <strong>${transaction.to}</strong>
+                        </span>
+                        <span class="fw-bold text-success">
+                            <span class="rupee-symbol">₹</span>${transaction.amount.toFixed(2)}
+                        </span>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+        <div class="text-center mt-2">
+            <button class="btn btn-outline-primary btn-sm" onclick="shareSettlementPlan()">
+                <i class="fas fa-share-alt me-1"></i>Share Plan
+            </button>
+        </div>
+    `;
+}
+
+function shareSettlementPlan() {
+    const settlementElement = document.getElementById('settlement-summary');
+    const transactions = settlementElement.querySelectorAll('.alert');
+    
+    if (transactions.length === 0) {
+        showToast('No settlements to share', 'info');
+        return;
+    }
+    
+    let shareText = `Settlement Plan for ${currentTrip.name}:\n\n`;
+    
+    transactions.forEach(transaction => {
+        const from = transaction.querySelector('strong:nth-child(1)').textContent;
+        const to = transaction.querySelector('strong:nth-child(2)').textContent;
+        const amount = transaction.querySelector('.text-success').textContent;
+        
+        shareText += `${from} → ${to}: ${amount}\n`;
+    });
+    
+    shareText += `\nTrip Code: ${currentTrip.code}`;
+    
+    // Copy to clipboard
+    navigator.clipboard.writeText(shareText).then(() => {
+        showToast('Settlement plan copied to clipboard!', 'success');
+    }).catch(() => {
+        // Fallback for mobile devices
+        const textArea = document.createElement('textarea');
+        textArea.value = shareText;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        showToast('Settlement plan copied!', 'success');
+    });
+}
