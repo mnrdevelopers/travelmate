@@ -2314,8 +2314,36 @@ function showPublicDashboard() {
         privateDashboard.classList.add('d-none');
     }
     
-    // Hide navigation for public view (optional)
-    document.querySelector('nav').classList.add('d-none');
+    // Show navigation for public view but update its content
+    const nav = document.querySelector('nav');
+    if (nav) {
+        nav.classList.remove('d-none');
+        
+        // Update navigation content for public view
+        const navbarNav = nav.querySelector('.navbar-nav');
+        if (navbarNav) {
+            navbarNav.innerHTML = `
+                <li class="nav-item">
+                    <a class="nav-link active" href="dashboard.html">
+                        <i class="fas fa-home me-1"></i>Home
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#features">
+                        <i class="fas fa-star me-1"></i>Features
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#how-it-works">
+                        <i class="fas fa-play-circle me-1"></i>How It Works
+                    </a>
+                </li>
+            `;
+        }
+    }
+    
+    // Update auth section for public view
+    updateNavigationBasedOnAuth(false);
 }
 
 function showPrivateDashboard() {
@@ -2331,8 +2359,44 @@ function showPrivateDashboard() {
         privateDashboard.classList.remove('d-none');
     }
     
-    // Show navigation for private view
-    document.querySelector('nav').classList.remove('d-none');
+    // Show navigation for private view with full menu
+    const nav = document.querySelector('nav');
+    if (nav) {
+        nav.classList.remove('d-none');
+        
+        // Update navigation content for private view
+        const navbarNav = nav.querySelector('.navbar-nav');
+        if (navbarNav) {
+            navbarNav.innerHTML = `
+                <li class="nav-item">
+                    <a class="nav-link active" href="dashboard.html">
+                        <i class="fas fa-home me-1"></i>Dashboard
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="car-calculations.html">
+                        <i class="fas fa-calculator me-1"></i>Car Calculator
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#" id="nav-profile">
+                        <i class="fas fa-user me-1"></i>Profile
+                    </a>
+                </li>
+            `;
+            
+            // Re-attach profile event listener
+            setTimeout(() => {
+                const navProfile = document.getElementById('nav-profile');
+                if (navProfile) {
+                    navProfile.addEventListener('click', showProfileModal);
+                }
+            }, 100);
+        }
+    }
+    
+    // Update auth section for private view
+    updateNavigationBasedOnAuth(true);
 }
 
 function showAuthModal() {
@@ -2359,7 +2423,7 @@ function updateNavigationBasedOnAuth(isLoggedIn) {
             </button>
         `;
         
-        // Re-attach logout event listener to the newly created button
+        // Re-attach logout event listener
         setTimeout(() => {
             const logoutBtn = document.getElementById('logout-btn');
             if (logoutBtn) {
@@ -2375,7 +2439,7 @@ function updateNavigationBasedOnAuth(isLoggedIn) {
             </button>
         `;
         
-        // Attach login event listener to the newly created button
+        // Attach login event listener
         setTimeout(() => {
             const loginBtn = document.getElementById('login-btn');
             if (loginBtn) {
