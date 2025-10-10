@@ -942,13 +942,20 @@ function loadTripItinerary(trip) {
         });
 }
 
-// Helper function to load member names for activities
 async function loadMemberNameForActivity(dayCard, memberId, activityIndex) {
-    const activityElement = dayCard.querySelector(`[data-activity-index="${activityIndex}"]`);
-    if (!activityElement) return;
+    // Find the activity element using the correct selector
+    const activityElement = dayCard.querySelector(`.activity-item .edit-activity-btn[data-activity-index="${activityIndex}"]`)?.closest('.activity-item');
+    
+    if (!activityElement) {
+        console.warn('Activity element not found for index:', activityIndex);
+        return;
+    }
     
     const addedByElement = activityElement.querySelector('.activity-added-by');
-    if (!addedByElement) return;
+    if (!addedByElement) {
+        console.warn('Added by element not found for activity index:', activityIndex);
+        return;
+    }
     
     try {
         const memberName = await getMemberName(memberId);
