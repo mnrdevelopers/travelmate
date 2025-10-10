@@ -371,7 +371,6 @@ async function loadUserTrips() {
         displayTrips();
         updateDashboardStats();
         loadUpcomingTrips();
-        loadRecentCalculations();
         
     } catch (error) {
         console.error('Error loading trips:', error);
