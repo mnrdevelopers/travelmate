@@ -76,15 +76,30 @@ function setupEnhancedCRUDEventListeners() {
             deleteExpense(expenseIndex);
         }
         
-        // Handle activity edit/delete (existing code)
-        if (e.target.classList.contains('edit-activity-btn') || e.target.closest('.edit-activity-btn')) {
-            const activityId = e.target.dataset.activityId || e.target.closest('.edit-activity-btn').dataset.activityId;
-            editActivity(activityId);
+        // Enhanced activity event listeners
+    document.addEventListener('click', function(e) {
+        // Handle activity edit - use event delegation with more specific targeting
+        const editBtn = e.target.closest('.edit-activity-btn');
+        if (editBtn) {
+            e.preventDefault();
+            const activityIndex = editBtn.dataset.activityIndex;
+            console.log('Edit activity clicked, index:', activityIndex);
+            if (activityIndex !== undefined) {
+                editActivity(parseInt(activityIndex));
+            }
         }
-        if (e.target.classList.contains('delete-activity-btn') || e.target.closest('.delete-activity-btn')) {
-            const activityId = e.target.dataset.activityId || e.target.closest('.delete-activity-btn').dataset.activityId;
-            deleteActivity(activityId);
+        
+        // Handle activity delete
+        const deleteBtn = e.target.closest('.delete-activity-btn');
+        if (deleteBtn) {
+            e.preventDefault();
+            const activityIndex = deleteBtn.dataset.activityIndex;
+            console.log('Delete activity clicked, index:', activityIndex);
+            if (activityIndex !== undefined) {
+                deleteActivity(parseInt(activityIndex));
+            }
         }
+    });
         if (e.target.classList.contains('leave-trip-btn') || e.target.closest('.leave-trip-btn')) {
             leaveCurrentTrip();
         }
@@ -839,51 +854,112 @@ function loadTripItinerary(trip) {
     
     emptyItinerary.classList.add('d-none');
     
-    // Group activities by day
+    // Group activities by day while preserving original indices
     const activitiesByDay = {};
-    trip.itinerary.forEach((activity, index) => {
-        if (!activitiesByDay[activity.day]) activitiesByDay[activity.day] = [];
-        activitiesByDay[activity.day].push({...activity, originalIndex: index});
+    trip.itinerary.forEach((activity, originalIndex) => {
+        if (!activity || !activity.day) {
+            console.warn('Invalid activity skipped:', activity);
+            return; // Skip invalid activities
+        }
+        
+        const day = activity.day.toString();
+        if (!activitiesByDay[day]) {
+            activitiesByDay[day] = [];
+        }
+        activitiesByDay[day].push({
+            ...activity,
+            originalIndex: originalIndex // Store the original array index
+        });
     });
     
+    // Clear existing content
     itineraryDays.innerHTML = '';
-    Object.keys(activitiesByDay).sort((a, b) => parseInt(a) - parseInt(b)).forEach(day => {
-        const dayCard = document.createElement('div');
-        dayCard.className = 'card itinerary-card mb-4';
-        
-        dayCard.innerHTML = `
-            <div class="card-header bg-success text-white">
-                <h5 class="mb-0"><i class="fas fa-calendar-day me-2"></i>Day ${day}</h5>
-            </div>
-            <div class="card-body">
-                ${activitiesByDay[day].map(activity => `
-                    <div class="d-flex align-items-start mb-3 p-3 border rounded activity-item" data-activity-index="${activity.originalIndex}">
-                        <div class="me-3 text-center">
-                            <div class="bg-primary text-white rounded p-2" style="width: 70px;">
-                                <div class="fw-bold">${activity.time}</div>
-                            </div>
-                        </div>
-                        <div class="flex-grow-1">
-                            <h6 class="mb-1 text-primary">${activity.place}</h6>
-                            ${activity.notes ? `<p class="mb-0 text-muted">${activity.notes}</p>` : ''}
-                            ${activity.addedBy === auth.currentUser.uid ? `
-                                <div class="mt-2">
-                                    <button class="btn btn-sm btn-outline-primary edit-activity-btn me-1" data-activity-index="${activity.originalIndex}">
-                                        <i class="fas fa-edit"></i> Edit
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-danger delete-activity-btn" data-activity-index="${activity.originalIndex}">
-                                        <i class="fas fa-trash"></i> Delete
-                                    </button>
+    
+    // Sort days numerically and create day cards
+    Object.keys(activitiesByDay)
+        .sort((a, b) => parseInt(a) - parseInt(b))
+        .forEach(day => {
+            const dayCard = document.createElement('div');
+            dayCard.className = 'card itinerary-card mb-4';
+            
+            // Sort activities by time within each day
+            const sortedActivities = activitiesByDay[day].sort((a, b) => {
+                return a.time.localeCompare(b.time);
+            });
+            
+            dayCard.innerHTML = `
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-calendar-day me-2"></i>Day ${day}
+                        <span class="badge bg-light text-dark ms-2">${sortedActivities.length} activities</span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    ${sortedActivities.map(activity => {
+                        const canEdit = activity.addedBy === auth.currentUser.uid;
+                        return `
+                            <div class="d-flex align-items-start mb-3 p-3 border rounded activity-item">
+                                <div class="me-3 text-center flex-shrink-0">
+                                    <div class="bg-primary text-white rounded p-2" style="width: 80px;">
+                                        <div class="fw-bold small">${activity.time}</div>
+                                    </div>
                                 </div>
-                            ` : ''}
-                        </div>
-                    </div>
-                `).join('')}
-            </div>
-        `;
-        
-        itineraryDays.appendChild(dayCard);
-    });
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-1 text-primary">${activity.place}</h6>
+                                    ${activity.notes ? `<p class="mb-2 text-muted small">${activity.notes}</p>` : ''}
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <small class="text-muted">
+                                            <i class="fas fa-user me-1"></i>
+                                            <span class="activity-added-by">Loading...</span>
+                                        </small>
+                                        ${canEdit ? `
+                                            <div>
+                                                <button class="btn btn-sm btn-outline-primary edit-activity-btn me-1" 
+                                                        data-activity-index="${activity.originalIndex}"
+                                                        title="Edit Activity">
+                                                    <i class="fas fa-edit"></i> Edit
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-danger delete-activity-btn" 
+                                                        data-activity-index="${activity.originalIndex}"
+                                                        title="Delete Activity">
+                                                    <i class="fas fa-trash"></i> Delete
+                                                </button>
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+            
+            itineraryDays.appendChild(dayCard);
+            
+            // Load member names for each activity
+            setTimeout(() => {
+                sortedActivities.forEach(activity => {
+                    loadMemberNameForActivity(dayCard, activity.addedBy, activity.originalIndex);
+                });
+            }, 100);
+        });
+}
+
+// Helper function to load member names for activities
+async function loadMemberNameForActivity(dayCard, memberId, activityIndex) {
+    const activityElement = dayCard.querySelector(`[data-activity-index="${activityIndex}"]`);
+    if (!activityElement) return;
+    
+    const addedByElement = activityElement.querySelector('.activity-added-by');
+    if (!addedByElement) return;
+    
+    try {
+        const memberName = await getMemberName(memberId);
+        addedByElement.textContent = memberName;
+    } catch (error) {
+        console.error('Error loading member name for activity:', error);
+        addedByElement.textContent = 'Traveler';
+    }
 }
 
 function loadTripRoute(trip) {
@@ -1584,38 +1660,118 @@ async function deleteExpense(expenseIndex) {
 }
 
 async function editActivity(activityIndex) {
-    const activity = currentTrip.itinerary[activityIndex];
+    console.log('Editing activity, index:', activityIndex);
     
-    document.getElementById('activity-day').value = activity.day;
-    document.getElementById('activity-time').value = activity.time;
-    document.getElementById('activity-place').value = activity.place;
-    document.getElementById('activity-notes').value = activity.notes || '';
+    // Add comprehensive validation
+    if (!currentTrip || !currentTrip.itinerary) {
+        console.error('No trip or itinerary data available');
+        showToast('No itinerary data found', 'warning');
+        return;
+    }
     
-    document.getElementById('save-activity-btn').innerHTML = 'Update Activity';
-    document.getElementById('save-activity-btn').dataset.editingIndex = activityIndex;
+    if (activityIndex === undefined || activityIndex === null) {
+        console.error('Invalid activity index:', activityIndex);
+        showToast('Invalid activity selection', 'warning');
+        return;
+    }
     
-    const modal = new bootstrap.Modal(document.getElementById('addActivityModal'));
-    modal.show();
+    const activityIndexNum = parseInt(activityIndex);
+    
+    if (isNaN(activityIndexNum) || activityIndexNum < 0 || activityIndexNum >= currentTrip.itinerary.length) {
+        console.error('Activity index out of bounds:', activityIndexNum, 'Available:', currentTrip.itinerary.length);
+        showToast('Activity not found', 'warning');
+        return;
+    }
+    
+    const activity = currentTrip.itinerary[activityIndexNum];
+    
+    if (!activity) {
+        console.error('Activity not found at index:', activityIndexNum);
+        showToast('Activity data not found', 'warning');
+        return;
+    }
+    
+    console.log('Activity data:', activity);
+    
+    // Validate required fields
+    if (!activity.day || !activity.time || !activity.place) {
+        console.error('Invalid activity data:', activity);
+        showToast('Invalid activity data', 'warning');
+        return;
+    }
+    
+    try {
+        // Populate the modal with activity data
+        document.getElementById('activity-day').value = activity.day;
+        document.getElementById('activity-time').value = activity.time;
+        document.getElementById('activity-place').value = activity.place;
+        document.getElementById('activity-notes').value = activity.notes || '';
+        
+        // Update button to show edit mode
+        const saveBtn = document.getElementById('save-activity-btn');
+        saveBtn.innerHTML = 'Update Activity';
+        saveBtn.dataset.editingIndex = activityIndexNum;
+        
+        const modal = new bootstrap.Modal(document.getElementById('addActivityModal'));
+        modal.show();
+        
+    } catch (error) {
+        console.error('Error populating activity form:', error);
+        showToast('Error loading activity data', 'danger');
+    }
 }
 
 async function deleteActivity(activityIndex) {
+    console.log('Deleting activity, index:', activityIndex);
+    
     if (!confirm('Are you sure you want to delete this activity?')) return;
 
+    // Validate input
+    if (activityIndex === undefined || activityIndex === null) {
+        console.error('Invalid activity index for deletion:', activityIndex);
+        showToast('Invalid activity selection', 'warning');
+        return;
+    }
+
+    const activityIndexNum = parseInt(activityIndex);
+    
+    if (isNaN(activityIndexNum) || activityIndexNum < 0) {
+        console.error('Invalid activity index for deletion:', activityIndex);
+        showToast('Invalid activity selection', 'danger');
+        return;
+    }
+
     try {
-        const updatedItinerary = currentTrip.itinerary.filter((_, index) => index !== parseInt(activityIndex));
+        // Get fresh trip data to ensure we have the latest itinerary
+        const tripDoc = await db.collection('trips').doc(currentTrip.id).get();
+        const tripData = tripDoc.data();
+        
+        const currentItinerary = tripData.itinerary || [];
+        
+        if (activityIndexNum >= currentItinerary.length) {
+            console.error('Activity index out of bounds:', activityIndexNum, 'Available:', currentItinerary.length);
+            showToast('Activity not found', 'danger');
+            return;
+        }
+        
+        const updatedItinerary = currentItinerary.filter((_, index) => index !== activityIndexNum);
         
         await db.collection('trips').doc(currentTrip.id).update({
             itinerary: updatedItinerary,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         
+        // Update local trip data
         currentTrip.itinerary = updatedItinerary;
-        loadTripDetails();
+        
+        // Reload the itinerary display
+        loadTripItinerary(currentTrip);
+        
         showToast('Activity deleted successfully!', 'success');
         
     } catch (error) {
         console.error('Error deleting activity:', error);
-        showToast('Error deleting activity', 'danger');
+        showToast('Error deleting activity. Please try again.', 'danger');
     }
 }
 
