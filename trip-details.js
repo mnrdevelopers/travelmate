@@ -81,6 +81,7 @@ const professionalCategories = [
 function initCategorySystem() {
     const categoryGrid = document.getElementById('category-grid');
     const categorySelect = document.getElementById('expense-category');
+    const showMoreBtn = document.getElementById('show-more-categories');
     
     if (!categoryGrid) {
         console.log('Category grid not found, skipping initialization');
@@ -89,35 +90,41 @@ function initCategorySystem() {
     
     // Clear existing options
     categoryGrid.innerHTML = '';
-    categorySelect.innerHTML = '';
+    if (categorySelect) {
+        categorySelect.innerHTML = '';
+    }
     
     // Add default option to select
-    const defaultOption = document.createElement('option');
-    defaultOption.value = '';
-    defaultOption.textContent = 'Select Category';
-    defaultOption.disabled = true;
-    defaultOption.selected = true;
-    categorySelect.appendChild(defaultOption);
+    if (categorySelect) {
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Select Category';
+        defaultOption.disabled = true;
+        defaultOption.selected = true;
+        categorySelect.appendChild(defaultOption);
+    }
     
-    // Use only professional categories (no custom categories for now)
+    // Use only professional categories
     const allCategories = [...professionalCategories];
     
     // Display initial categories (first 12 for better UX)
     const initialCategories = allCategories.slice(0, 12);
     renderCategoryGrid(initialCategories, categoryGrid, categorySelect);
     
-    // Add event listener for "Show More" button
-    const showMoreBtn = document.getElementById('show-more-categories');
+    // Reset and setup "Show More" button
     if (showMoreBtn) {
-        showMoreBtn.addEventListener('click', function() {
+        showMoreBtn.style.display = allCategories.length > 12 ? 'block' : 'none';
+        showMoreBtn.innerHTML = '<i class="fas fa-ellipsis-h me-1"></i>Show More Categories';
+        
+        // Remove existing event listeners and add new one
+        showMoreBtn.replaceWith(showMoreBtn.cloneNode(true));
+        const newShowMoreBtn = document.getElementById('show-more-categories');
+        
+        newShowMoreBtn.addEventListener('click', function() {
+            console.log('Show more categories clicked');
             renderCategoryGrid(allCategories, categoryGrid, categorySelect);
             this.style.display = 'none';
         });
-        
-        // Only show "Show More" if there are more categories
-        if (allCategories.length <= 12) {
-            showMoreBtn.style.display = 'none';
-        }
     }
     
     // Update hidden select when category is clicked
@@ -127,19 +134,32 @@ function initCategorySystem() {
             const categoryId = categoryItem.dataset.categoryId;
             
             // Update select value
-            categorySelect.value = categoryId;
+            if (categorySelect) {
+                categorySelect.value = categoryId;
+            }
             
             // Update visual selection
             document.querySelectorAll('.category-item').forEach(item => {
                 item.classList.remove('selected');
             });
             categoryItem.classList.add('selected');
+            
+            console.log('Category selected:', categoryId);
         }
     });
+    
+    console.log('Category system initialized with', allCategories.length, 'categories');
 }
 
 function renderCategoryGrid(categories, gridElement, selectElement) {
+    if (!gridElement) {
+        console.error('Category grid element not found');
+        return;
+    }
+    
     gridElement.innerHTML = '';
+    
+    console.log('Rendering', categories.length, 'categories');
     
     categories.forEach(category => {
         // Create grid item
@@ -158,11 +178,15 @@ function renderCategoryGrid(categories, gridElement, selectElement) {
         gridElement.appendChild(categoryItem);
         
         // Also add to select dropdown (for form submission)
-        const option = document.createElement('option');
-        option.value = category.id;
-        option.textContent = category.name;
-        selectElement.appendChild(option);
+        if (selectElement) {
+            const option = document.createElement('option');
+            option.value = category.id;
+            option.textContent = category.name;
+            selectElement.appendChild(option);
+        }
     });
+    
+    console.log('Category grid rendered successfully');
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -1646,20 +1670,23 @@ async function editExpense(expenseIndex) {
     document.getElementById('expense-payment-mode').value = expense.paymentMode || 'cash';
     document.getElementById('expense-date').value = expense.date || new Date().toISOString().split('T')[0];
     
-    // Initialize category system first
+    // Initialize category system FIRST
     initCategorySystem();
     
-    // Set category in both the grid and select
-    document.getElementById('expense-category').value = expense.category || '';
-    
-    // Update visual selection in grid
+    // Wait a bit for the category system to initialize, then set the category
     setTimeout(() => {
+        // Set category in both the grid and select
+        document.getElementById('expense-category').value = expense.category || '';
+        
+        // Update visual selection in grid
         document.querySelectorAll('.category-item').forEach(item => {
             item.classList.remove('selected');
             if (item.dataset.categoryId === expense.category) {
                 item.classList.add('selected');
             }
         });
+        
+        console.log('Category set to:', expense.category);
     }, 100);
     
     // Update button to show it's in edit mode
