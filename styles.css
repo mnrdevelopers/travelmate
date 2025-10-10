@@ -943,3 +943,34 @@ html, body {
 .toast-container {
     z-index: 10000;
 }
+
+/* Member Expenditure Styles */
+.member-expense-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.settlement-list {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.member-expense-list .progress {
+    background-color: #e9ecef;
+}
+
+.settlement-list .alert {
+    margin-bottom: 0.5rem;
+    padding: 0.5rem 0.75rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .member-expense-list {
+        max-height: 250px;
+    }
+    
+    .settlement-list {
+        max-height: 150px;
+    }
+}
