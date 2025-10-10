@@ -88,9 +88,10 @@ function initCategorySystem() {
     }
     
     // Clear existing options
+    categoryGrid.innerHTML = '';
     categorySelect.innerHTML = '';
     
-    // Add default option
+    // Add default option to select
     const defaultOption = document.createElement('option');
     defaultOption.value = '';
     defaultOption.textContent = 'Select Category';
@@ -98,23 +99,59 @@ function initCategorySystem() {
     defaultOption.selected = true;
     categorySelect.appendChild(defaultOption);
     
+    // Combine professional categories with custom categories
+    let allCategories = [...professionalCategories];
+    
+    // Add custom categories if they exist
+    if (customCategories && customCategories.length > 0) {
+        customCategories.forEach(customCat => {
+            allCategories.push({
+                id: customCat.id,
+                name: customCat.name,
+                icon: 'fas fa-tag',
+                group: 'custom',
+                custom: true,
+                color: customCat.color
+            });
+        });
+    }
+    
     // Display initial categories (first 12 for better UX)
-    const initialCategories = professionalCategories.slice(0, 12);
+    const initialCategories = allCategories.slice(0, 12);
     renderCategoryGrid(initialCategories, categoryGrid, categorySelect);
+    
+    // Add "Add Custom" option if we're not showing all categories
+    if (allCategories.length > 12) {
+        const addCustomItem = document.createElement('div');
+        addCustomItem.className = 'category-item category-custom';
+        addCustomItem.innerHTML = `
+            <div class="category-icon">
+                <i class="fas fa-plus-circle"></i>
+            </div>
+            <div class="category-name">Add Custom</div>
+        `;
+        addCustomItem.addEventListener('click', showCustomCategoryModal);
+        categoryGrid.appendChild(addCustomItem);
+    }
     
     // Add event listener for "Show More" button
     const showMoreBtn = document.getElementById('show-more-categories');
     if (showMoreBtn) {
         showMoreBtn.addEventListener('click', function() {
-            renderCategoryGrid(professionalCategories, categoryGrid, categorySelect);
+            renderCategoryGrid(allCategories, categoryGrid, categorySelect);
             this.style.display = 'none';
         });
+        
+        // Only show "Show More" if there are more categories
+        if (allCategories.length <= 12) {
+            showMoreBtn.style.display = 'none';
+        }
     }
     
     // Update hidden select when category is clicked
     categoryGrid.addEventListener('click', function(e) {
         const categoryItem = e.target.closest('.category-item');
-        if (categoryItem) {
+        if (categoryItem && !categoryItem.querySelector('.fa-plus-circle')) {
             const categoryId = categoryItem.dataset.categoryId;
             
             // Update select value
@@ -139,8 +176,14 @@ function renderCategoryGrid(categories, gridElement, selectElement) {
         categoryItem.dataset.categoryId = category.id;
         categoryItem.title = category.name;
         
+        // Add custom color if available
+        if (category.color) {
+            categoryItem.querySelector = () => null; // Prevent errors
+            categoryItem.style.borderColor = category.color;
+        }
+        
         categoryItem.innerHTML = `
-            <div class="category-icon">
+            <div class="category-icon" style="${category.color ? `color: ${category.color}` : ''}">
                 <i class="${category.icon}"></i>
             </div>
             <div class="category-name">${category.name}</div>
@@ -154,6 +197,18 @@ function renderCategoryGrid(categories, gridElement, selectElement) {
         option.textContent = category.name;
         selectElement.appendChild(option);
     });
+    
+    // Add "Add Custom" option at the end
+    const addCustomItem = document.createElement('div');
+    addCustomItem.className = 'category-item category-custom';
+    addCustomItem.innerHTML = `
+        <div class="category-icon">
+            <i class="fas fa-plus-circle"></i>
+        </div>
+        <div class="category-name">Add Custom</div>
+    `;
+    addCustomItem.addEventListener('click', showCustomCategoryModal);
+    gridElement.appendChild(addCustomItem);
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -191,14 +246,8 @@ function setupTripDetailsEventListeners() {
     setupEnhancedCRUDEventListeners();
 }
 
-function setupEnhancedCRUDEventListeners() {
-    // Expense category handling
-    const categorySelect = document.getElementById('expense-category');
-    if (categorySelect) {
-        categorySelect.addEventListener('change', handleCategoryChange);
-    }
-    
-    // Custom category modal
+function setupEnhancedCRUDEventListeners() { 
+    // Custom category modal (keep this if you still want custom categories)
     const saveCategoryBtn = document.getElementById('save-category-btn');
     if (saveCategoryBtn) {
         saveCategoryBtn.addEventListener('click', saveCustomCategory);
