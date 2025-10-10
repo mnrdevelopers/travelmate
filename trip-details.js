@@ -179,6 +179,7 @@ function setupTripDetailsEventListeners() {
     document.getElementById('save-activity-btn').addEventListener('click', saveActivity);
     document.getElementById('calculate-route-btn').addEventListener('click', calculateRoute);
     document.getElementById('share-settlement-btn')?.addEventListener('click', shareSettlementPlan);
+    document.getElementById('add-first-expense-btn')?.addEventListener('click', showAddExpenseModal);
 
      // Filter event listeners
     document.getElementById('category-filter').addEventListener('change', applyExpenseFilters);
@@ -590,12 +591,19 @@ async function loadTripMembers(trip) {
 }
 
 async function loadTripExpenses(trip) {
-    const expensesList = document.getElementById('expenses-list');
+    const expensesTbody = document.getElementById('expenses-tbody');
     const emptyExpenses = document.getElementById('empty-expenses');
     const memberFilter = document.getElementById('member-filter');
+    const categoryFilter = document.getElementById('category-filter');
     
     // Populate member filter
     memberFilter.innerHTML = '<option value="all">All Members</option>';
+    
+    // Populate category filter
+    categoryFilter.innerHTML = '<option value="all">All Categories</option>';
+    professionalCategories.forEach(category => {
+        categoryFilter.innerHTML += `<option value="${category.id}">${category.name}</option>`;
+    });
     
     if (trip.members && trip.members.length > 0) {
         for (const memberId of trip.members) {
@@ -605,20 +613,22 @@ async function loadTripExpenses(trip) {
     }
     
     if (!trip.expenses || trip.expenses.length === 0) {
-        expensesList.innerHTML = '';
+        expensesTbody.innerHTML = '';
         emptyExpenses.classList.remove('d-none');
-        updateBudgetSummary(trip);
-        // Load member expenditure even with no expenses
+        document.getElementById('expenses-table').classList.add('d-none');
+        updateExpenseStats(trip);
         loadMemberExpenditure(trip);
         return;
     }
     
     emptyExpenses.classList.add('d-none');
+    document.getElementById('expenses-table').classList.remove('d-none');
+    
     filterAndDisplayExpenses();
-    updateBudgetSummary(trip);
+    updateExpenseStats(trip);
     renderExpenseChart(trip);
-    renderPaymentChart(trip);
     loadMemberExpenditure(trip);
+    loadRecentExpenses(trip);
 }
 
 async function loadMemberExpenditure(trip) {
@@ -1146,8 +1156,16 @@ function showAddExpenseModal() {
     document.getElementById('expense-date').valueAsDate = new Date();
     document.getElementById('add-expense-form').reset();
     
+    // Reset category selection
+    document.querySelectorAll('.category-item').forEach(item => {
+        item.classList.remove('selected');
+    });
+    
     document.getElementById('save-expense-btn').innerHTML = 'Add Expense';
     delete document.getElementById('save-expense-btn').dataset.editingIndex;
+    
+    // Initialize category system
+    initCategorySystem();
     
     const modal = new bootstrap.Modal(document.getElementById('addExpenseModal'));
     modal.show();
@@ -2352,28 +2370,25 @@ function filterAndDisplayExpenses() {
     
     let filteredExpenses = [...currentTrip.expenses];
     
-    // Apply category filter
+    // Apply filters
     if (currentFilters.category !== 'all') {
         filteredExpenses = filteredExpenses.filter(expense => 
             expense.category === currentFilters.category
         );
     }
     
-    // Apply payment mode filter
     if (currentFilters.payment !== 'all') {
         filteredExpenses = filteredExpenses.filter(expense => 
             expense.paymentMode === currentFilters.payment
         );
     }
     
-    // Apply member filter
     if (currentFilters.member !== 'all') {
         filteredExpenses = filteredExpenses.filter(expense => 
             expense.addedBy === currentFilters.member
         );
     }
     
-    // Apply date filter
     if (currentFilters.date !== 'all') {
         const now = new Date();
         filteredExpenses = filteredExpenses.filter(expense => {
@@ -2394,7 +2409,115 @@ function filterAndDisplayExpenses() {
         });
     }
     
-    displayFilteredExpenses(filteredExpenses);
+    displayExpensesTable(filteredExpenses);
+    updateExpenseStats(currentTrip, filteredExpenses);
+}
+
+function displayExpensesTable(expenses) {
+    const expensesTbody = document.getElementById('expenses-tbody');
+    const expensesCount = document.getElementById('expenses-count');
+    
+    expensesCount.textContent = `${expenses.length} ${expenses.length === 1 ? 'expense' : 'expenses'}`;
+    
+    if (expenses.length === 0) {
+        expensesTbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center py-4 text-muted">
+                    <i class="fas fa-search fa-2x mb-3 d-block"></i>
+                    No expenses match your filters
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    // Sort expenses by date (newest first)
+    const sortedExpenses = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    expensesTbody.innerHTML = sortedExpenses.map((expense, index) => {
+        const categoryName = getCategoryName(expense.category);
+        const expenseDate = new Date(expense.date).toLocaleDateString();
+        const canEdit = expense.addedBy === auth.currentUser.uid;
+        
+        return `
+            <tr>
+                <td>
+                    <div class="fw-semibold">${expense.description}</div>
+                    <small class="text-muted">Added by: <span class="added-by" data-member-id="${expense.addedBy}">Loading...</span></small>
+                </td>
+                <td>
+                    <span class="expense-amount"><span class="rupee-symbol">₹</span>${expense.amount.toFixed(2)}</span>
+                </td>
+                <td>
+                    <span class="expense-category category-${getCategoryGroup(expense.category)}">${categoryName}</span>
+                </td>
+                <td>
+                    <span class="payment-badge payment-${expense.paymentMode}">
+                        <i class="${getPaymentModeIcon(expense.paymentMode)} me-1"></i>
+                        ${getPaymentModeText(expense.paymentMode)}
+                    </span>
+                </td>
+                <td>
+                    <span class="expense-date">${expenseDate}</span>
+                </td>
+                <td>
+                    ${canEdit ? `
+                        <div class="action-buttons">
+                            <button class="btn btn-outline-primary btn-sm edit-expense-btn" 
+                                    data-expense-index="${getOriginalExpenseIndex(expense)}"
+                                    title="Edit Expense">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm delete-expense-btn" 
+                                    data-expense-index="${getOriginalExpenseIndex(expense)}"
+                                    title="Delete Expense">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    ` : '<span class="text-muted">Read only</span>'}
+                </td>
+            </tr>
+        `;
+    }).join('');
+    
+    // Load member names for each expense
+    expenses.forEach((expense, index) => {
+        loadMemberNameForTableRow(expense.addedBy, index);
+    });
+}
+
+function getCategoryGroup(categoryId) {
+    const category = professionalCategories.find(cat => cat.id === categoryId);
+    return category ? category.group : 'misc';
+}
+
+function getPaymentModeIcon(paymentMode) {
+    switch(paymentMode) {
+        case 'cash': return 'fas fa-money-bill-wave';
+        case 'upi': return 'fas fa-mobile-alt';
+        case 'card': return 'fas fa-credit-card';
+        case 'other': return 'fas fa-wallet';
+        default: return 'fas fa-wallet';
+    }
+}
+
+function getPaymentModeText(paymentMode) {
+    switch(paymentMode) {
+        case 'cash': return 'Cash';
+        case 'upi': return 'UPI';
+        case 'card': return 'Card';
+        case 'other': return 'Other';
+        default: return paymentMode;
+    }
+}
+
+function getOriginalExpenseIndex(expense) {
+    if (!currentTrip.expenses) return -1;
+    return currentTrip.expenses.findIndex(e => 
+        e.description === expense.description && 
+        e.amount === expense.amount && 
+        e.date === expense.date
+    );
 }
 
 function displayFilteredExpenses(expenses) {
@@ -2707,5 +2830,86 @@ function useFallbackCopy(text) {
     }
 }
 
+async function loadMemberNameForTableRow(memberId, rowIndex) {
+    const rows = document.querySelectorAll('#expenses-tbody tr');
+    if (rows[rowIndex]) {
+        const addedByElement = rows[rowIndex].querySelector('.added-by');
+        if (addedByElement) {
+            if (memberId === auth.currentUser.uid) {
+                addedByElement.textContent = 'You';
+            } else {
+                try {
+                    const memberName = await getMemberName(memberId);
+                    addedByElement.textContent = memberName;
+                } catch (error) {
+                    addedByElement.textContent = 'Traveler';
+                }
+            }
+        }
+    }
+}
+
+function updateExpenseStats(trip, filteredExpenses = null) {
+    const expenses = filteredExpenses || trip.expenses || [];
+    const totalExpenses = expenses.length;
+    const totalSpent = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+    
+    // Update summary cards
+    document.getElementById('total-budget-amount').textContent = trip.budget.toFixed(2);
+    document.getElementById('total-spent-amount').textContent = totalSpent.toFixed(2);
+    document.getElementById('remaining-amount').textContent = (trip.budget - totalSpent).toFixed(2);
+    
+    // Update progress
+    const progressPercent = Math.min((totalSpent / trip.budget) * 100, 100);
+    document.getElementById('progress-spent').textContent = totalSpent.toFixed(2);
+    document.getElementById('progress-remaining').textContent = (trip.budget - totalSpent).toFixed(2);
+    document.getElementById('budget-percentage').textContent = `${progressPercent.toFixed(1)}% of budget used`;
+    
+    const progressBar = document.getElementById('budget-progress-bar');
+    progressBar.style.width = `${progressPercent}%`;
+    
+    // Color code progress bar
+    if (progressPercent > 90) {
+        progressBar.className = 'progress-bar bg-danger';
+    } else if (progressPercent > 75) {
+        progressBar.className = 'progress-bar bg-warning';
+    } else {
+        progressBar.className = 'progress-bar bg-success';
+    }
+}
+
+function loadRecentExpenses(trip) {
+    const recentExpensesList = document.getElementById('recent-expenses-list');
+    
+    if (!trip.expenses || trip.expenses.length === 0) {
+        recentExpensesList.innerHTML = '<div class="text-center text-muted py-3">No recent expenses</div>';
+        return;
+    }
+    
+    // Get 5 most recent expenses
+    const recentExpenses = [...trip.expenses]
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .slice(0, 5);
+    
+    recentExpensesList.innerHTML = recentExpenses.map(expense => {
+        const categoryName = getCategoryName(expense.category);
+        const expenseDate = new Date(expense.date).toLocaleDateString();
+        
+        return `
+            <div class="recent-expense-item">
+                <div class="flex-grow-1">
+                    <div class="fw-semibold small">${expense.description}</div>
+                    <small class="text-muted">${categoryName} • ${expenseDate}</small>
+                </div>
+                <div class="recent-expense-amount">
+                    <span class="rupee-symbol">₹</span>${expense.amount.toFixed(2)}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
 // Make function available globally for inline onclick
 window.shareSettlementPlan = shareSettlementPlan;
+
+
