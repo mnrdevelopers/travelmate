@@ -227,46 +227,74 @@
             </div>
         </div>
 
-        <!-- Right Column: Summary & Charts -->
-        <div class="col-md-4">
-            <h4>Budget Summary</h4>
-            <div class="card mb-4">
-                <div class="card-body">
-                    <div class="mb-3">
-                        <strong>Total Budget:</strong>
-                        <span id="summary-total-budget" class="float-end">
-                            <span class="rupee-symbol">₹</span>0
-                        </span>
-                    </div>
-                    <div class="mb-3">
-                        <strong>Total Spent:</strong>
-                        <span id="summary-total-spent" class="float-end">
-                            <span class="rupee-symbol">₹</span>0
-                        </span>
-                    </div>
-                    <div class="mb-3">
-                        <strong>Remaining:</strong>
-                        <span id="summary-remaining" class="float-end">
-                            <span class="rupee-symbol">₹</span>0
-                        </span>
-                    </div>
-                    <div class="progress mt-3">
-                        <div id="summary-progress-bar" class="progress-bar" role="progressbar" style="width: 0%"></div>
-                    </div>
+       <!-- Right Column: Summary & Charts -->
+<div class="col-md-4">
+    <!-- Budget Summary -->
+    <h4>Budget Summary</h4>
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="mb-3">
+                <strong>Total Budget:</strong>
+                <span id="summary-total-budget" class="float-end">
+                    <span class="rupee-symbol">₹</span>0
+                </span>
+            </div>
+            <div class="mb-3">
+                <strong>Total Spent:</strong>
+                <span id="summary-total-spent" class="float-end">
+                    <span class="rupee-symbol">₹</span>0
+                </span>
+            </div>
+            <div class="mb-3">
+                <strong>Remaining:</strong>
+                <span id="summary-remaining" class="float-end">
+                    <span class="rupee-symbol">₹</span>0
+                </span>
+            </div>
+            <div class="progress mt-3">
+                <div id="summary-progress-bar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Spending by Category -->
+    <h4>Spending by Category</h4>
+    <div class="card mb-4">
+        <div class="card-body">
+            <canvas id="expense-chart" height="250"></canvas>
+        </div>
+    </div>
+
+    <!-- Spending by Payment Mode -->
+    <h4>Spending by Payment Mode</h4>
+    <div class="card mb-4">
+        <div class="card-body">
+            <canvas id="payment-chart" height="200"></canvas>
+        </div>
+    </div>
+
+    <!-- Member Expenditure Section -->
+    <h4>Member Expenditure</h4>
+    <div class="card mb-4">
+        <div class="card-body">
+            <div id="member-expenditure-stats">
+                <div class="text-center text-muted py-4">
+                    <i class="fas fa-users fa-2x mb-3"></i>
+                    <p>No expenditure data yet</p>
+                    <small>Expenses will appear here as members add them</small>
                 </div>
             </div>
+        </div>
+    </div>
 
-            <h4>Spending by Category</h4>
-            <div class="card mb-4">
-                <div class="card-body">
-                    <canvas id="expense-chart" height="250"></canvas>
-                </div>
-            </div>
-
-            <h4>Spending by Payment Mode</h4>
-            <div class="card">
-                <div class="card-body">
-                    <canvas id="payment-chart" height="200"></canvas>
+    <!-- Settlement Summary -->
+    <h4>Settlement Summary</h4>
+    <div class="card">
+        <div class="card-body">
+            <div id="settlement-summary">
+                <div class="text-center text-muted py-3">
+                    <i class="fas fa-balance-scale fa-2x mb-2"></i>
+                    <p>Balances will calculate automatically</p>
                 </div>
             </div>
         </div>
