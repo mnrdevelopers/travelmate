@@ -2346,36 +2346,67 @@ function calculateAndDisplaySettlement(memberData, averagePerPerson) {
 
 function shareSettlementPlan() {
     const settlementElement = document.getElementById('settlement-summary');
-    const transactions = settlementElement.querySelectorAll('.alert');
     
-    if (transactions.length === 0) {
+    if (!settlementElement) {
+        showToast('Settlement summary not found', 'warning');
+        return;
+    }
+    
+    const transactionElements = settlementElement.querySelectorAll('.alert');
+    
+    if (transactionElements.length === 0) {
         showToast('No settlements to share', 'info');
         return;
     }
     
     let shareText = `Settlement Plan for ${currentTrip.name}:\n\n`;
     
-    transactions.forEach(transaction => {
-        const from = transaction.querySelector('strong:nth-child(1)').textContent;
-        const to = transaction.querySelector('strong:nth-child(2)').textContent;
-        const amount = transaction.querySelector('.text-success').textContent;
+    transactionElements.forEach(transaction => {
+        const strongElements = transaction.querySelectorAll('strong');
+        const amountElement = transaction.querySelector('.text-success');
         
-        shareText += `${from} → ${to}: ${amount}\n`;
+        // Check if all required elements exist
+        if (strongElements.length >= 2 && amountElement) {
+            const from = strongElements[0].textContent;
+            const to = strongElements[1].textContent;
+            const amount = amountElement.textContent;
+            
+            shareText += `${from} → ${to}: ${amount}\n`;
+        }
     });
     
     shareText += `\nTrip Code: ${currentTrip.code}`;
     
     // Copy to clipboard
-    navigator.clipboard.writeText(shareText).then(() => {
-        showToast('Settlement plan copied to clipboard!', 'success');
-    }).catch(() => {
-        // Fallback for mobile devices
-        const textArea = document.createElement('textarea');
-        textArea.value = shareText;
-        document.body.appendChild(textArea);
-        textArea.select();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(shareText).then(() => {
+            showToast('Settlement plan copied to clipboard!', 'success');
+        }).catch(() => {
+            useFallbackCopy(shareText);
+        });
+    } else {
+        useFallbackCopy(shareText);
+    }
+}
+
+// Helper function for fallback copy method
+function useFallbackCopy(text) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    textArea.style.top = '-999999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
+    try {
         document.execCommand('copy');
-        document.body.removeChild(textArea);
         showToast('Settlement plan copied!', 'success');
-    });
+    } catch (err) {
+        console.error('Fallback copy failed:', err);
+        showToast('Failed to copy settlement plan', 'danger');
+    } finally {
+        document.body.removeChild(textArea);
+    }
 }
