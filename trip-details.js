@@ -2434,10 +2434,21 @@ function displayExpensesTable(expenses) {
     // Sort expenses by date (newest first)
     const sortedExpenses = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date));
     
-    expensesTbody.innerHTML = sortedExpenses.map((expense, index) => {
+    expensesTbody.innerHTML = sortedExpenses.map((expense, displayIndex) => {
         const categoryName = getCategoryName(expense.category);
         const expenseDate = new Date(expense.date).toLocaleDateString();
         const canEdit = expense.addedBy === auth.currentUser.uid;
+        
+        // Find the original index in the currentTrip.expenses array
+        let originalIndex = -1;
+        if (currentTrip.expenses) {
+            originalIndex = currentTrip.expenses.findIndex(e => 
+                e.description === expense.description && 
+                e.amount === expense.amount && 
+                e.date === expense.date &&
+                e.addedBy === expense.addedBy
+            );
+        }
         
         return `
             <tr>
@@ -2464,12 +2475,12 @@ function displayExpensesTable(expenses) {
                     ${canEdit ? `
                         <div class="action-buttons">
                             <button class="btn btn-outline-primary btn-sm edit-expense-btn" 
-                                    data-expense-index="${getOriginalExpenseIndex(expense)}"
+                                    data-expense-index="${originalIndex}"
                                     title="Edit Expense">
                                 <i class="fas fa-edit"></i>
                             </button>
                             <button class="btn btn-outline-danger btn-sm delete-expense-btn" 
-                                    data-expense-index="${getOriginalExpenseIndex(expense)}"
+                                    data-expense-index="${originalIndex}"
                                     title="Delete Expense">
                                 <i class="fas fa-trash"></i>
                             </button>
@@ -2481,8 +2492,34 @@ function displayExpensesTable(expenses) {
     }).join('');
     
     // Load member names for each expense
-    expenses.forEach((expense, index) => {
-        loadMemberNameForTableRow(expense.addedBy, index);
+    loadAllMemberNamesForExpenses(expenses);
+}
+
+async function loadAllMemberNamesForExpenses(expenses) {
+    // Get unique member IDs from all expenses
+    const uniqueMemberIds = [...new Set(expenses.map(expense => expense.addedBy))];
+    
+    // Pre-load all member names
+    const memberNames = {};
+    const memberPromises = uniqueMemberIds.map(async (memberId) => {
+        try {
+            const name = await getMemberName(memberId);
+            memberNames[memberId] = name;
+        } catch (error) {
+            console.error('Error loading member name:', error);
+            memberNames[memberId] = 'Traveler';
+        }
+    });
+    
+    // Wait for all member names to load
+    await Promise.all(memberPromises);
+    
+    // Update all "Added by" elements
+    document.querySelectorAll('.added-by').forEach(element => {
+        const memberId = element.dataset.memberId;
+        if (memberNames[memberId]) {
+            element.textContent = memberId === auth.currentUser.uid ? 'You' : memberNames[memberId];
+        }
     });
 }
 
@@ -2513,10 +2550,14 @@ function getPaymentModeText(paymentMode) {
 
 function getOriginalExpenseIndex(expense) {
     if (!currentTrip.expenses) return -1;
+    
+    // Find the exact expense in the original array by matching multiple properties
     return currentTrip.expenses.findIndex(e => 
         e.description === expense.description && 
         e.amount === expense.amount && 
-        e.date === expense.date
+        e.date === expense.date &&
+        e.addedBy === expense.addedBy &&
+        e.category === expense.category
     );
 }
 
