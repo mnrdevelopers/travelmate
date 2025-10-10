@@ -23,6 +23,7 @@ function setupTripDetailsEventListeners() {
     document.getElementById('add-activity-btn').addEventListener('click', showAddActivityModal);
     document.getElementById('save-activity-btn').addEventListener('click', saveActivity);
     document.getElementById('calculate-route-btn').addEventListener('click', calculateRoute);
+    document.getElementById('share-settlement-btn')?.addEventListener('click', shareSettlementPlan);
 
      // Filter event listeners
     document.getElementById('category-filter').addEventListener('change', applyExpenseFilters);
@@ -2337,7 +2338,7 @@ function calculateAndDisplaySettlement(memberData, averagePerPerson) {
             `).join('')}
         </div>
         <div class="text-center mt-2">
-            <button class="btn btn-outline-primary btn-sm" onclick="shareSettlementPlan()">
+            <button class="btn btn-outline-primary btn-sm" id="share-settlement-btn">
                 <i class="fas fa-share-alt me-1"></i>Share Plan
             </button>
         </div>
