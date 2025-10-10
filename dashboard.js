@@ -265,11 +265,20 @@ function checkAuthState() {
         if (user) {
             console.log('User is logged in');
             currentUser = user;
-            await loadUserData();
-            await loadCustomCategories();
-            await loadUserTrips();
-            showPrivateDashboard();
-            updateNavigationBasedOnAuth(true);
+            
+            // Only try to load user data if we're showing private dashboard
+            try {
+                await loadUserData();
+                await loadCustomCategories();
+                await loadUserTrips();
+                showPrivateDashboard();
+                updateNavigationBasedOnAuth(true);
+            } catch (error) {
+                console.error('Error loading user data:', error);
+                // Fallback to public dashboard if there's an error
+                showPublicDashboard();
+                updateNavigationBasedOnAuth(false);
+            }
         } else {
             console.log('User is not logged in, showing public dashboard');
             showPublicDashboard();
@@ -305,8 +314,17 @@ function hideLoadingOverlay() {
 function loadUserData() {
     if (!currentUser) return;
     
-    document.getElementById('user-name').textContent = currentUser.displayName || 'Traveler';
-    document.getElementById('user-avatar').src = currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || 'Traveler')}&background=4361ee&color=fff`;
+    // Only update these elements if they exist (private dashboard)
+    const userNameElement = document.getElementById('user-name');
+    const userAvatarElement = document.getElementById('user-avatar');
+    
+    if (userNameElement) {
+        userNameElement.textContent = currentUser.displayName || 'Traveler';
+    }
+    
+    if (userAvatarElement) {
+        userAvatarElement.src = currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || 'Traveler')}&background=4361ee&color=fff`;
+    }
 }
 
 async function loadUserTrips() {
