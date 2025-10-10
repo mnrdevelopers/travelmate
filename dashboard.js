@@ -508,155 +508,15 @@ function updateDashboardStats() {
         return startDate <= today && endDate >= today;
     }).length;
 
-    // Update DOM elements - show only trip counts
-    document.getElementById('total-trips-count').textContent = totalTrips;
-    document.getElementById('active-trips-count').textContent = activeTrips;
-
     // Count upcoming and completed trips
     const upcomingTrips = userTrips.filter(trip => new Date(trip.startDate) > today).length;
     const completedTrips = userTrips.filter(trip => new Date(trip.endDate) < today).length;
 
-    // Show upcoming and completed trip counts instead of expenses
+    // Update DOM elements
+    document.getElementById('total-trips-count').textContent = totalTrips;
+    document.getElementById('active-trips-count').textContent = activeTrips;
     document.getElementById('total-spent-amount').textContent = upcomingTrips;
     document.getElementById('car-expenses-amount').textContent = completedTrips;
-
-    // Optionally keep the car expense chart for visualization per trip
-    updateCarExpenseChart(userTrips);
-}
-
-
-// Update car expense chart
-function updateCarExpenseChart(trips) {
-    const ctx = document.getElementById('carExpenseChart').getContext('2d');
-    
-    // Destroy previous chart if it exists
-    if (carExpenseChart) {
-        carExpenseChart.destroy();
-    }
-    
-    // Calculate car expense breakdown
-    const expenseCategories = {
-        fuel: 0,
-        rental: 0,
-        maintenance: 0,
-        toll: 0,
-        parking: 0,
-        other: 0
-    };
-    
-    trips.forEach(trip => {
-        if (trip.expenses) {
-            trip.expenses.forEach(expense => {
-                const desc = expense.description.toLowerCase();
-                const amount = expense.amount;
-                
-                if (expense.category === 'fuel' || desc.includes('fuel')) {
-                    expenseCategories.fuel += amount;
-                } else if (desc.includes('rental') || desc.includes('car rental')) {
-                    expenseCategories.rental += amount;
-                } else if (desc.includes('maintenance') || desc.includes('service')) {
-                    expenseCategories.maintenance += amount;
-                } else if (desc.includes('toll')) {
-                    expenseCategories.toll += amount;
-                } else if (desc.includes('parking')) {
-                    expenseCategories.parking += amount;
-                } else if (desc.includes('car') || desc.includes('vehicle')) {
-                    expenseCategories.other += amount;
-                }
-            });
-        }
-    });
-    
-    // Filter out zero categories
-    const labels = [];
-    const data = [];
-    const backgroundColors = [
-        '#ff6b6b', // fuel - red
-        '#4ecdc4', // rental - teal
-        '#45b7d1', // maintenance - blue
-        '#96ceb4', // toll - green
-        '#feca57', // parking - yellow
-        '#b8b8b8'  // other - gray
-    ];
-    
-    Object.keys(expenseCategories).forEach((category) => {
-        if (expenseCategories[category] > 0) {
-            labels.push(category.charAt(0).toUpperCase() + category.slice(1));
-            data.push(expenseCategories[category]);
-        }
-    });
-    
-    const totalCarExpenses = data.reduce((sum, value) => sum + value, 0);
-    
-    if (data.length === 0) {
-        document.getElementById('car-expense-details').innerHTML = `
-            <div class="text-center text-muted py-4">
-                <i class="fas fa-car fa-3x mb-3"></i>
-                <p>No car expenses recorded yet</p>
-                <a href="car-calculations.html" class="btn btn-primary btn-sm mt-3">
-                    <i class="fas fa-calculator me-1"></i>Calculate Car Expenses
-                </a>
-            </div>
-        `;
-        return;
-    }
-    
-    // Create chart
-    carExpenseChart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: labels,
-            datasets: [{
-                data: data,
-                backgroundColor: backgroundColors.slice(0, labels.length),
-                borderWidth: 2,
-                borderColor: '#fff'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: {
-                        padding: 15,
-                        usePointStyle: true
-                    }
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            const label = context.label || '';
-                            const value = context.raw || 0;
-                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                            const percentage = Math.round((value / total) * 100);
-                            return `${label}: ₹${value.toFixed(2)} (${percentage}%)`;
-                        }
-                    }
-                }
-            }
-        }
-    });
-    
-    // Update expense details (without fuel efficiency)
-    document.getElementById('car-expense-details').innerHTML = `
-        <div class="text-center">
-            <h4 class="text-primary"><span class="rupee-symbol">₹</span>${totalCarExpenses.toFixed(2)}</h4>
-            <p class="text-muted mb-3">Total Car Expenses</p>
-            
-            ${labels.map((label, index) => `
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span class="small">${label}:</span>
-                    <span class="fw-bold"><span class="rupee-symbol">₹</span>${data[index].toFixed(2)}</span>
-                </div>
-            `).join('')}
-            
-            <a href="car-calculations.html" class="btn btn-primary btn-sm mt-3">
-                <i class="fas fa-calculator me-1"></i>New Calculation
-            </a>
-        </div>
-    `;
 }
 
 function showLoadingState(show) {
