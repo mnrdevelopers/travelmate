@@ -1231,3 +1231,22 @@ html, body {
 .empty-icon {
     opacity: 0.5;
 }
+
+/* Footer Styles */
+.footer {
+    background-color: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+    margin-top: auto;
+}
+
+.travel-icons {
+    font-size: 1.5rem;
+}
+
+.travel-icons i {
+    transition: transform 0.3s ease, color 0.3s ease;
+}
+
+.travel-icons i:hover {
+    transform: translateY(-3px);
+}
