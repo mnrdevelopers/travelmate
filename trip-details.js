@@ -199,6 +199,7 @@ function setupTripDetailsEventListeners() {
     document.getElementById('logout-btn').addEventListener('click', handleLogout);
     document.getElementById('add-expense-btn').addEventListener('click', showAddExpenseModal);
     document.getElementById('save-expense-btn').addEventListener('click', saveExpense);
+    document.getElementById('save-manual-member-btn')?.addEventListener('click', saveManualMember);
     document.getElementById('add-activity-btn').addEventListener('click', showAddActivityModal);
     document.getElementById('save-activity-btn').addEventListener('click', saveActivity);
     document.getElementById('calculate-route-btn').addEventListener('click', calculateRoute);
@@ -532,6 +533,21 @@ async function loadTripMembers(trip) {
         });
         
         const members = await Promise.all(memberPromises);
+
+        // Add manual members
+        if (trip.manualMembers) {
+            trip.manualMembers.forEach(mm => {
+                members.push({
+                    id: mm.id,
+                    name: mm.name + ' (Manual)',
+                    email: null,
+                    photoURL: null,
+                    isCurrentUser: false,
+                    isCreator: false,
+                    isManual: true
+                });
+            });
+        }
         
         // Sort members: creator first, then current user, then others alphabetically
         members.sort((a, b) => {
@@ -580,6 +596,16 @@ async function loadTripMembers(trip) {
             
             membersList.appendChild(memberDiv);
         });
+
+        // Show/Hide Add Manual Member Button (Only Creator)
+        const addMemberBtn = document.getElementById('add-manual-member-btn-header');
+        if (addMemberBtn) {
+            if (trip.createdBy === auth.currentUser.uid) {
+                addMemberBtn.classList.remove('d-none');
+            } else {
+                addMemberBtn.classList.add('d-none');
+            }
+        }
         
     } catch (error) {
         console.error('Error loading members:', error);
@@ -641,6 +667,12 @@ async function loadTripExpenses(trip) {
             memberFilter.innerHTML += `<option value="${memberId}">${memberName}</option>`;
         }
     }
+
+    if (trip.manualMembers) {
+        trip.manualMembers.forEach(mm => {
+            memberFilter.innerHTML += `<option value="${mm.id}">${mm.name} (Manual)</option>`;
+        });
+    }
     
     if (!trip.expenses || trip.expenses.length === 0) {
         expensesTbody.innerHTML = '';
@@ -686,6 +718,7 @@ function createExpenseItem(expense, originalIndex) {
     const expenseDate = new Date(expense.date).toLocaleDateString();
     
     const paymentModeInfo = getPaymentModeInfo(expense.paymentMode);
+    const isPersonal = expense.isPersonal;
     
     expenseItem.innerHTML = `
         <div class="card-body">
@@ -697,19 +730,20 @@ function createExpenseItem(expense, originalIndex) {
                         <span class="badge bg-light text-dark ms-2">
                             <i class="${paymentModeInfo.icon} me-1"></i>${paymentModeInfo.text}
                         </span>
+                        ${isPersonal ? '<span class="badge bg-secondary ms-2"><i class="fas fa-user-lock me-1"></i>Personal</span>' : ''}
                         <small class="text-muted ms-2">${expenseDate}</small>
                     </div>
                     <div class="mt-1">
                         <small class="text-muted">
                             <i class="fas fa-user me-1"></i>
-                            Added by: <span class="added-by-text">Loading...</span>
+                            Paid by: <span class="added-by-text">Loading...</span>
                         </small>
                     </div>
                 </div>
                 <div class="text-end ms-3">
                     <div class="fw-bold fs-5"><span class="rupee-symbol">₹</span>${expense.amount.toFixed(2)}</div>
                     <div class="mt-2">
-                        ${expense.addedBy === auth.currentUser.uid ? `
+                        ${(expense.createdBy === auth.currentUser.uid || expense.addedBy === auth.currentUser.uid || currentTrip.createdBy === auth.currentUser.uid) ? `
                             <button class="btn btn-sm btn-outline-primary edit-expense-btn me-1" 
                                     data-expense-index="${originalIndex}">
                                 <i class="fas fa-edit"></i>
@@ -769,6 +803,12 @@ async function getMemberName(memberId) {
         if (memberId === auth.currentUser.uid) {
             return auth.currentUser.displayName || auth.currentUser.email || 'You';
         }
+
+        // Check manual members
+        if (currentTrip && currentTrip.manualMembers) {
+            const manual = currentTrip.manualMembers.find(m => m.id === memberId);
+            if (manual) return manual.name + ' (Manual)';
+        }
         
         const userDoc = await db.collection('users').doc(memberId).get();
         if (userDoc.exists) {
@@ -815,7 +855,8 @@ function getCategoryName(categoryId) {
 }
 
 function updateBudgetSummary(trip) {
-    const totalSpent = trip.expenses ? trip.expenses.reduce((sum, expense) => sum + expense.amount, 0) : 0;
+    // Exclude personal expenses from total budget calculation
+    const totalSpent = trip.expenses ? trip.expenses.filter(e => !e.isPersonal).reduce((sum, expense) => sum + expense.amount, 0) : 0;
     const remaining = trip.budget - totalSpent;
     const progressPercent = Math.min((totalSpent / trip.budget) * 100, 100);
     
@@ -858,6 +899,7 @@ function renderExpenseChart(trip) {
     customCategories.forEach(cat => categories[cat.id] = 0);
     
     trip.expenses.forEach(expense => {
+        if (expense.isPersonal) return; // Exclude personal expenses from chart
         if (categories[expense.category] !== undefined) {
             categories[expense.category] += expense.amount;
         } else {
@@ -943,6 +985,7 @@ function renderPaymentChart(trip) {
     };
     
     trip.expenses.forEach(expense => {
+        if (expense.isPersonal) return; // Exclude personal expenses from chart
         if (paymentModes[expense.paymentMode] !== undefined) {
             paymentModes[expense.paymentMode] += expense.amount;
         } else {
@@ -1207,6 +1250,8 @@ async function saveExpense() {
     const category = document.getElementById('expense-category').value;
     const paymentMode = document.getElementById('expense-payment-mode').value;
     const date = document.getElementById('expense-date').value;
+    const payerId = document.getElementById('expense-payer').value;
+    const isPersonal = document.getElementById('expense-personal').checked;
     const isEditing = document.getElementById('save-expense-btn').dataset.editingIndex;
     
     if (!description || !amount || !category || !date) {
@@ -1225,7 +1270,9 @@ async function saveExpense() {
         category,
         date,
         paymentMode,
-        addedBy: auth.currentUser.uid,
+        addedBy: payerId, // The Payer (used for settlement)
+        createdBy: auth.currentUser.uid, // The Record Creator (used for permissions)
+        isPersonal: isPersonal,
         addedAt: new Date().toISOString()
     };
     
@@ -1669,6 +1716,12 @@ async function editExpense(expenseIndex) {
     document.getElementById('expense-amount').value = expense.amount || '';
     document.getElementById('expense-payment-mode').value = expense.paymentMode || 'cash';
     document.getElementById('expense-date').value = expense.date || new Date().toISOString().split('T')[0];
+    document.getElementById('expense-personal').checked = expense.isPersonal || false;
+    
+    // Set payer
+    setTimeout(() => {
+        document.getElementById('expense-payer').value = expense.addedBy || auth.currentUser.uid;
+    }, 500); // Wait for dropdown to populate
     
     // Initialize category system FIRST
     initCategorySystem();
@@ -2320,11 +2373,113 @@ function showAddExpenseModal() {
     document.getElementById('save-expense-btn').innerHTML = 'Add Expense';
     delete document.getElementById('save-expense-btn').dataset.editingIndex;
     
+    // Populate Payer Dropdown
+    const payerSelect = document.getElementById('expense-payer');
+    payerSelect.innerHTML = '';
+    
+    // Add current user
+    const currentUserOption = document.createElement('option');
+    currentUserOption.value = auth.currentUser.uid;
+    currentUserOption.textContent = 'You';
+    payerSelect.appendChild(currentUserOption);
+    
+    // Add other members
+    if (currentTrip.members) {
+        currentTrip.members.forEach(async memberId => {
+            if (memberId !== auth.currentUser.uid) {
+                const name = await getMemberName(memberId);
+                const option = document.createElement('option');
+                option.value = memberId;
+                option.textContent = name;
+                payerSelect.appendChild(option);
+            }
+        });
+    }
+    
+    // Add manual members
+    if (currentTrip.manualMembers) {
+        currentTrip.manualMembers.forEach(mm => {
+            const option = document.createElement('option');
+            option.value = mm.id;
+            option.textContent = mm.name + ' (Manual)';
+            payerSelect.appendChild(option);
+        });
+    }
+    
+    // Reset personal checkbox
+    document.getElementById('expense-personal').checked = false;
+
     // Initialize category system
     initCategorySystem();
     
     const modal = new bootstrap.Modal(document.getElementById('addExpenseModal'));
     modal.show();
+}
+
+function showAddManualMemberModal() {
+    document.getElementById('manual-member-name').value = '';
+    const modal = new bootstrap.Modal(document.getElementById('addManualMemberModal'));
+    modal.show();
+}
+
+async function saveManualMember() {
+    const nameInput = document.getElementById('manual-member-name');
+    const name = nameInput.value.trim();
+    
+    if (!name) {
+        showToast('Please enter a member name', 'warning');
+        return;
+    }
+    
+    const saveBtn = document.getElementById('save-manual-member-btn');
+    
+    try {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Adding...';
+        
+        const manualMember = {
+            id: `manual_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+            name: name,
+            addedAt: new Date().toISOString(),
+            isManual: true
+        };
+        
+        // Update Firestore
+        await db.collection('trips').doc(currentTrip.id).update({
+            manualMembers: firebase.firestore.FieldValue.arrayUnion(manualMember),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        // Update local trip data
+        if (!currentTrip.manualMembers) {
+            currentTrip.manualMembers = [];
+        }
+        currentTrip.manualMembers.push(manualMember);
+        
+        // Reload members list
+        await loadTripMembers(currentTrip);
+        
+        // Update filters
+        const memberFilter = document.getElementById('member-filter');
+        if (memberFilter) {
+             const option = document.createElement('option');
+             option.value = manualMember.id;
+             option.textContent = `${manualMember.name} (Manual)`;
+             memberFilter.appendChild(option);
+        }
+
+        const modal = bootstrap.Modal.getInstance(document.getElementById('addManualMemberModal'));
+        modal.hide();
+        
+        showToast('Manual member added successfully', 'success');
+        
+    } catch (error) {
+        console.error('Error adding manual member:', error);
+        showToast('Error adding member', 'danger');
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = 'Add Member';
+    }
 }
 
 // Add this to utils.js for data migration if needed
@@ -2470,7 +2625,8 @@ function displayExpensesTable(expenses) {
     expensesTbody.innerHTML = sortedExpenses.map((expense, displayIndex) => {
         const categoryName = getCategoryName(expense.category);
         const expenseDate = new Date(expense.date).toLocaleDateString();
-        const canEdit = expense.addedBy === auth.currentUser.uid;
+        const canEdit = expense.createdBy === auth.currentUser.uid || expense.addedBy === auth.currentUser.uid || currentTrip.createdBy === auth.currentUser.uid;
+        const isPersonal = expense.isPersonal;
         
         // Find the original index in the currentTrip.expenses array
         let originalIndex = -1;
@@ -2487,7 +2643,7 @@ function displayExpensesTable(expenses) {
             <tr>
                 <td>
                     <div class="fw-semibold">${expense.description}</div>
-                    <small class="text-muted">Added by: <span class="added-by" data-member-id="${expense.addedBy}">Loading...</span></small>
+                    <small class="text-muted">Paid by: <span class="added-by" data-member-id="${expense.addedBy}">Loading...</span></small>
                 </td>
                 <td>
                     <span class="expense-amount"><span class="rupee-symbol">₹</span>${expense.amount.toFixed(2)}</span>
@@ -2500,6 +2656,7 @@ function displayExpensesTable(expenses) {
                         <i class="${getPaymentModeIcon(expense.paymentMode)} me-1"></i>
                         ${getPaymentModeText(expense.paymentMode)}
                     </span>
+                    ${isPersonal ? '<br><span class="badge bg-secondary mt-1" style="font-size:0.65rem">Personal</span>' : ''}
                 </td>
                 <td>
                     <span class="expense-date">${expenseDate}</span>
@@ -2623,7 +2780,7 @@ function displayFilteredExpenses(expenses) {
 }
 
 function updateFilteredBudgetSummary(expenses) {
-    const totalSpent = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+    const totalSpent = expenses.filter(e => !e.isPersonal).reduce((sum, expense) => sum + expense.amount, 0);
     const remaining = currentTrip.budget - totalSpent;
     const progressPercent = Math.min((totalSpent / currentTrip.budget) * 100, 100);
     
@@ -2655,10 +2812,16 @@ function calculateTripMemberExpenditure(trip) {
     trip.members.forEach(memberId => {
         memberExpenses[memberId] = 0;
     });
+    if (trip.manualMembers) {
+        trip.manualMembers.forEach(mm => {
+            memberExpenses[mm.id] = 0;
+        });
+    }
     
     // Calculate expenses for each member
     if (trip.expenses) {
         trip.expenses.forEach(expense => {
+            if (expense.isPersonal) return; // Skip personal expenses for settlement
             if (memberExpenses[expense.addedBy] !== undefined) {
                 memberExpenses[expense.addedBy] += expense.amount;
             }
@@ -2666,7 +2829,12 @@ function calculateTripMemberExpenditure(trip) {
     }
     
     // Prepare member data for display
-    const promises = trip.members.map(async (memberId) => {
+    const allMemberIds = [...trip.members];
+    if (trip.manualMembers) {
+        trip.manualMembers.forEach(mm => allMemberIds.push(mm.id));
+    }
+
+    const promises = allMemberIds.map(async (memberId) => {
         const memberName = await getMemberName(memberId);
         const totalSpent = memberExpenses[memberId] || 0;
         
@@ -2940,8 +3108,9 @@ async function loadMemberNameForTableRow(memberId, rowIndex) {
 
 function updateExpenseStats(trip, filteredExpenses = null) {
     const expenses = filteredExpenses || trip.expenses || [];
-    const totalExpenses = expenses.length;
-    const totalSpent = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+    // Filter out personal expenses for budget stats
+    const budgetExpenses = expenses.filter(e => !e.isPersonal);
+    const totalSpent = budgetExpenses.reduce((sum, expense) => sum + expense.amount, 0);
     
     // Update summary cards
     document.getElementById('total-budget-amount').textContent = trip.budget.toFixed(2);
@@ -3000,5 +3169,4 @@ function loadRecentExpenses(trip) {
 
 // Make function available globally for inline onclick
 window.shareSettlementPlan = shareSettlementPlan;
-
-
+window.showAddManualMemberModal = showAddManualMemberModal;
