@@ -138,7 +138,12 @@
 
             <!-- Right Column: Trip Members -->
             <div class="col-md-4">
-                <h4>Trip Members</h4>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h4>Trip Members</h4>
+                    <button class="btn btn-sm btn-outline-primary d-none" id="add-manual-member-btn-header" onclick="showAddManualMemberModal()">
+                        <i class="fas fa-user-plus me-1"></i>Add
+                    </button>
+                </div>
                 <div class="card">
                     <div class="card-body">
                         <div id="members-list">
@@ -497,6 +502,16 @@
                         <input type="number" class="form-control" id="expense-amount" min="0" step="0.01" required>
                     </div>
                     <div class="mb-3">
+                        <label for="expense-payer" class="form-label">Paid By</label>
+                        <select class="form-select" id="expense-payer" required></select>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="expense-personal">
+                        <label class="form-check-label" for="expense-personal">
+                            Personal Expense (Not split)
+                        </label>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label">Category</label>
                         <div class="category-selector">
                             <div class="category-grid" id="category-grid">
@@ -570,6 +585,28 @@
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                         <button type="button" class="btn btn-primary" id="save-activity-btn">Add Activity</button>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Manual Member Modal -->
+    <div class="modal fade" id="addManualMemberModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Manual Member</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="manual-member-name" class="form-label">Member Name</label>
+                        <input type="text" class="form-control" id="manual-member-name" placeholder="e.g. John Doe" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="save-manual-member-btn">Add Member</button>
                 </div>
             </div>
         </div>
