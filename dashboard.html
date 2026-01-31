@@ -14,21 +14,36 @@
 <!-- Add this right after the opening body tag in dashboard.html -->
 <div id="loading-overlay" class="loading-overlay">
     <div class="loading-content">
-        <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;"></div>
-        <p class="mt-3">Loading TravelMate...</p>
+        <div class="premium-loader">
+            <div class="loader-ring"></div>
+            <div class="travel-icons-cycle">
+                <i class="fas fa-plane travel-icon-item"></i>
+                <i class="fas fa-train travel-icon-item"></i>
+                <i class="fas fa-car travel-icon-item"></i>
+            </div>
+        </div>
+        <p class="loading-text">Planning your journey...</p>
     </div>
 </div>
     
     <!-- Navigation -->
   <nav class="navbar navbar-expand-lg navbar-light sticky-top">
     <div class="container">
-        <a class="navbar-brand fw-bold" href="dashboard.html">
-            <i class="fas fa-map-marked-alt me-2 text-primary"></i>TravelMate
-        </a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <button class="navbar-toggler order-0 me-2" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span class="navbar-toggler-icon"></span>
         </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
+        <a class="navbar-brand fw-bold order-1 me-auto" href="dashboard.html">
+            <i class="fas fa-map-marked-alt me-2 text-primary"></i>TravelMate
+        </a>
+        <div class="d-flex align-items-center order-2 order-lg-3">
+            <button class="btn btn-link nav-link me-2" id="theme-toggle" title="Toggle Dark Mode">
+                <i class="fas fa-moon"></i>
+            </button>
+            <button class="btn btn-link nav-link d-lg-none" id="mobile-logout-btn" title="Logout">
+                <i class="fas fa-sign-out-alt"></i>
+            </button>
+        </div>
+        <div class="collapse navbar-collapse order-3 order-lg-2" id="navbarNav">
             <ul class="navbar-nav me-auto">
                 <li class="nav-item">
                     <a class="nav-link active" href="dashboard.html">
@@ -56,7 +71,7 @@
     <!-- Public Dashboard View (for non-logged in users) -->
 <div id="public-dashboard" class="d-none">
     <!-- Hero Section -->
-    <div class="bg-primary text-white py-5">
+    <div class="bg-primary text-white py-5" style="background: var(--primary-gradient) !important;">
         <div class="container">
             <div class="row align-items-center">
                 <div class="col-lg-6">
@@ -65,9 +80,9 @@
                     </h1>
                     <p class="lead mb-4">Plan your trips, track expenses, and travel smarter with your companions</p>
                     <div class="d-flex flex-wrap gap-3">
-                        <button class="btn btn-light btn-lg" onclick="showAuthModal()">
+                        <a href="login.html" class="btn btn-light btn-lg">
                             <i class="fas fa-rocket me-2"></i>Get Started
-                        </button>
+                        </a>
                         <a href="#features" class="btn btn-outline-light btn-lg">
                             <i class="fas fa-info-circle me-2"></i>Learn More
                         </a>
@@ -225,42 +240,11 @@
         <div class="container text-center">
             <h2 class="fw-bold mb-3">Ready to Plan Your Next Adventure?</h2>
             <p class="lead mb-4">Join thousands of travelers who use TravelMate to make their trips memorable and stress-free.</p>
-            <button class="btn btn-warning btn-lg px-5" onclick="showAuthModal()">
+            <a href="signup.html" class="btn btn-warning btn-lg px-5">
                 <i class="fas fa-plane-departure me-2"></i>Start Planning Now
-            </button>
+            </a>
         </div>
     </section>
-</div>
-
-<!-- Auth Modal for Public Dashboard -->
-<div class="modal fade" id="authModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Join TravelMate</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body text-center">
-                <div class="mb-4">
-                    <i class="fas fa-map-marked-alt text-primary fa-3x mb-3"></i>
-                    <h4>Start Your Journey</h4>
-                    <p class="text-muted">Sign in to create trips and access all features</p>
-                </div>
-                
-                <div class="d-grid">
-                    <button class="btn btn-google py-3" onclick="redirectToAuth()">
-                        <i class="fab fa-google me-2"></i>Continue with Google
-                    </button>
-                </div>
-                
-                <div class="mt-3">
-                    <small class="text-muted">
-                        By continuing, you agree to our Terms of Service and Privacy Policy
-                    </small>
-                </div>
-            </div>
-        </div>
-    </div>
 </div>
 
     <!-- Profile Section -->
@@ -290,8 +274,10 @@
                         <small class="text-muted">Email cannot be changed</small>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">User ID</label>
-                        <input type="text" class="form-control" id="profile-userid" disabled>
+                        <label class="form-label">Password</label>
+                        <button type="button" class="btn btn-outline-secondary w-100" id="change-password-btn">
+                            <i class="fas fa-key me-1"></i>Change Password
+                        </button>
                     </div>
                 </form>
                 <div class="border-top pt-3 mt-3">
@@ -311,108 +297,148 @@
 
 <!-- Dashboard Content -->
 <div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2>My Trips</h2>
-        <div>
-            <button class="btn btn-primary me-2" id="create-trip-btn">
-                <i class="fas fa-plus me-1"></i>New Trip
+    <!-- Hero Section with Slideshow -->
+    <div id="dashboardHeroCarousel" class="carousel slide mb-4 shadow-sm overflow-hidden" data-bs-ride="carousel" style="border-radius: var(--border-radius-md);">
+        <div class="carousel-indicators">
+            <button type="button" data-bs-target="#dashboardHeroCarousel" data-bs-slide-to="0" class="active"></button>
+            <button type="button" data-bs-target="#dashboardHeroCarousel" data-bs-slide-to="1"></button>
+            <button type="button" data-bs-target="#dashboardHeroCarousel" data-bs-slide-to="2"></button>
+            <button type="button" data-bs-target="#dashboardHeroCarousel" data-bs-slide-to="3"></button>
+            <button type="button" data-bs-target="#dashboardHeroCarousel" data-bs-slide-to="4"></button>
+        </div>
+        <div class="carousel-inner">
+            <!-- Devotional -->
+            <div class="carousel-item active" data-bs-interval="4000">
+                <div class="hero-slide-img" style="background-image: url('https://images.unsplash.com/photo-1548013146-72479768bada?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80');"></div>
+                <div class="hero-overlay p-4 d-flex align-items-end">
+                    <div class="text-white text-shadow">
+                        <h3 class="fw-bold mb-1">Spiritual Journeys</h3>
+                        <p class="mb-0 d-none d-md-block">Find peace in devotional trips</p>
+                    </div>
+                </div>
+            </div>
+            <!-- Adventure -->
+            <div class="carousel-item" data-bs-interval="4000">
+                <div class="hero-slide-img" style="background-image: url('https://images.unsplash.com/photo-1501555088652-021faa106b9b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80');"></div>
+                <div class="hero-overlay p-4 d-flex align-items-end">
+                    <div class="text-white text-shadow">
+                        <h3 class="fw-bold mb-1">Adventure Awaits</h3>
+                        <p class="mb-0 d-none d-md-block">Challenge yourself with thrilling experiences</p>
+                    </div>
+                </div>
+            </div>
+            <!-- Safari -->
+            <div class="carousel-item" data-bs-interval="4000">
+                <div class="hero-slide-img" style="background-image: url('https://images.unsplash.com/photo-1516426122078-c23e76319801?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80');"></div>
+                <div class="hero-overlay p-4 d-flex align-items-end">
+                    <div class="text-white text-shadow">
+                        <h3 class="fw-bold mb-1">Wild Safari</h3>
+                        <p class="mb-0 d-none d-md-block">Explore nature and wildlife</p>
+                    </div>
+                </div>
+            </div>
+            <!-- Party -->
+            <div class="carousel-item" data-bs-interval="4000">
+                <div class="hero-slide-img" style="background-image: url('https://images.unsplash.com/photo-1566737236500-c8ac43014a67?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80');"></div>
+                <div class="hero-overlay p-4 d-flex align-items-end">
+                    <div class="text-white text-shadow">
+                        <h3 class="fw-bold mb-1">Party in Goa & Bangkok</h3>
+                        <p class="mb-0 d-none d-md-block">Experience the best nightlife</p>
+                    </div>
+                </div>
+            </div>
+            <!-- Local Trips -->
+            <div class="carousel-item" data-bs-interval="4000">
+                <div class="hero-slide-img" style="background-image: url('https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80');"></div>
+                <div class="hero-overlay p-4 d-flex align-items-end">
+                    <div class="text-white text-shadow">
+                        <h3 class="fw-bold mb-1">Local Road Trips</h3>
+                        <p class="mb-0 d-none d-md-block">Discover hidden gems nearby</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <button class="carousel-control-prev" type="button" data-bs-target="#dashboardHeroCarousel" data-bs-slide="prev">
+            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+            <span class="visually-hidden">Previous</span>
+        </button>
+        <button class="carousel-control-next" type="button" data-bs-target="#dashboardHeroCarousel" data-bs-slide="next">
+            <span class="carousel-control-next-icon" aria-hidden="true"></span>
+            <span class="visually-hidden">Next</span>
+        </button>
+    </div>
+
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+        <h2 class="mb-0 fw-bold text-primary">My Trips</h2>
+        <div class="action-buttons-container d-flex flex-row gap-2 w-100 w-md-auto">
+            <button class="btn btn-primary shadow-sm flex-grow-1 flex-md-grow-0 d-flex align-items-center justify-content-center" id="create-trip-btn">
+                <i class="fas fa-plus me-1"></i><span class="d-md-none">New</span><span class="d-none d-md-inline">New Trip</span>
             </button>
-            <button class="btn btn-outline-primary me-2" id="join-trip-btn">
-                <i class="fas fa-user-plus me-1"></i>Join Trip
+            <button class="btn btn-outline-primary shadow-sm flex-grow-1 flex-md-grow-0 d-flex align-items-center justify-content-center" id="join-trip-btn">
+                <i class="fas fa-user-plus me-1"></i><span class="d-md-none">Join</span><span class="d-none d-md-inline">Join Trip</span>
             </button>
-            <a href="car-calculations.html" class="btn btn-success">
-                <i class="fas fa-calculator me-1"></i>Car Calculator
+            <a href="car-calculations.html" class="btn btn-info text-white shadow-sm flex-grow-1 flex-md-grow-0 d-flex align-items-center justify-content-center">
+                <i class="fas fa-calculator me-1"></i><span class="d-md-none">Calc</span><span class="d-none d-md-inline">Car Calculator</span>
             </a>
         </div>
     </div>
     
    <!-- In dashboard.html, update the statistics cards section -->
-<div class="row mb-5">
-    <div class="col-md-3 mb-3">
-        <div class="card bg-primary text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h4 class="card-title">Total Trips</h4>
-                        <h2 id="total-trips-count">0</h2>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-suitcase-rolling fa-2x"></i>
-                    </div>
+<div class="row g-2 g-md-4 mb-4">
+    <div class="col-3 col-md-3">
+        <div class="card bg-primary text-white h-100 border-0 shadow-sm stat-card">
+            <div class="card-body p-2 p-md-3 d-flex flex-column flex-md-row justify-content-between align-items-center">
+                <div class="text-center text-md-start order-2 order-md-1">
+                    <h5 class="mb-0 fw-bold stat-value" id="total-trips-count">0</h5>
+                    <small class="stat-label opacity-75"><span class="d-md-none">Total</span><span class="d-none d-md-inline">Total Trips</span></small>
+                </div>
+                <div class="order-1 order-md-2 mb-1 mb-md-0">
+                    <i class="fas fa-suitcase-rolling opacity-75 stat-icon"></i>
                 </div>
             </div>
         </div>
     </div>
-    <div class="col-md-3 mb-3">
-        <div class="card bg-success text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h4 class="card-title">Active Trips</h4>
-                        <h2 id="active-trips-count">0</h2>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-map-marked-alt fa-2x"></i>
-                    </div>
+    <div class="col-3 col-md-3">
+        <div class="card bg-success text-white h-100 border-0 shadow-sm stat-card">
+            <div class="card-body p-2 p-md-3 d-flex flex-column flex-md-row justify-content-between align-items-center">
+                <div class="text-center text-md-start order-2 order-md-1">
+                    <h5 class="mb-0 fw-bold stat-value" id="active-trips-count">0</h5>
+                    <small class="stat-label opacity-75"><span class="d-md-none">Active</span><span class="d-none d-md-inline">Active Trips</span></small>
+                </div>
+                <div class="order-1 order-md-2 mb-1 mb-md-0">
+                    <i class="fas fa-map-marked-alt opacity-75 stat-icon"></i>
                 </div>
             </div>
         </div>
     </div>
-    <div class="col-md-3 mb-3">
-        <div class="card bg-warning text-dark">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h4 class="card-title">Upcoming Trips</h4>
-                        <h2 id="total-spent-amount">0</h2>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-calendar-plus fa-2x"></i>
-                    </div>
+    <div class="col-3 col-md-3">
+        <div class="card bg-warning text-white h-100 border-0 shadow-sm stat-card">
+            <div class="card-body p-2 p-md-3 d-flex flex-column flex-md-row justify-content-between align-items-center">
+                <div class="text-center text-md-start order-2 order-md-1">
+                    <h5 class="mb-0 fw-bold stat-value" id="total-spent-amount">0</h5>
+                    <small class="stat-label opacity-75"><span class="d-md-none">Upcoming</span><span class="d-none d-md-inline">Upcoming Trips</span></small>
+                </div>
+                <div class="order-1 order-md-2 mb-1 mb-md-0">
+                    <i class="fas fa-calendar-plus opacity-75 stat-icon"></i>
                 </div>
             </div>
         </div>
     </div>
-    <div class="col-md-3 mb-3">
-        <div class="card bg-info text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h4 class="card-title">Completed Trips</h4>
-                        <h2 id="car-expenses-amount">0</h2>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-flag-checkered fa-2x"></i>
-                    </div>
+    <div class="col-3 col-md-3">
+        <div class="card bg-info text-white h-100 border-0 shadow-sm stat-card">
+            <div class="card-body p-2 p-md-3 d-flex flex-column flex-md-row justify-content-between align-items-center">
+                <div class="text-center text-md-start order-2 order-md-1">
+                    <h5 class="mb-0 fw-bold stat-value" id="car-expenses-amount">0</h5>
+                    <small class="stat-label opacity-75"><span class="d-md-none">Done</span><span class="d-none d-md-inline">Completed Trips</span></small>
+                </div>
+                <div class="order-1 order-md-2 mb-1 mb-md-0">
+                    <i class="fas fa-flag-checkered opacity-75 stat-icon"></i>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-    <!-- Upcoming Trips -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header bg-warning text-dark">
-                    <h5 class="mb-0"><i class="fas fa-calendar-alt me-2"></i>Upcoming Trips</h5>
-                </div>
-                <div class="card-body">
-                    <div id="upcoming-trips-list">
-                        <!-- Upcoming trips will be loaded here -->
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Main Trips Grid -->
-    <div class="row">
-        <div class="col-12">
-            <h4 class="mb-3">All Trips</h4>
-        </div>
-    </div>
-    
     <div id="trips-container" class="row">
         <!-- Trips will be loaded here -->
     </div>
@@ -443,6 +469,16 @@
                             <label for="trip-name" class="form-label">Trip Name</label>
                             <input type="text" class="form-control" id="trip-name" required>
                         </div>
+                        <div class="mb-3">
+                            <label for="transport-mode" class="form-label">Primary Transport</label>
+                            <select class="form-select" id="transport-mode">
+                                <option value="car" selected>Car (Self/Rental)</option>
+                                <option value="flight">Flight</option>
+                                <option value="train">Train</option>
+                                <option value="bus">Bus</option>
+                                <option value="public">Public Transport (Other)</option>
+                            </select>
+                        </div>
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="start-location" class="form-label">Start Location</label>
@@ -467,7 +503,7 @@
                             <label for="trip-budget" class="form-label">Total Budget (<span class="rupee-symbol">₹</span>)</label>
                             <input type="number" class="form-control" id="trip-budget" min="0" step="0.01" required>
                         </div>
-                        <div class="form-check mb-3">
+                        <div class="form-check mb-3" id="distance-calc-container">
                             <input class="form-check-input" type="checkbox" id="calculate-distance">
                             <label class="form-check-label" for="calculate-distance">
                                 Calculate travel distance and time
@@ -503,6 +539,16 @@
                         <div class="mb-3">
                             <label for="edit-trip-name" class="form-label">Trip Name</label>
                             <input type="text" class="form-control" id="edit-trip-name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-transport-mode" class="form-label">Primary Transport</label>
+                            <select class="form-select" id="edit-transport-mode">
+                                <option value="car">Car (Self/Rental)</option>
+                                <option value="flight">Flight</option>
+                                <option value="train">Train</option>
+                                <option value="bus">Bus</option>
+                                <option value="public">Public Transport (Other)</option>
+                            </select>
                         </div>
                         <div class="row">
                             <div class="col-md-6 mb-3">
