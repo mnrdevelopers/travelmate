@@ -3,7 +3,8 @@ const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/dashboard.html',
-  '/auth.html',
+  '/login.html',
+  '/signup.html',
   '/trip-details.html',
   '/styles.css',
   '/dashboard.js',
@@ -12,7 +13,6 @@ const ASSETS_TO_CACHE = [
   '/utils.js',
   '/trip-details.js',
   '/icon.png',
-  '/icon.png'
 ];
 
 // Install event: caching app shell
