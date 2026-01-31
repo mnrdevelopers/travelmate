@@ -23,6 +23,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // Check auth state (this will show the appropriate dashboard)
     checkAuthState();
 
+    // Initialize Theme
+    setupTheme();
+
     // Initialize app
     initializeApp();
 });
@@ -33,7 +36,7 @@ document.addEventListener('DOMContentLoaded', function () {
         carCalcLink.addEventListener('click', function (e) {
             if (!auth.currentUser) {
                 e.preventDefault();
-                showAuthModal();
+                window.location.href = 'login.html';
             }
         });
     }
@@ -44,7 +47,7 @@ document.addEventListener('DOMContentLoaded', function () {
         createFirstTripBtn.addEventListener('click', function (e) {
             if (!auth.currentUser) {
                 e.preventDefault();
-                showAuthModal();
+                window.location.href = 'login.html';
             }
         });
     }
@@ -61,6 +64,7 @@ function setupDashboardEventListeners() {
     const copyCodeBtn = document.getElementById('copy-code-btn');
     const navProfile = document.getElementById('nav-profile');
     const createFirstTripBtn = document.getElementById('create-first-trip-btn');
+    const mobileLogoutBtn = document.getElementById('mobile-logout-btn');
     
     // Only add event listeners if elements exist
     if (createTripBtn) createTripBtn.addEventListener('click', showCreateTripModal);
@@ -73,6 +77,7 @@ function setupDashboardEventListeners() {
     if (copyCodeBtn) copyCodeBtn.addEventListener('click', copyTripCode);
     if (navProfile) navProfile.addEventListener('click', showProfileModal);
     if (createFirstTripBtn) createFirstTripBtn.addEventListener('click', showCreateTripModal);
+    if (mobileLogoutBtn) mobileLogoutBtn.addEventListener('click', handleLogout);
     
     // Distance calculation - check if elements exist
     const calculateDistance = document.getElementById('calculate-distance');
@@ -97,6 +102,14 @@ function setupDashboardEventListeners() {
             }
         });
     }
+
+    // Transport mode change listeners
+    const transportMode = document.getElementById('transport-mode');
+    if (transportMode) {
+        transportMode.addEventListener('change', function() {
+            toggleDistanceCalculation(this.value, 'distance-calc-container', 'calculate-distance', 'distance-results');
+        });
+    }
     
     // Profile operations
     setupProfileEventListeners();
@@ -107,10 +120,23 @@ function setupDashboardEventListeners() {
         link.addEventListener('click', function(e) {
             if (!auth.currentUser) {
                 e.preventDefault();
-                showAuthModal();
+                window.location.href = 'login.html';
             }
         });
     });
+}
+
+function toggleDistanceCalculation(mode, containerId, checkboxId, resultsId) {
+    const container = document.getElementById(containerId);
+    const checkbox = document.getElementById(checkboxId);
+    
+    if (mode === 'car') {
+        container.classList.remove('d-none');
+    } else {
+        container.classList.add('d-none');
+        checkbox.checked = false;
+        document.getElementById(resultsId).classList.add('d-none');
+    }
 }
 
 function setupProfileEventListeners() {
@@ -118,11 +144,13 @@ function setupProfileEventListeners() {
     const saveProfileBtn = document.getElementById('save-profile-btn');
     const avatarUpload = document.getElementById('avatar-upload');
     const leaveAllTripsBtn = document.getElementById('leave-all-trips-btn');
+    const changePasswordBtn = document.getElementById('change-password-btn');
     
     if (navProfile) navProfile.addEventListener('click', showProfileModal);
     if (saveProfileBtn) saveProfileBtn.addEventListener('click', saveProfile);
     if (avatarUpload) avatarUpload.addEventListener('change', handleAvatarUpload);
     if (leaveAllTripsBtn) leaveAllTripsBtn.addEventListener('click', leaveAllTrips);
+    if (changePasswordBtn) changePasswordBtn.addEventListener('click', handleChangePassword);
 }
 
 // Add the missing profile functions
@@ -132,7 +160,6 @@ function showProfileModal() {
     
     document.getElementById('profile-name').value = user.displayName || '';
     document.getElementById('profile-email').value = user.email || '';
-    document.getElementById('profile-userid').value = user.uid;
     document.getElementById('profile-avatar').src = user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}&background=4361ee&color=fff`;
     
     const modal = new bootstrap.Modal(document.getElementById('profileModal'));
@@ -175,6 +202,28 @@ async function saveProfile() {
     } finally {
         document.getElementById('save-profile-btn').disabled = false;
         document.getElementById('save-profile-btn').innerHTML = 'Save Changes';
+    }
+}
+
+async function handleChangePassword() {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const isGoogle = user.providerData.some(userInfo => userInfo.providerId === 'google.com');
+    
+    if (isGoogle) {
+        showToast('You are logged in with Google. Please change your password via Google Account settings.', 'info');
+        return;
+    }
+
+    if (confirm(`Send password reset email to ${user.email}?`)) {
+        try {
+            await auth.sendPasswordResetEmail(user.email);
+            showToast('Password reset email sent!', 'success');
+        } catch (error) {
+            console.error('Error sending reset email:', error);
+            showToast('Error sending reset email: ' + error.message, 'danger');
+        }
     }
 }
 
@@ -267,9 +316,11 @@ function checkAuthState() {
             currentUser = user;
             
             try {
-                await loadUserData();
-                await loadCustomCategories();
-                await loadUserTrips();
+                await Promise.all([
+                    loadUserData(),
+                    loadCustomCategories(),
+                    loadUserTrips()
+                ]);
                 showPrivateDashboard();
                 updateNavigationBasedOnAuth(true);
                 
@@ -311,8 +362,15 @@ function showLoadingOverlay() {
         overlay.className = 'loading-overlay';
         overlay.innerHTML = `
             <div class="loading-content">
-                <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;"></div>
-                <p class="mt-3">Loading...</p>
+                <div class="premium-loader">
+                    <div class="loader-ring"></div>
+                    <div class="travel-icons-cycle">
+                        <i class="fas fa-plane travel-icon-item"></i>
+                        <i class="fas fa-train travel-icon-item"></i>
+                        <i class="fas fa-car travel-icon-item"></i>
+                    </div>
+                </div>
+                <p class="loading-text">Planning your journey...</p>
             </div>
         `;
         document.body.appendChild(overlay);
@@ -370,7 +428,6 @@ async function loadUserTrips() {
         
         displayTrips();
         updateDashboardStats();
-        loadUpcomingTrips();
         
     } catch (error) {
         console.error('Error loading trips:', error);
@@ -439,61 +496,6 @@ async function loadRecentCalculations() {
 }
 
 
-
-function loadUpcomingTrips() {
-    const upcomingTripsList = document.getElementById('upcoming-trips-list');
-    const today = new Date();
-    
-    const upcomingTrips = userTrips.filter(trip => {
-        const startDate = new Date(trip.startDate);
-        return startDate > today;
-    }).slice(0, 5); // Show only next 5 upcoming trips
-    
-    if (upcomingTrips.length === 0) {
-        upcomingTripsList.innerHTML = `
-            <div class="text-center text-muted py-3">
-                <i class="fas fa-calendar-times fa-2x mb-3"></i>
-                <p>No upcoming trips</p>
-                <button class="btn btn-primary btn-sm" id="create-trip-from-upcoming">
-                    <i class="fas fa-plus me-1"></i>Create New Trip
-                </button>
-            </div>
-        `;
-        
-        document.getElementById('create-trip-from-upcoming').addEventListener('click', showCreateTripModal);
-        return;
-    }
-    
-    upcomingTripsList.innerHTML = upcomingTrips.map(trip => {
-        const startDate = new Date(trip.startDate);
-        const daysUntil = Math.ceil((startDate - today) / (1000 * 60 * 60 * 24));
-        
-        return `
-            <div class="card mb-2">
-                <div class="card-body py-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="mb-1">${trip.name}</h6>
-                            <small class="text-muted">
-                                <i class="fas fa-map-marker-alt me-1"></i>${trip.startLocation} → ${trip.destination}
-                            </small>
-                            <br>
-                            <small class="text-muted">
-                                <i class="fas fa-calendar me-1"></i>${startDate.toLocaleDateString()}
-                            </small>
-                        </div>
-                        <div class="text-end">
-                            <span class="badge bg-primary">In ${daysUntil} days</span>
-                            <div class="mt-1">
-                                <small class="text-muted trip-code">${trip.code}</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }).join('');
-}
 
 // In dashboard.js, update the statistics section to be more descriptive
 function updateDashboardStats() {
@@ -567,11 +569,61 @@ function displayTrips() {
     
     emptyTrips.classList.add('d-none');
     tripsContainer.innerHTML = '';
-    
-    userTrips.forEach(trip => {
-        const tripCard = createTripCard(trip);
-        tripsContainer.appendChild(tripCard);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Separate trips into Active/Upcoming and Completed
+    const activeTrips = userTrips.filter(trip => {
+        const endDate = new Date(trip.endDate);
+        return endDate >= today;
     });
+
+    const completedTrips = userTrips.filter(trip => {
+        const endDate = new Date(trip.endDate);
+        return endDate < today;
+    });
+
+    // Render Active/Upcoming Trips
+    if (activeTrips.length > 0) {
+        activeTrips.forEach(trip => {
+            const tripCard = createTripCard(trip);
+            tripsContainer.appendChild(tripCard);
+        });
+    } else if (completedTrips.length > 0) {
+        const noActiveMsg = document.createElement('div');
+        noActiveMsg.className = 'col-12 mb-4 text-center text-muted py-4 bg-white rounded shadow-sm';
+        noActiveMsg.innerHTML = '<i class="fas fa-plane-departure fa-2x mb-3 text-secondary"></i><p class="mb-0">No upcoming trips. Plan your next adventure!</p>';
+        tripsContainer.appendChild(noActiveMsg);
+    }
+
+    // Render Completed Trips Section (Hidden by default)
+    if (completedTrips.length > 0) {
+        const toggleContainer = document.createElement('div');
+        toggleContainer.className = 'col-12 text-center my-4';
+        toggleContainer.innerHTML = `
+            <button class="btn btn-light rounded-pill px-4 shadow-sm fw-bold text-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#completedTripsSection">
+                <i class="fas fa-history me-2"></i>View Completed Trips (${completedTrips.length})
+            </button>
+        `;
+        tripsContainer.appendChild(toggleContainer);
+
+        const completedSection = document.createElement('div');
+        completedSection.className = 'col-12 collapse';
+        completedSection.id = 'completedTripsSection';
+        
+        const rowDiv = document.createElement('div');
+        rowDiv.className = 'row';
+
+        completedTrips.forEach(trip => {
+            const tripCard = createTripCard(trip);
+            tripCard.querySelector('.card').classList.add('opacity-75'); // Visual cue for completed
+            rowDiv.appendChild(tripCard);
+        });
+
+        completedSection.appendChild(rowDiv);
+        tripsContainer.appendChild(completedSection);
+    }
 }
 
 function createTripCard(trip) {
@@ -729,12 +781,14 @@ function createTripCard(trip) {
 
 function showCreateTripModal() {
     if (!auth.currentUser) {
-        showAuthModal();
+        window.location.href = 'login.html';
         return;
     }
     
     // Original create trip modal code...
     document.getElementById('create-trip-form').reset();
+    document.getElementById('transport-mode').value = 'car';
+    document.getElementById('distance-calc-container').classList.remove('d-none');
     document.getElementById('distance-results').classList.add('d-none');
     document.getElementById('calculate-distance').checked = false;
     
@@ -752,6 +806,7 @@ function showCreateTripModal() {
 function showEditTripModal(trip) {
     document.getElementById('edit-trip-id').value = trip.id;
     document.getElementById('edit-trip-name').value = trip.name;
+    document.getElementById('edit-transport-mode').value = trip.transportMode || 'car';
     document.getElementById('edit-start-location').value = trip.startLocation;
     document.getElementById('edit-trip-destination').value = trip.destination;
     document.getElementById('edit-start-date').value = trip.startDate;
@@ -787,7 +842,7 @@ function showDeleteTripModal(trip) {
 
 function showJoinTripModal() {
     if (!auth.currentUser) {
-        showAuthModal();
+        window.location.href = 'login.html';
         return;
     }
     
@@ -887,6 +942,7 @@ function displayDistanceResults(distance, duration) {
 
 async function saveTrip() {
     const name = document.getElementById('trip-name').value;
+    const transportMode = document.getElementById('transport-mode').value;
     const startLocation = document.getElementById('start-location').value;
     const destination = document.getElementById('trip-destination').value;
     const startDate = document.getElementById('start-date').value;
@@ -914,6 +970,7 @@ async function saveTrip() {
     // Create trip data with proper structure
     const tripData = {
         name: name.trim(),
+        transportMode,
         startLocation: startLocation.trim(),
         destination: destination.trim(),
         startDate,
@@ -989,6 +1046,7 @@ async function saveTrip() {
 async function updateTrip() {
     const tripId = document.getElementById('edit-trip-id').value;
     const name = document.getElementById('edit-trip-name').value;
+    const transportMode = document.getElementById('edit-transport-mode').value;
     const startLocation = document.getElementById('edit-start-location').value;
     const destination = document.getElementById('edit-trip-destination').value;
     const startDate = document.getElementById('edit-start-date').value;
@@ -1017,6 +1075,7 @@ async function updateTrip() {
         
         const updateData = {
             name: name.trim(),
+            transportMode,
             startLocation: startLocation.trim(),
             destination: destination.trim(),
             startDate,
@@ -1199,6 +1258,10 @@ function copyTripCode() {
 }
 
 async function handleLogout() {
+    if (!confirm('Are you sure you want to log out?')) {
+        return;
+    }
+
     try {
         // Show loading state
         const logoutBtn = document.getElementById('logout-btn');
@@ -1388,17 +1451,17 @@ function showPrivateDashboard() {
     updateNavigationBasedOnAuth(true);
 }
 
-function showAuthModal() {
-    const modal = new bootstrap.Modal(document.getElementById('authModal'));
-    modal.show();
-}
-
 function redirectToAuth() {
     navigateTo('auth.html');
 }
 
 function updateNavigationBasedOnAuth(isLoggedIn) {
     const navAuthSection = document.getElementById('nav-auth-section');
+    const mobileLogoutBtn = document.getElementById('mobile-logout-btn');
+    
+    if (mobileLogoutBtn) {
+        mobileLogoutBtn.style.display = isLoggedIn ? 'block' : 'none';
+    }
     
     if (!navAuthSection) return;
     
@@ -1432,7 +1495,7 @@ function updateNavigationBasedOnAuth(isLoggedIn) {
         setTimeout(() => {
             const loginBtn = document.getElementById('login-btn');
             if (loginBtn) {
-                loginBtn.addEventListener('click', showAuthModal);
+                loginBtn.addEventListener('click', () => window.location.href = 'login.html');
             }
         }, 100);
     }
@@ -1445,7 +1508,7 @@ function setupProtectedNavigation() {
         carCalcLink.addEventListener('click', function(e) {
             if (!auth.currentUser) {
                 e.preventDefault();
-                showAuthModal();
+                window.location.href = 'login.html';
             }
         });
     }
@@ -1456,7 +1519,7 @@ function setupProtectedNavigation() {
         createFirstTripBtn.addEventListener('click', function(e) {
             if (!auth.currentUser) {
                 e.preventDefault();
-                showAuthModal();
+                window.location.href = 'login.html';
             }
         });
     }
@@ -1466,7 +1529,7 @@ function setupProtectedNavigation() {
         navProfile.addEventListener('click', function(e) {
             if (!auth.currentUser) {
                 e.preventDefault();
-                showAuthModal();
+                window.location.href = 'login.html';
             }
         });
     }
