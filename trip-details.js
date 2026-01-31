@@ -9,6 +9,10 @@ let currentFilters = {
     member: 'all',
     date: 'all'
 };
+let tripMarkers = {};
+let routePolyline = null;
+let memberCache = {};
+let memberPromises = {};
 
 // Professional category system with icons (Add this at the top with other variables)
 const professionalCategories = [
@@ -192,6 +196,7 @@ function renderCategoryGrid(categories, gridElement, selectElement) {
 document.addEventListener('DOMContentLoaded', function() {
     // Only setup event listeners, checkAuthState will handle the rest
     checkAuthState();
+    setupTheme();
     setupTripDetailsEventListeners();
 });
 
@@ -224,6 +229,16 @@ function setupTripDetailsEventListeners() {
     
     // Enhanced CRUD event listeners
     setupEnhancedCRUDEventListeners();
+
+    // Map initialization on tab show
+    const routeTab = document.querySelector('a[href="#route"]');
+    if (routeTab) {
+        routeTab.addEventListener('shown.bs.tab', function (e) {
+            if (currentTrip) {
+                loadTripMap(currentTrip);
+            }
+        });
+    }
 }
 
 function setupEnhancedCRUDEventListeners() {
@@ -275,6 +290,16 @@ function setupEnhancedCRUDEventListeners() {
             console.log('Share settlement button clicked');
             shareSettlementPlan();
         }
+
+        // Handle activity item click (for map zoom)
+        const activityItem = e.target.closest('.activity-item');
+        // Ensure we didn't click a button inside the item
+        if (activityItem && !e.target.closest('.btn')) {
+            const locationName = activityItem.dataset.location;
+            if (locationName) {
+                zoomToLocation(locationName);
+            }
+        }
     });
 }
 
@@ -282,7 +307,7 @@ function checkAuthState() {
     auth.onAuthStateChanged(async (user) => {
         if (!user) {
             // User is not signed in, redirect to auth page
-            navigateTo('auth.html');
+            navigateTo('login.html');
         } else {
             loadUserData();
             await loadTripDetails();
@@ -329,10 +354,13 @@ async function loadTripDetails() {
         document.getElementById('trip-details-code').textContent = currentTrip.code;
         
         // Load all trip data
-        await loadTripOverview(currentTrip);
-        loadTripExpenses(currentTrip);
-        loadTripItinerary(currentTrip);
-        loadTripRoute(currentTrip);
+        await Promise.all([
+            loadTripOverview(currentTrip),
+            loadTripExpenses(currentTrip),
+            loadTripItinerary(currentTrip),
+            loadTripRoute(currentTrip),
+            loadTripWeather(currentTrip)
+        ]);
         
         // Add leave trip button if user is not the creator
         if (currentTrip.createdBy !== user.uid) {
@@ -401,6 +429,11 @@ async function loadTripOverview(trip) {
 
 function addCarExpenseSection(trip) {
     const overviewTab = document.getElementById('overview');
+
+    // Only show for car trips
+    if (trip.transportMode && trip.transportMode !== 'car') {
+        return;
+    }
     
     // Remove existing car expense section if it exists
     const existingSection = overviewTab.querySelector('#car-expense-section');
@@ -476,6 +509,7 @@ async function loadTripMembers(trip) {
                 
                 if (userDoc.exists) {
                     const userData = userDoc.data();
+                    memberCache[memberId] = userData.name || userData.displayName || userData.email || 'Traveler';
                     return {
                         id: memberId,
                         name: userData.name || userData.displayName || userData.email || 'Traveler',
@@ -798,11 +832,7 @@ function getPaymentModeInfo(paymentMode) {
 async function getMemberName(memberId) {
     try {
         if (memberId === auth.currentUser.uid) return 'You';
-        
-        // Check if we're trying to get the current user's name from Firestore
-        if (memberId === auth.currentUser.uid) {
-            return auth.currentUser.displayName || auth.currentUser.email || 'You';
-        }
+        if (memberCache[memberId]) return memberCache[memberId];
 
         // Check manual members
         if (currentTrip && currentTrip.manualMembers) {
@@ -810,18 +840,27 @@ async function getMemberName(memberId) {
             if (manual) return manual.name + ' (Manual)';
         }
         
-        const userDoc = await db.collection('users').doc(memberId).get();
-        if (userDoc.exists) {
-            const userData = userDoc.data();
-            return userData.name || userData.displayName || userData.email || 'Traveler';
+        // Check if request is already in progress
+        if (memberPromises[memberId]) {
+            return await memberPromises[memberId];
         }
         
-        // If user document doesn't exist, try to get from auth (for current user)
-        if (memberId === auth.currentUser.uid) {
-            return auth.currentUser.displayName || auth.currentUser.email || 'You';
-        }
+        // Create new request
+        const promise = (async () => {
+            const userDoc = await db.collection('users').doc(memberId).get();
+            if (userDoc.exists) {
+                const userData = userDoc.data();
+                const name = userData.name || userData.displayName || userData.email || 'Traveler';
+                memberCache[memberId] = name;
+                return name;
+            }
+            return 'Traveler';
+        })();
         
-        return 'Traveler';
+        memberPromises[memberId] = promise;
+        const result = await promise;
+        delete memberPromises[memberId];
+        return result;
     } catch (error) {
         console.error('Error getting member name:', error);
         
@@ -1099,7 +1138,8 @@ async function loadTripItinerary(trip) {
                         const memberName = memberNames[activity.addedBy] || 'Traveler';
                         
                         return `
-                            <div class="d-flex align-items-start mb-3 p-3 border rounded activity-item">
+                            <div class="d-flex align-items-start mb-3 p-3 border rounded activity-item" 
+                                 data-location="${activity.place}" style="cursor: pointer;" title="Click to view on map">
                                 <div class="me-3 text-center flex-shrink-0">
                                     <div class="bg-primary text-white rounded p-2" style="width: 80px;">
                                         <div class="fw-bold small">${activity.time}</div>
@@ -1223,6 +1263,120 @@ function loadTripRoute(trip) {
         routeDetails.innerHTML = '';
         emptyRoute.classList.remove('d-none');
     }
+}
+
+let tripMap = null; // Ensure this is defined if not already
+
+async function loadTripMap(trip) {
+    const mapElement = document.getElementById('trip-map');
+    if (!mapElement) return;
+
+    // Initialize map if needed
+    if (!tripMap) {
+        tripMap = L.map('trip-map').setView([0, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(tripMap);
+    } else {
+        tripMap.invalidateSize();
+    }
+
+    // Clear existing layers (markers and polyline)
+    if (tripMap) {
+        tripMap.eachLayer((layer) => {
+            if (layer instanceof L.Marker || layer instanceof L.Polyline) {
+                tripMap.removeLayer(layer);
+            }
+        });
+    }
+
+    tripMarkers = {};
+    const pathCoordinates = [];
+
+    // Helper to add marker and collect coordinates
+    const addMarker = async (name, type, details) => {
+        try {
+            const coords = await geocodeLocation(name);
+            // OpenRouteService returns [lon, lat], Leaflet needs [lat, lon]
+            const latLng = [coords[1], coords[0]];
+            
+            const marker = L.marker(latLng).addTo(tripMap)
+                .bindPopup(`<b>${type}:</b> ${name}${details ? '<br>' + details : ''}`);
+            
+            tripMarkers[name] = marker;
+            pathCoordinates.push(latLng);
+        } catch (e) {
+            console.warn(`Could not map location: ${name}`);
+        }
+    };
+
+    // 1. Start Location
+    if (trip.startLocation) await addMarker(trip.startLocation, 'Start', '');
+
+    // 2. Itinerary Items (Sorted Chronologically)
+    if (trip.itinerary && trip.itinerary.length > 0) {
+        const sortedItinerary = [...trip.itinerary].sort((a, b) => {
+            if (a.day !== b.day) return a.day - b.day;
+            return a.time.localeCompare(b.time);
+        });
+
+        for (const activity of sortedItinerary) {
+            if (activity.place) {
+                await addMarker(activity.place, `Day ${activity.day}`, `${activity.time} - ${activity.notes || ''}`);
+            }
+        }
+    }
+
+    // 3. Destination
+    if (trip.destination) await addMarker(trip.destination, 'Destination', '');
+
+    // Draw Polyline connecting all points
+    if (pathCoordinates.length > 1) {
+        routePolyline = L.polyline(pathCoordinates, {
+            color: '#6366f1', // Primary color
+            weight: 4,
+            opacity: 0.7,
+            dashArray: '10, 10',
+            lineJoin: 'round'
+        }).addTo(tripMap);
+        
+        tripMap.fitBounds(routePolyline.getBounds().pad(0.1));
+    } else if (pathCoordinates.length === 1) {
+        tripMap.setView(pathCoordinates[0], 10);
+    }
+}
+
+function zoomToLocation(locationName) {
+    // Switch to route tab if not active
+    const routeTabLink = document.querySelector('a[href="#route"]');
+    if (routeTabLink && !routeTabLink.classList.contains('active')) {
+        const tab = new bootstrap.Tab(routeTabLink);
+        tab.show();
+    }
+    
+    // Wait for tab switch animation/rendering
+    setTimeout(() => {
+        const marker = tripMarkers[locationName];
+        if (marker && tripMap) {
+            tripMap.flyTo(marker.getLatLng(), 14, {
+                duration: 1.5
+            });
+            marker.openPopup();
+        } else {
+            // Try to find it loosely if exact match fails
+            const foundKey = Object.keys(tripMarkers).find(key => 
+                key.toLowerCase().includes(locationName.toLowerCase()) || 
+                locationName.toLowerCase().includes(key.toLowerCase())
+            );
+            
+            if (foundKey && tripMarkers[foundKey]) {
+                tripMap.flyTo(tripMarkers[foundKey].getLatLng(), 14);
+                tripMarkers[foundKey].openPopup();
+            } else {
+                showToast(`Location "${locationName}" not found on map`, 'warning');
+            }
+        }
+    }, 200);
 }
 
 function showAddExpenseModal() {
@@ -1996,6 +2150,10 @@ function addLeaveTripButton() {
 }
 
 function handleLogout() {
+    if (!confirm('Are you sure you want to log out?')) {
+        return;
+    }
+
     auth.signOut().then(() => {
         // Redirect to dashboard (which will show public view) instead of auth page
         navigateTo('dashboard.html');
@@ -2073,6 +2231,7 @@ function editCurrentTrip() {
     // Populate the edit modal with current trip data
     document.getElementById('edit-trip-id').value = currentTrip.id;
     document.getElementById('edit-trip-name').value = currentTrip.name;
+    document.getElementById('edit-transport-mode').value = currentTrip.transportMode || 'car';
     document.getElementById('edit-start-location').value = currentTrip.startLocation;
     document.getElementById('edit-trip-destination').value = currentTrip.destination;
     document.getElementById('edit-start-date').value = currentTrip.startDate;
@@ -2156,8 +2315,10 @@ function showProfileModal() {
                                 <small class="text-muted">Email cannot be changed</small>
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">User ID</label>
-                                <input type="text" class="form-control" value="${user.uid}" disabled>
+                                <label class="form-label">Password</label>
+                                <button type="button" class="btn btn-outline-secondary w-100" onclick="handleChangePassword()">
+                                    <i class="fas fa-key me-1"></i>Change Password
+                                </button>
                             </div>
                         </form>
                     </div>
@@ -2222,9 +2383,32 @@ async function updateProfile() {
     }
 }
 
+async function handleChangePassword() {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const isGoogle = user.providerData.some(userInfo => userInfo.providerId === 'google.com');
+    
+    if (isGoogle) {
+        showToast('You are logged in with Google. Please change your password via Google Account settings.', 'info');
+        return;
+    }
+
+    if (confirm(`Send password reset email to ${user.email}?`)) {
+        try {
+            await auth.sendPasswordResetEmail(user.email);
+            showToast('Password reset email sent!', 'success');
+        } catch (error) {
+            console.error('Error sending reset email:', error);
+            showToast('Error sending reset email: ' + error.message, 'danger');
+        }
+    }
+}
+
 async function updateTripFromDetails() {
     const tripId = document.getElementById('edit-trip-id').value;
     const name = document.getElementById('edit-trip-name').value;
+    const transportMode = document.getElementById('edit-transport-mode').value;
     const startLocation = document.getElementById('edit-start-location').value;
     const destination = document.getElementById('edit-trip-destination').value;
     const startDate = document.getElementById('edit-start-date').value;
@@ -2254,6 +2438,7 @@ async function updateTripFromDetails() {
         
         const updateData = {
             name: name.trim(),
+            transportMode,
             startLocation: startLocation.trim(),
             destination: destination.trim(),
             startDate,
@@ -3170,3 +3355,102 @@ function loadRecentExpenses(trip) {
 // Make function available globally for inline onclick
 window.shareSettlementPlan = shareSettlementPlan;
 window.showAddManualMemberModal = showAddManualMemberModal;
+
+async function loadTripWeather(trip) {
+    const weatherCard = document.getElementById('weather-widget-card');
+    const weatherContent = document.getElementById('weather-widget-content');
+    
+    if (!trip.destination || !weatherCard || !weatherContent) return;
+
+    // Show card with loading state
+    weatherCard.style.display = 'block';
+
+    try {
+        // Get coordinates using existing geocode function
+        const coords = await geocodeLocation(trip.destination); // returns [lon, lat]
+        const lat = coords[1];
+        const lon = coords[0];
+
+        // Fetch weather from Open-Meteo (Free API, no key required)
+        const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto`);
+        
+        if (!response.ok) throw new Error('Weather API failed');
+        
+        const data = await response.json();
+        const current = data.current_weather;
+        const daily = data.daily;
+
+        // Map WMO weather codes to icons and descriptions
+        const getWeatherInfo = (code) => {
+            const codes = {
+                0: { icon: 'fa-sun', text: 'Clear sky', color: 'text-warning' },
+                1: { icon: 'fa-cloud-sun', text: 'Mainly clear', color: 'text-warning' },
+                2: { icon: 'fa-cloud-sun', text: 'Partly cloudy', color: 'text-secondary' },
+                3: { icon: 'fa-cloud', text: 'Overcast', color: 'text-secondary' },
+                45: { icon: 'fa-smog', text: 'Fog', color: 'text-secondary' },
+                48: { icon: 'fa-smog', text: 'Depositing rime fog', color: 'text-secondary' },
+                51: { icon: 'fa-cloud-rain', text: 'Light drizzle', color: 'text-info' },
+                53: { icon: 'fa-cloud-rain', text: 'Moderate drizzle', color: 'text-info' },
+                55: { icon: 'fa-cloud-rain', text: 'Dense drizzle', color: 'text-info' },
+                61: { icon: 'fa-cloud-showers-heavy', text: 'Slight rain', color: 'text-primary' },
+                63: { icon: 'fa-cloud-showers-heavy', text: 'Moderate rain', color: 'text-primary' },
+                65: { icon: 'fa-cloud-showers-heavy', text: 'Heavy rain', color: 'text-primary' },
+                71: { icon: 'fa-snowflake', text: 'Slight snow', color: 'text-info' },
+                73: { icon: 'fa-snowflake', text: 'Moderate snow', color: 'text-info' },
+                75: { icon: 'fa-snowflake', text: 'Heavy snow', color: 'text-info' },
+                80: { icon: 'fa-cloud-showers-heavy', text: 'Slight rain showers', color: 'text-primary' },
+                81: { icon: 'fa-cloud-showers-heavy', text: 'Moderate rain showers', color: 'text-primary' },
+                82: { icon: 'fa-cloud-showers-heavy', text: 'Violent rain showers', color: 'text-primary' },
+                95: { icon: 'fa-bolt', text: 'Thunderstorm', color: 'text-warning' },
+                96: { icon: 'fa-bolt', text: 'Thunderstorm with hail', color: 'text-danger' },
+                99: { icon: 'fa-bolt', text: 'Thunderstorm with hail', color: 'text-danger' }
+            };
+            return codes[code] || { icon: 'fa-cloud', text: 'Unknown', color: 'text-secondary' };
+        };
+
+        const currentInfo = getWeatherInfo(current.weathercode);
+
+        let forecastHtml = '';
+        // Show next 3 days forecast
+        for(let i = 1; i <= 3; i++) {
+            if (daily.time[i]) {
+                const dayInfo = getWeatherInfo(daily.weathercode[i]);
+                const date = new Date(daily.time[i]);
+                const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+                
+                forecastHtml += `
+                    <div class="col-4 text-center border-end">
+                        <small class="d-block text-muted">${dayName}</small>
+                        <i class="fas ${dayInfo.icon} ${dayInfo.color} my-1"></i>
+                        <div class="small fw-bold">${Math.round(daily.temperature_2m_max[i])}°</div>
+                        <div class="small text-muted" style="font-size: 0.7rem;">${Math.round(daily.temperature_2m_min[i])}°</div>
+                    </div>
+                `;
+            }
+        }
+
+        weatherContent.innerHTML = `
+            <div class="d-flex align-items-center justify-content-between mb-3">
+                <div>
+                    <h2 class="mb-0 display-6 fw-bold">${Math.round(current.temperature)}°C</h2>
+                    <div class="text-muted small">${currentInfo.text}</div>
+                </div>
+                <div class="text-center">
+                    <i class="fas ${currentInfo.icon} ${currentInfo.color} fa-3x"></i>
+                </div>
+            </div>
+            <div class="row g-0 border-top pt-2">
+                ${forecastHtml.replace(/border-end(?![\s\S]*border-end)/, '')}
+            </div>
+        `;
+
+    } catch (error) {
+        console.error('Error loading weather:', error);
+        weatherContent.innerHTML = `
+            <div class="text-center text-muted py-2">
+                <i class="fas fa-cloud-showers-heavy mb-2"></i>
+                <p class="mb-0 small">Weather data unavailable</p>
+            </div>
+        `;
+    }
+}
