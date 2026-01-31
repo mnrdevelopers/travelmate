@@ -7,6 +7,7 @@ let currentFillUpTrip = null;
 
 document.addEventListener('DOMContentLoaded', function() {
     checkAuthState();
+    setupTheme();
 });
 
 function setupCarCalculatorEventListeners() {
@@ -736,7 +737,7 @@ function checkAuthState() {
             loadTripsForFuelTracking(); // Add this line
         } else {
             // User is signed out
-            navigateTo('auth.html');
+            navigateTo('login.html');
         }
     });
 }
@@ -750,7 +751,7 @@ function loadUserData() {
 
 function handleLogout() {
     auth.signOut().then(() => {
-        navigateTo('auth.html');
+        navigateTo('login.html');
     }).catch((error) => {
         console.error('Logout error:', error);
         showAlert('Error logging out', 'danger');
