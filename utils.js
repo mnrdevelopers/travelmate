@@ -355,3 +355,68 @@ function navigateTo(page) {
     }
     window.location.href = page;
 }
+
+// Global Theme Setup
+function setupTheme() {
+    const themeToggle = document.getElementById('theme-toggle');
+    const navbar = document.querySelector('.navbar');
+    const icon = themeToggle ? themeToggle.querySelector('i') : null;
+
+    // Function to apply theme
+    const applyTheme = (isDark) => {
+        if (isDark) {
+            document.body.classList.add('dark-mode');
+            if (icon) {
+                icon.classList.remove('fa-moon');
+                icon.classList.add('fa-sun');
+            }
+            if (navbar) {
+                navbar.classList.remove('navbar-light');
+                navbar.classList.add('navbar-dark');
+            }
+        } else {
+            document.body.classList.remove('dark-mode');
+            if (icon) {
+                icon.classList.remove('fa-sun');
+                icon.classList.add('fa-moon');
+            }
+            if (navbar) {
+                navbar.classList.remove('navbar-dark');
+                navbar.classList.add('navbar-light');
+            }
+        }
+    };
+
+    // Check saved theme or system preference
+    const savedTheme = localStorage.getItem('theme');
+    const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    
+    if (savedTheme === 'dark' || (!savedTheme && systemPrefersDark)) {
+        applyTheme(true);
+    } else {
+        applyTheme(false);
+    }
+
+    // Event listener for toggle button
+    if (themeToggle) {
+        // Clone to remove existing listeners if any
+        const newToggle = themeToggle.cloneNode(true);
+        themeToggle.parentNode.replaceChild(newToggle, themeToggle);
+        
+        newToggle.addEventListener('click', (e) => {
+            e.preventDefault();
+            const isDark = !document.body.classList.contains('dark-mode');
+            applyTheme(isDark);
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        });
+    }
+
+    // Listen for system preference changes if no manual override
+    if (window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+            if (!localStorage.getItem('theme')) {
+                applyTheme(e.matches);
+            }
+        });
+    }
+}
