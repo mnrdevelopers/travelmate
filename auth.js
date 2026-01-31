@@ -8,6 +8,22 @@ document.addEventListener('DOMContentLoaded', function() {
 function setupAuthEventListeners() {
     // Only Google Sign-In button
     document.getElementById('google-signin-btn').addEventListener('click', handleGoogleSignIn);
+    
+    // Email Auth Forms (if present)
+    const loginForm = document.getElementById('login-form');
+    const signupForm = document.getElementById('signup-form');
+    
+    if (loginForm) loginForm.addEventListener('submit', handleEmailLogin);
+    if (signupForm) signupForm.addEventListener('submit', handleEmailSignup);
+    
+    // Setup password toggles
+    setupPasswordToggles();
+    
+    // Forgot Password
+    const forgotPasswordLink = document.getElementById('forgot-password-link');
+    if (forgotPasswordLink) {
+        forgotPasswordLink.addEventListener('click', handleForgotPassword);
+    }
 }
 
 // Add this function to auth.js
@@ -35,12 +51,6 @@ function checkAuthStateAndRedirect() {
         showAuthMessage('Authentication error. Please refresh the page.', 'danger');
     });
 }
-
-// Update the DOMContentLoaded event listener
-document.addEventListener('DOMContentLoaded', function() {
-    checkAuthStateAndRedirect(); // Check if user is already logged in
-    setupAuthEventListeners();
-});
 
 function checkAuthState() {
     auth.onAuthStateChanged(user => {
@@ -149,6 +159,70 @@ async function handleGoogleSignIn() {
     }
 }
 
+async function handleEmailLogin(e) {
+    e.preventDefault();
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+    const btn = e.target.querySelector('button[type="submit"]');
+    
+    try {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Signing In...';
+        
+        await auth.signInWithEmailAndPassword(email, password);
+        // Redirect handled by onAuthStateChanged
+        
+    } catch (error) {
+        console.error('Login error:', error);
+        showAuthMessage(error.message, 'danger');
+        btn.disabled = false;
+        btn.innerHTML = 'Sign In';
+    }
+}
+
+async function handleEmailSignup(e) {
+    e.preventDefault();
+    const name = document.getElementById('signup-name').value;
+    const email = document.getElementById('signup-email').value;
+    const password = document.getElementById('signup-password').value;
+    const btn = e.target.querySelector('button[type="submit"]');
+    
+    // Password Complexity Validation
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    if (!passwordRegex.test(password)) {
+        showAuthMessage('Password must be at least 8 characters long and include uppercase, lowercase, number, and special character (@$!%*?&).', 'warning');
+        return;
+    }
+
+    try {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Creating Account...';
+        
+        const result = await auth.createUserWithEmailAndPassword(email, password);
+        const user = result.user;
+        
+        await user.updateProfile({
+            displayName: name
+        });
+        
+        // Create user document
+        await db.collection('users').doc(user.uid).set({
+            name: name,
+            email: email,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            provider: 'password'
+        });
+        
+        // Redirect handled by onAuthStateChanged
+        
+    } catch (error) {
+        console.error('Signup error:', error);
+        showAuthMessage(error.message, 'danger');
+        btn.disabled = false;
+        btn.innerHTML = 'Create Account';
+    }
+}
+
 function showAuthMessage(message, type) {
     const messageEl = document.getElementById('auth-message');
     messageEl.innerHTML = `
@@ -168,5 +242,51 @@ function getMessageIcon(type) {
         case 'warning': return 'exclamation-circle';
         case 'info': return 'info-circle';
         default: return 'info-circle';
+    }
+}
+
+function setupPasswordToggles() {
+    document.querySelectorAll('.password-toggle').forEach(toggle => {
+        toggle.addEventListener('click', function(e) {
+            e.preventDefault();
+            const btn = e.currentTarget;
+            const inputGroup = btn.closest('.input-group');
+            const input = inputGroup.querySelector('input');
+            const icon = btn.querySelector('i');
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            } else {
+                input.type = 'password';
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        });
+    });
+}
+
+async function handleForgotPassword(e) {
+    e.preventDefault();
+    const emailInput = document.getElementById('login-email');
+    const email = emailInput ? emailInput.value.trim() : '';
+    
+    if (!email) {
+        showAuthMessage('Please enter your email address first to reset password.', 'warning');
+        if (emailInput) emailInput.focus();
+        return;
+    }
+    
+    try {
+        await auth.sendPasswordResetEmail(email);
+        showAuthMessage('Password reset email sent! Please check your inbox.', 'success');
+    } catch (error) {
+        console.error('Reset password error:', error);
+        let errorMessage = error.message;
+        if (error.code === 'auth/user-not-found') {
+            errorMessage = 'No account found with this email address.';
+        }
+        showAuthMessage(errorMessage, 'danger');
     }
 }
