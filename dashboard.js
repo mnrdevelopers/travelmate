@@ -4,6 +4,7 @@ let customCategories = [];
 let carExpenseChart = null;
 let fuelPriceChart = null;
 let dashboardTrackerMap = null;
+let activeTripTrackerTimeout = null;
 
 document.addEventListener('DOMContentLoaded', function () {
     console.log('DOM loaded, initializing dashboard...');
@@ -934,219 +935,223 @@ function updateDashboardActiveTripTracker() {
     
     card.style.display = 'block';
     
-    // Initialize or resize Leaflet Map
-    if (!dashboardTrackerMap) {
-        const streetTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        });
-        
-        const satelliteTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, USDA, USGS, and the GIS User Community'
-        });
-        
-        const terrainTiles = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-            attribution: 'Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap (CC-BY-SA)'
-        });
-        
-        dashboardTrackerMap = L.map('dashboard-tracker-map', {
-            center: [20, 78],
-            zoom: 5,
-            layers: [streetTiles]
-        });
-        
-        const baseMaps = {
-            "Streets": streetTiles,
-            "Satellite": satelliteTiles,
-            "Terrain": terrainTiles
-        };
-        
-        L.control.layers(baseMaps).addTo(dashboardTrackerMap);
-        
-        // Add Live Location Button Control
-        const LiveButtonControl = L.Control.extend({
-            options: { position: 'topleft' },
-            onAdd: function(map) {
-                const btn = L.DomUtil.create('button', 'leaflet-bar leaflet-control leaflet-control-custom btn btn-light p-0 d-flex align-items-center justify-content-center');
-                btn.style.width = '30px';
-                btn.style.height = '30px';
-                btn.style.backgroundColor = '#ffffff';
-                btn.style.borderRadius = '4px';
-                btn.style.border = '2px solid rgba(0,0,0,0.2)';
-                btn.style.cursor = 'pointer';
-                btn.innerHTML = '<i class="fas fa-location-crosshairs text-success" style="font-size: 1rem;"></i>';
-                btn.title = 'Pan to live location';
-                
-                L.DomEvent.disableClickPropagation(btn);
-                
-                btn.onclick = function() {
-                    if ('geolocation' in navigator) {
-                        navigator.geolocation.getCurrentPosition((pos) => {
-                            const lat = pos.coords.latitude;
-                            const lon = pos.coords.longitude;
-                            map.setView([lat, lon], 14);
-                            
-                            // Draw a live location circle/marker
-                            L.circle([lat, lon], {
-                                radius: 80,
-                                color: '#147df5',
-                                fillColor: '#147df5',
-                                fillOpacity: 0.4
-                            }).addTo(map).bindPopup('Your Current GPS Location').openPopup();
-                        }, (err) => {
-                            console.error(err);
-                            alert('Could not determine GPS coordinates: ' + err.message);
-                        });
-                    } else {
-                        alert('Geolocation is not supported by this browser.');
-                    }
-                };
-                return btn;
-            }
-        });
-        dashboardTrackerMap.addControl(new LiveButtonControl());
-    } else {
-        setTimeout(() => {
-            dashboardTrackerMap.invalidateSize();
-        }, 100);
+    if (activeTripTrackerTimeout) {
+        clearTimeout(activeTripTrackerTimeout);
     }
     
-    // Clear old map layers
-    dashboardTrackerMap.eachLayer((layer) => {
-        if (layer instanceof L.Marker || layer instanceof L.Polyline) {
-            dashboardTrackerMap.removeLayer(layer);
-        }
-    });
-    
-    const pathCoordinates = [];
-    
-    // Helper to add custom icon markers to Leaflet
-    const addTrackerMarker = async (name, title, iconClass, isRoute = true) => {
-        try {
-            const coords = await geocodeLocation(name);
-            const latLng = [coords[1], coords[0]];
-            
-            const customIcon = L.divIcon({
-                html: `<div class="d-flex align-items-center justify-content-center bg-white rounded-circle shadow-sm" style="width: 28px; height: 28px; border: 2px solid #2d6a4f;"><i class="${iconClass}"></i></div>`,
-                className: 'custom-tracker-icon',
-                iconSize: [28, 28],
-                iconAnchor: [14, 14]
+    activeTripTrackerTimeout = setTimeout(async () => {
+        // Initialize or resize Leaflet Map
+        if (!dashboardTrackerMap) {
+            const streetTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
             });
             
-            L.marker(latLng, { icon: customIcon }).addTo(dashboardTrackerMap).bindPopup(`<b>${title}:</b> ${name}`);
-            
-            if (isRoute) {
-                pathCoordinates.push(latLng);
-            }
-            return latLng;
-        } catch (e) {
-            console.warn(`Could not geocode tracker marker: ${name}`);
-            return null;
-        }
-    };
-    
-    // Load markers asynchronously and draw path
-    const loadTrackerMapData = async () => {
-        const startLatLng = await addTrackerMarker(activeTrip.startLocation, 'Start Point', 'fas fa-circle-play text-success', true);
-        
-        if (activeTrip.stops && Array.isArray(activeTrip.stops)) {
-            for (let i = 0; i < activeTrip.stops.length; i++) {
-                const stop = activeTrip.stops[i];
-                if (stop) {
-                    await addTrackerMarker(stop, `Stop #${i + 1}`, 'fas fa-location-dot text-warning', true);
-                }
-            }
-        }
-        
-        const destLatLng = await addTrackerMarker(activeTrip.destination, 'Destination', 'fas fa-flag-checkered text-danger', true);
-        
-        // Render Vehicle Marker
-        let vehicleLatLng = null;
-        if (activeTrip.currentLocationName) {
-            vehicleLatLng = await addTrackerMarker(activeTrip.currentLocationName, 'Vehicle Position', `${vehicleIcon} animate-bounce-subtle`, false);
-        } else if (startLatLng) {
-            // Draw vehicle marker at start location so it's always shown
-            const customIcon = L.divIcon({
-                html: `<div class="d-flex align-items-center justify-content-center bg-white rounded-circle shadow-sm animate-pulse-slow" style="width: 32px; height: 32px; border: 2.5px solid #2d6a4f; z-index: 999;"><i class="${vehicleIcon}" style="font-size: 1.15rem;"></i></div>`,
-                className: 'custom-tracker-vehicle',
-                iconSize: [32, 32],
-                iconAnchor: [16, 16]
+            const satelliteTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri &mdash; Source: Esri, USDA, USGS, and the GIS User Community'
             });
-            L.marker(startLatLng, { icon: customIcon }).addTo(dashboardTrackerMap).bindPopup(`<b>Vehicle Position (Start):</b> ${activeTrip.startLocation}`);
-            vehicleLatLng = startLatLng;
-        }
-        
-        let routeCoords = null;
-        if (mode !== 'flight' && mode !== 'train') {
-            routeCoords = await fetchRouteGeometryCoords(activeTrip.startLocation, activeTrip.destination, activeTrip.stops);
-        }
-        
-        const finalCoords = routeCoords && routeCoords.length > 1 ? routeCoords : pathCoordinates;
-        
-        if (finalCoords.length > 1) {
-            if (mode === 'train') {
-                // Train track style: solid dark gray casing with white dashes on top
-                L.polyline(finalCoords, {
-                    color: '#333333',
-                    weight: 6,
-                    opacity: 0.9,
-                    lineJoin: 'round'
-                }).addTo(dashboardTrackerMap);
-                
-                const dashes = L.polyline(finalCoords, {
-                    color: '#ffffff',
-                    weight: 4,
-                    opacity: 1,
-                    dashArray: '8, 8',
-                    lineJoin: 'round'
-                }).addTo(dashboardTrackerMap);
-                
-                dashboardTrackerMap.fitBounds(dashes.getBounds().pad(0.15));
-            } else if (mode === 'flight') {
-                // Flight curve style: curved dashed blue/indigo line
-                const startPt = pathCoordinates[0];
-                const endPt = pathCoordinates[pathCoordinates.length - 1];
-                const curvedCoords = [];
-                const steps = 60;
-                for (let i = 0; i <= steps; i++) {
-                    const t = i / steps;
-                    const lat = startPt[0] + (endPt[0] - startPt[0]) * t;
-                    const lng = startPt[1] + (endPt[1] - startPt[1]) * t;
-                    const offset = Math.sin(t * Math.PI) * (Math.abs(endPt[1] - startPt[1]) * 0.15 + 2);
-                    curvedCoords.push([lat + offset, lng]);
+            
+            const terrainTiles = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+                attribution: 'Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap (CC-BY-SA)'
+            });
+            
+            dashboardTrackerMap = L.map('dashboard-tracker-map', {
+                center: [20, 78],
+                zoom: 5,
+                layers: [streetTiles]
+            });
+            
+            const baseMaps = {
+                "Streets": streetTiles,
+                "Satellite": satelliteTiles,
+                "Terrain": terrainTiles
+            };
+            
+            L.control.layers(baseMaps).addTo(dashboardTrackerMap);
+            
+            // Add Live Location Button Control
+            const LiveButtonControl = L.Control.extend({
+                options: { position: 'topleft' },
+                onAdd: function(map) {
+                    const btn = L.DomUtil.create('button', 'leaflet-bar leaflet-control leaflet-control-custom btn btn-light p-0 d-flex align-items-center justify-content-center');
+                    btn.style.width = '30px';
+                    btn.style.height = '30px';
+                    btn.style.backgroundColor = '#ffffff';
+                    btn.style.borderRadius = '4px';
+                    btn.style.border = '2px solid rgba(0,0,0,0.2)';
+                    btn.style.cursor = 'pointer';
+                    btn.innerHTML = '<i class="fas fa-location-crosshairs text-success" style="font-size: 1rem;"></i>';
+                    btn.title = 'Pan to live location';
+                    
+                    L.DomEvent.disableClickPropagation(btn);
+                    
+                    btn.onclick = function() {
+                        if ('geolocation' in navigator) {
+                            navigator.geolocation.getCurrentPosition((pos) => {
+                                const lat = pos.coords.latitude;
+                                const lon = pos.coords.longitude;
+                                map.setView([lat, lon], 14);
+                                
+                                // Draw a live location circle/marker
+                                L.circle([lat, lon], {
+                                    radius: 80,
+                                    color: '#147df5',
+                                    fillColor: '#147df5',
+                                    fillOpacity: 0.4
+                                }).addTo(map).bindPopup('Your Current GPS Location').openPopup();
+                            }, (err) => {
+                                console.error(err);
+                                alert('Could not determine GPS coordinates: ' + err.message);
+                            });
+                        } else {
+                            alert('Geolocation is not supported by this browser.');
+                        }
+                    };
+                    return btn;
                 }
-                const flightLine = L.polyline(curvedCoords, {
-                    color: '#6366f1',
-                    weight: 3.5,
-                    opacity: 0.85,
-                    dashArray: '6, 8',
-                    lineJoin: 'round'
-                }).addTo(dashboardTrackerMap);
-                
-                dashboardTrackerMap.fitBounds(flightLine.getBounds().pad(0.15));
-            } else {
-                // Road transport: solid dark green highway
-                L.polyline(finalCoords, {
-                    color: '#1b4332',
-                    weight: 6,
-                    opacity: 0.4,
-                    lineJoin: 'round'
-                }).addTo(dashboardTrackerMap);
-                
-                const roadLine = L.polyline(finalCoords, {
-                    color: '#2d6a4f',
-                    weight: 4,
-                    opacity: 0.9,
-                    lineJoin: 'round'
-                }).addTo(dashboardTrackerMap);
-                
-                dashboardTrackerMap.fitBounds(roadLine.getBounds().pad(0.15));
-            }
-        } else if (finalCoords.length === 1) {
-            dashboardTrackerMap.setView(finalCoords[0], 11);
+            });
+            dashboardTrackerMap.addControl(new LiveButtonControl());
+        } else {
+            dashboardTrackerMap.invalidateSize();
         }
-    };
-    
-    loadTrackerMapData();
+        
+        // Clear old map layers
+        dashboardTrackerMap.eachLayer((layer) => {
+            if (layer instanceof L.Marker || layer instanceof L.Polyline) {
+                dashboardTrackerMap.removeLayer(layer);
+            }
+        });
+        
+        const pathCoordinates = [];
+        
+        // Helper to add custom icon markers to Leaflet
+        const addTrackerMarker = async (name, title, iconClass, isRoute = true) => {
+            try {
+                const coords = await geocodeLocation(name);
+                const latLng = [coords[1], coords[0]];
+                
+                const customIcon = L.divIcon({
+                    html: `<div class="d-flex align-items-center justify-content-center bg-white rounded-circle shadow-sm" style="width: 28px; height: 28px; border: 2px solid #2d6a4f;"><i class="${iconClass}"></i></div>`,
+                    className: 'custom-tracker-icon',
+                    iconSize: [28, 28],
+                    iconAnchor: [14, 14]
+                });
+                
+                L.marker(latLng, { icon: customIcon }).addTo(dashboardTrackerMap).bindPopup(`<b>${title}:</b> ${name}`);
+                
+                if (isRoute) {
+                    pathCoordinates.push(latLng);
+                }
+                return latLng;
+            } catch (e) {
+                console.warn(`Could not geocode tracker marker: ${name}`);
+                return null;
+            }
+        };
+        
+        // Load markers asynchronously and draw path
+        const loadTrackerMapData = async () => {
+            const startLatLng = await addTrackerMarker(activeTrip.startLocation, 'Start Point', 'fas fa-circle-play text-success', true);
+            
+            if (activeTrip.stops && Array.isArray(activeTrip.stops)) {
+                for (let i = 0; i < activeTrip.stops.length; i++) {
+                    const stop = activeTrip.stops[i];
+                    if (stop) {
+                        await addTrackerMarker(stop, `Stop #${i + 1}`, 'fas fa-location-dot text-warning', true);
+                    }
+                }
+            }
+            
+            const destLatLng = await addTrackerMarker(activeTrip.destination, 'Destination', 'fas fa-flag-checkered text-danger', true);
+            
+            // Render Vehicle Marker
+            let vehicleLatLng = null;
+            if (activeTrip.currentLocationName) {
+                vehicleLatLng = await addTrackerMarker(activeTrip.currentLocationName, 'Vehicle Position', `${vehicleIcon} animate-bounce-subtle`, false);
+            } else if (startLatLng) {
+                // Draw vehicle marker at start location so it's always shown
+                const customIcon = L.divIcon({
+                    html: `<div class="d-flex align-items-center justify-content-center bg-white rounded-circle shadow-sm animate-pulse-slow" style="width: 32px; height: 32px; border: 2.5px solid #2d6a4f; z-index: 999;"><i class="${vehicleIcon}" style="font-size: 1.15rem;"></i></div>`,
+                    className: 'custom-tracker-vehicle',
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16]
+                });
+                L.marker(startLatLng, { icon: customIcon }).addTo(dashboardTrackerMap).bindPopup(`<b>Vehicle Position (Start):</b> ${activeTrip.startLocation}`);
+                vehicleLatLng = startLatLng;
+            }
+            
+            let routeCoords = null;
+            if (mode !== 'flight' && mode !== 'train') {
+                routeCoords = await fetchRouteGeometryCoords(activeTrip.startLocation, activeTrip.destination, activeTrip.stops);
+            }
+            
+            const finalCoords = routeCoords && routeCoords.length > 1 ? routeCoords : pathCoordinates;
+            
+            if (finalCoords.length > 1) {
+                if (mode === 'train') {
+                    // Train track style: solid dark gray casing with white dashes on top
+                    L.polyline(finalCoords, {
+                        color: '#333333',
+                        weight: 6,
+                        opacity: 0.9,
+                        lineJoin: 'round'
+                    }).addTo(dashboardTrackerMap);
+                    
+                    const dashes = L.polyline(finalCoords, {
+                        color: '#ffffff',
+                        weight: 4,
+                        opacity: 1,
+                        dashArray: '8, 8',
+                        lineJoin: 'round'
+                    }).addTo(dashboardTrackerMap);
+                    
+                    dashboardTrackerMap.fitBounds(dashes.getBounds().pad(0.15));
+                } else if (mode === 'flight') {
+                    // Flight curve style: curved dashed blue/indigo line
+                    const startPt = pathCoordinates[0];
+                    const endPt = pathCoordinates[pathCoordinates.length - 1];
+                    const curvedCoords = [];
+                    const steps = 60;
+                    for (let i = 0; i <= steps; i++) {
+                        const t = i / steps;
+                        const lat = startPt[0] + (endPt[0] - startPt[0]) * t;
+                        const lng = startPt[1] + (endPt[1] - startPt[1]) * t;
+                        const offset = Math.sin(t * Math.PI) * (Math.abs(endPt[1] - startPt[1]) * 0.15 + 2);
+                        curvedCoords.push([lat + offset, lng]);
+                    }
+                    const flightLine = L.polyline(curvedCoords, {
+                        color: '#6366f1',
+                        weight: 3.5,
+                        opacity: 0.85,
+                        dashArray: '6, 8',
+                        lineJoin: 'round'
+                    }).addTo(dashboardTrackerMap);
+                    
+                    dashboardTrackerMap.fitBounds(flightLine.getBounds().pad(0.15));
+                } else {
+                    // Road transport: solid dark green highway
+                    L.polyline(finalCoords, {
+                        color: '#1b4332',
+                        weight: 6,
+                        opacity: 0.4,
+                        lineJoin: 'round'
+                    }).addTo(dashboardTrackerMap);
+                    
+                    const roadLine = L.polyline(finalCoords, {
+                        color: '#2d6a4f',
+                        weight: 4,
+                        opacity: 0.9,
+                        lineJoin: 'round'
+                    }).addTo(dashboardTrackerMap);
+                    
+                    dashboardTrackerMap.fitBounds(roadLine.getBounds().pad(0.15));
+                }
+            } else if (finalCoords.length === 1) {
+                dashboardTrackerMap.setView(finalCoords[0], 11);
+            }
+        };
+        
+        await loadTrackerMapData();
+    }, 150);
     
     // Wire up prompt and GPS handlers
     setTimeout(() => {
