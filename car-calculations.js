@@ -686,7 +686,14 @@ function openVehicleManager(index) {
     document.getElementById('manage-plate-number').value = vehicle.plateNumber || '';
     document.getElementById('manage-fastag-id').value = vehicle.fastagId || '';
     
-    const balance = vehicle.fastagBalance !== undefined ? vehicle.fastagBalance : 500;
+    let balance = vehicle.fastagBalance;
+    if ((balance === undefined || balance === null) && vehicle.fastagId) {
+        balance = getStableMockBalance(vehicle.fastagId);
+        vehicle.fastagBalance = balance;
+    } else if (balance === undefined || balance === null) {
+        balance = 500;
+    }
+    
     document.getElementById('manage-fastag-balance').textContent = `₹${balance.toFixed(2)}`;
     
     // Check low balance alert display
@@ -853,11 +860,16 @@ function checkVehicleAlertsOnLoad() {
     
     savedVehicles.forEach(vehicle => {
         // FASTag low balance alert
-        if (vehicle.fastagBalance !== undefined && vehicle.fastagBalance < 250) {
+        let balance = vehicle.fastagBalance;
+        if ((balance === undefined || balance === null) && vehicle.fastagId) {
+            balance = getStableMockBalance(vehicle.fastagId);
+            vehicle.fastagBalance = balance;
+        }
+        if (balance !== undefined && balance !== null && balance < 250) {
             alertsList.push({
                 type: 'warning',
                 title: `Low FASTag Balance (${vehicle.name})`,
-                desc: `FASTag balance is ₹${vehicle.fastagBalance.toFixed(2)}. Please recharge soon.`,
+                desc: `FASTag balance is ₹${balance.toFixed(2)}. Please recharge soon.`,
                 icon: 'fas fa-ticket'
             });
         }

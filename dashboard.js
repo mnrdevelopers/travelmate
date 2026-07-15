@@ -3455,11 +3455,16 @@ async function checkDashboardVehicleAlerts() {
             
             savedVehicles.forEach(vehicle => {
                 // FASTag low balance alert
-                if (vehicle.fastagBalance !== undefined && vehicle.fastagBalance < 250) {
+                let balance = vehicle.fastagBalance;
+                if ((balance === undefined || balance === null) && vehicle.fastagId) {
+                    balance = getStableMockBalance(vehicle.fastagId);
+                    vehicle.fastagBalance = balance;
+                }
+                if (balance !== undefined && balance !== null && balance < 250) {
                     alertsList.push({
                         type: 'warning',
                         title: `Low FASTag Balance (${vehicle.name})`,
-                        desc: `FASTag balance is ₹${vehicle.fastagBalance.toFixed(2)}. Please recharge soon.`,
+                        desc: `FASTag balance is ₹${balance.toFixed(2)}. Please recharge soon.`,
                         icon: 'fas fa-ticket'
                     });
                 }

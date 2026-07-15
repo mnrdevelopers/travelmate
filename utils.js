@@ -1293,3 +1293,14 @@ async function fetchRouteGeometryCoords(startLocation, destination, stops = []) 
     return null;
 }
 
+function getStableMockBalance(tagId) {
+    if (!tagId) return 0;
+    let hash = 0;
+    for (let i = 0; i < tagId.length; i++) {
+        hash = tagId.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    // Generate a balance between 50 and 1500
+    const balance = 50 + (Math.abs(hash) % 1450);
+    return Math.round(balance * 100) / 100;
+}
+
