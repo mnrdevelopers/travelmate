@@ -1887,15 +1887,16 @@ async function loadTripMap(trip) {
     }
 
     // Draw Polyline connecting all points
+    const mode = (trip.transportMode || 'car').toLowerCase().trim();
     let routeCoords = null;
-    if (trip.transportMode !== 'flight') {
+    if (mode !== 'flight' && mode !== 'train') {
         routeCoords = await fetchRouteGeometryCoords(trip.startLocation, trip.destination, trip.stops);
     }
     
     const finalCoords = routeCoords && routeCoords.length > 1 ? routeCoords : pathCoordinates;
     
     if (finalCoords.length > 1) {
-        if (trip.transportMode === 'train') {
+        if (mode === 'train') {
             // Train track style: solid dark gray casing with white dashes on top
             L.polyline(finalCoords, {
                 color: '#333333',
@@ -1913,7 +1914,7 @@ async function loadTripMap(trip) {
             }).addTo(tripMap);
             
             tripMap.fitBounds(routePolyline.getBounds().pad(0.15));
-        } else if (trip.transportMode === 'flight') {
+        } else if (mode === 'flight') {
             // Flight curve style: curved dashed blue/indigo line
             const startPt = pathCoordinates[0];
             const endPt = pathCoordinates[pathCoordinates.length - 1];

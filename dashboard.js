@@ -860,10 +860,11 @@ function updateDashboardActiveTripTracker() {
     endDate.setHours(23, 59, 59, 999);
     
     // Determine vehicle icon and color based on transportMode
+    const mode = (activeTrip.transportMode || 'car').toLowerCase().trim();
     let vehicleIcon = 'fas fa-car text-success';
     let transportDesc = 'Car';
     
-    switch(activeTrip.transportMode) {
+    switch(mode) {
         case 'flight':
             vehicleIcon = 'fas fa-plane text-info';
             transportDesc = 'Flight';
@@ -1042,18 +1043,26 @@ function updateDashboardActiveTripTracker() {
         if (activeTrip.currentLocationName) {
             vehicleLatLng = await addTrackerMarker(activeTrip.currentLocationName, 'Vehicle Position', `${vehicleIcon} animate-bounce-subtle`, false);
         } else if (startLatLng) {
+            // Draw vehicle marker at start location so it's always shown
+            const customIcon = L.divIcon({
+                html: `<div class="d-flex align-items-center justify-content-center bg-white rounded-circle shadow-sm animate-pulse-slow" style="width: 32px; height: 32px; border: 2.5px solid #2d6a4f; z-index: 999;"><i class="${vehicleIcon}" style="font-size: 1.15rem;"></i></div>`,
+                className: 'custom-tracker-vehicle',
+                iconSize: [32, 32],
+                iconAnchor: [16, 16]
+            });
+            L.marker(startLatLng, { icon: customIcon }).addTo(dashboardTrackerMap).bindPopup(`<b>Vehicle Position (Start):</b> ${activeTrip.startLocation}`);
             vehicleLatLng = startLatLng;
         }
         
         let routeCoords = null;
-        if (activeTrip.transportMode !== 'flight') {
+        if (mode !== 'flight' && mode !== 'train') {
             routeCoords = await fetchRouteGeometryCoords(activeTrip.startLocation, activeTrip.destination, activeTrip.stops);
         }
         
         const finalCoords = routeCoords && routeCoords.length > 1 ? routeCoords : pathCoordinates;
         
         if (finalCoords.length > 1) {
-            if (activeTrip.transportMode === 'train') {
+            if (mode === 'train') {
                 // Train track style: solid dark gray casing with white dashes on top
                 L.polyline(finalCoords, {
                     color: '#333333',
@@ -1071,7 +1080,7 @@ function updateDashboardActiveTripTracker() {
                 }).addTo(dashboardTrackerMap);
                 
                 dashboardTrackerMap.fitBounds(dashes.getBounds().pad(0.15));
-            } else if (activeTrip.transportMode === 'flight') {
+            } else if (mode === 'flight') {
                 // Flight curve style: curved dashed blue/indigo line
                 const startPt = pathCoordinates[0];
                 const endPt = pathCoordinates[pathCoordinates.length - 1];
