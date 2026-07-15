@@ -3,6 +3,7 @@ let userTrips = [];
 let customCategories = [];
 let carExpenseChart = null;
 let fuelPriceChart = null;
+let dashboardTrackerMap = null;
 
 document.addEventListener('DOMContentLoaded', function () {
     console.log('DOM loaded, initializing dashboard...');
@@ -809,14 +810,13 @@ function displayTrips() {
 
 function updateDashboardActiveTripTracker() {
     const card = document.getElementById('dashboard-active-trip-tracker');
-    const bar = document.getElementById('dashboard-tracker-bar');
-    const vehicle = document.getElementById('dashboard-tracker-vehicle');
+    const mapElement = document.getElementById('dashboard-tracker-map');
     const statusText = document.getElementById('dashboard-tracker-status');
     const startText = document.getElementById('dashboard-tracker-start');
     const currentText = document.getElementById('dashboard-tracker-current');
     const destText = document.getElementById('dashboard-tracker-dest');
     
-    if (!card || !bar || !vehicle || !statusText || !startText || !destText) return;
+    if (!card || !mapElement || !statusText || !startText || !destText) return;
     
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -835,8 +835,7 @@ function updateDashboardActiveTripTracker() {
         return;
     }
     
-    // Trigger background route calculation if stopsDistances is missing OR if AI key
-    // is available but the route was not calculated with AI yet
+    // Trigger background route calculation if stopsDistances is missing
     const hasAiKey = !!window._openrouterApiKey;
     const needsCalc = activeTrip.stops && activeTrip.stops.length > 0 && (
         !activeTrip.route ||
@@ -860,31 +859,28 @@ function updateDashboardActiveTripTracker() {
     startDate.setHours(0, 0, 0, 0);
     endDate.setHours(23, 59, 59, 999);
     
-    // Determine vehicle icon and animation class based on transportMode
-    let iconClass = 'fa-car text-success animate-drive';
+    // Determine vehicle icon and color based on transportMode
+    let vehicleIcon = 'fas fa-car text-success';
     let transportDesc = 'Car';
     
     switch(activeTrip.transportMode) {
         case 'flight':
-            iconClass = 'fa-plane text-info animate-flight';
+            vehicleIcon = 'fas fa-plane text-info';
             transportDesc = 'Flight';
             break;
         case 'train':
-            iconClass = 'fa-train text-primary animate-ride';
+            vehicleIcon = 'fas fa-train text-primary';
             transportDesc = 'Train';
             break;
         case 'bus':
-            iconClass = 'fa-bus text-warning animate-ride';
+            vehicleIcon = 'fas fa-bus text-warning';
             transportDesc = 'Bus';
             break;
         case 'public':
-            iconClass = 'fa-train-subway text-success animate-ride';
+            vehicleIcon = 'fas fa-train-subway text-success';
             transportDesc = 'Public Transport';
             break;
     }
-    
-    // Set Icon HTML
-    vehicle.innerHTML = `<i class="fas ${iconClass}" style="font-size: 1.5rem; text-shadow: 0 2px 4px rgba(0,0,0,0.15);"></i>`;
     
     // Calculate progress percentage
     const totalDistance = parseFloat(activeTrip.route?.distance) || parseFloat(activeTrip.distance) || 0;
@@ -903,7 +899,6 @@ function updateDashboardActiveTripTracker() {
             progressText = `: ~${estDistance} / ${totalDistance.toFixed(0)} km completed`;
         }
     } else {
-        // Fallback to percentage-based progression
         progressPercent = activeTrip.currentKm !== undefined ? Math.min(100, activeTrip.currentKm) : 0;
         if (activeTrip.currentKm !== undefined) {
             progressText = `: ${progressPercent.toFixed(0)}% completed`;
@@ -938,66 +933,92 @@ function updateDashboardActiveTripTracker() {
     
     card.style.display = 'block';
     
-    // Render stops pins on progress bar
-    const stopsPinsContainer = document.getElementById('dashboard-tracker-stops-pins');
-    if (stopsPinsContainer) {
-        stopsPinsContainer.innerHTML = '';
-        if (activeTrip.stops && activeTrip.stops.length > 0) {
-            const stopsCount = activeTrip.stops.length;
-            activeTrip.stops.forEach((stopName, index) => {
-                let pct = 0;
-                let legDistText = '';
-                let stopDistText = '';
-                
-                if (activeTrip.route?.stopsDistances && activeTrip.route.stopsDistances[index] !== undefined && totalDistance > 0) {
-                    const stopDist = activeTrip.route.stopsDistances[index];
-                    pct = Math.min(95, Math.max(5, (stopDist / totalDistance) * 100));
-                    
-                    const prevDist = index === 0 ? 0 : activeTrip.route.stopsDistances[index - 1];
-                    const legDist = stopDist - prevDist;
-                    legDistText = `+${legDist.toFixed(0)} km`;
-                    stopDistText = `${stopDist.toFixed(0)} km`;
-                } else {
-                    // Fallback: space evenly
-                    pct = ((index + 1) / (stopsCount + 1)) * 100;
-                    const stopDist = totalDistance * (pct / 100);
-                    const prevDist = index === 0 ? 0 : totalDistance * (((index) / (stopsCount + 1)) * 100 / 100);
-                    const legDist = stopDist - prevDist;
-                    if (totalDistance > 0) {
-                        legDistText = `+${legDist.toFixed(0)} km`;
-                    }
-                }
-                
-                const isCrossed = progressPercent >= pct;
-                
-                const pin = document.createElement('div');
-                pin.className = 'position-absolute top-50 translate-middle';
-                pin.style.left = `${pct}%`;
-                pin.style.zIndex = '3';
-                pin.style.cursor = 'pointer';
-                
-                if (isCrossed) {
-                    pin.innerHTML = '<i class="fas fa-circle-check text-muted opacity-75" style="font-size: 0.85rem; background-color: #fff; border-radius: 50%;"></i>';
-                } else {
-                    pin.innerHTML = '<i class="fas fa-location-dot text-success" style="font-size: 0.85rem; text-shadow: 0 1px 2px rgba(0,0,0,0.2);"></i>';
-                }
-                
-                pin.title = `${stopName}${stopDistText ? ' (' + stopDistText + ')' : ''}`;
-                
-                const label = document.createElement('div');
-                label.className = `position-absolute text-center fw-semibold ${isCrossed ? 'text-muted opacity-75' : 'text-success'}`;
-                label.style.fontSize = '0.65rem';
-                label.style.left = `${pct}%`;
-                label.style.transform = 'translateX(-50%)';
-                label.style.top = '22px';
-                label.style.whiteSpace = 'nowrap';
-                label.innerHTML = `<span>${stopName}</span>${legDistText ? `<br><span style="font-size: 0.55rem; color: #6c757d;">${legDistText}</span>` : ''}`;
-                
-                stopsPinsContainer.appendChild(pin);
-                stopsPinsContainer.appendChild(label);
-            });
-        }
+    // Initialize or resize Leaflet Map
+    if (!dashboardTrackerMap) {
+        dashboardTrackerMap = L.map('dashboard-tracker-map').setView([20, 78], 5);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(dashboardTrackerMap);
+    } else {
+        setTimeout(() => {
+            dashboardTrackerMap.invalidateSize();
+        }, 100);
     }
+    
+    // Clear old map layers
+    dashboardTrackerMap.eachLayer((layer) => {
+        if (layer instanceof L.Marker || layer instanceof L.Polyline) {
+            dashboardTrackerMap.removeLayer(layer);
+        }
+    });
+    
+    const pathCoordinates = [];
+    
+    // Helper to add custom icon markers to Leaflet
+    const addTrackerMarker = async (name, title, iconClass, isRoute = true) => {
+        try {
+            const coords = await geocodeLocation(name);
+            const latLng = [coords[1], coords[0]];
+            
+            const customIcon = L.divIcon({
+                html: `<div class="d-flex align-items-center justify-content-center bg-white rounded-circle shadow-sm" style="width: 28px; height: 28px; border: 2px solid #2d6a4f;"><i class="${iconClass}"></i></div>`,
+                className: 'custom-tracker-icon',
+                iconSize: [28, 28],
+                iconAnchor: [14, 14]
+            });
+            
+            L.marker(latLng, { icon: customIcon }).addTo(dashboardTrackerMap).bindPopup(`<b>${title}:</b> ${name}`);
+            
+            if (isRoute) {
+                pathCoordinates.push(latLng);
+            }
+            return latLng;
+        } catch (e) {
+            console.warn(`Could not geocode tracker marker: ${name}`);
+            return null;
+        }
+    };
+    
+    // Load markers asynchronously and draw path
+    const loadTrackerMapData = async () => {
+        const startLatLng = await addTrackerMarker(activeTrip.startLocation, 'Start Point', 'fas fa-circle-play text-success', true);
+        
+        if (activeTrip.stops && Array.isArray(activeTrip.stops)) {
+            for (let i = 0; i < activeTrip.stops.length; i++) {
+                const stop = activeTrip.stops[i];
+                if (stop) {
+                    await addTrackerMarker(stop, `Stop #${i + 1}`, 'fas fa-location-dot text-warning', true);
+                }
+            }
+        }
+        
+        const destLatLng = await addTrackerMarker(activeTrip.destination, 'Destination', 'fas fa-flag-checkered text-danger', true);
+        
+        // Render Vehicle Marker
+        let vehicleLatLng = null;
+        if (activeTrip.currentLocationName) {
+            vehicleLatLng = await addTrackerMarker(activeTrip.currentLocationName, 'Vehicle Position', `${vehicleIcon} animate-bounce-subtle`, false);
+        } else if (startLatLng) {
+            vehicleLatLng = startLatLng;
+        }
+        
+        if (pathCoordinates.length > 1) {
+            const polyline = L.polyline(pathCoordinates, {
+                color: '#2d6a4f',
+                weight: 4,
+                opacity: 0.8,
+                dashArray: '6, 6',
+                lineJoin: 'round'
+            }).addTo(dashboardTrackerMap);
+            
+            dashboardTrackerMap.fitBounds(polyline.getBounds().pad(0.15));
+        } else if (pathCoordinates.length === 1) {
+            dashboardTrackerMap.setView(pathCoordinates[0], 11);
+        }
+    };
+    
+    loadTrackerMapData();
+}
     
     // Wire up prompt and GPS handlers
     setTimeout(() => {

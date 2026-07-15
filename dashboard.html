@@ -8,6 +8,8 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -429,42 +431,21 @@
     <div class="card mb-4 border-0 shadow-sm overflow-hidden" id="dashboard-active-trip-tracker" style="display: none;">
         <div class="card-body py-3 px-4 bg-white" style="border-radius: var(--border-radius-md);">
             <div class="section-guide-card mb-3" 
-                 data-guide-en="This is the Live Journey Tracker. It automatically displays the progress of your active trip today. You can see intermediate stops plotted as pins on the progress bar, and see how much distance is remaining."
-                 data-guide-hi="यह लाइव जर्नी ट्रैकर है। यह स्वचालित रूप से आज आपकी सक्रिय यात्रा की प्रगति को प्रदर्शित करता है। आप प्रगति पट्टी पर पिन के रूप में मध्यवर्ती स्टॉप देख सकते हैं, और देख सकते हैं कि कितनी दूरी शेष है।"
-                 data-guide-te="ఇది లైవ్ జర్నీ ట్రాకర్. ఇది ఈరోజు మీ క్రియాశీల ప్రయాణం యొక్క పురోగతిని స్వయంచాలకంగా ప్రదర్శిస్తుంది. మీరు ప్రోగ్రెస్ బార్‌లో పిన్‌లుగా మధ్యంతర స్టాప్‌లను చూడవచ్చు మరియు ఎంత దూరం మిగిలి ఉందో తెలుసుకోవచ్చు.">
+                 data-guide-en="This is the Live Journey Tracker. It automatically displays the route of your active trip today on the Leaflet map. You can see the start, intermediate stops as icons, and destination plotted with your current journey progress."
+                 data-guide-hi="यह लाइव जर्नी ट्रैकर है। यह स्वचालित रूप से आज आपकी सक्रिय यात्रा के मार्ग को लीफलेट मानचित्र पर प्रदर्शित करता है। आप प्रारंभ, आइकन के रूप में मध्यवर्ती स्टॉप और अपनी वर्तमान यात्रा प्रगति के साथ प्लॉट किए गए गंतव्य को देख सकते हैं।"
+                 data-guide-te="ఇది లైవ్ జర్నీ ట్రాకర్. ఇది ఈరోజు మీ క్రియాశీల ప్రయాణం యొక్క మార్గాన్ని లీఫ్‌లెట్ మ్యాప్‌లో స్వయంచాలకంగా ప్రదర్శిస్తుంది. మీరు ప్రారంభం, చిహ్నాలుగా మధ్యంతర స్టాప్‌లు మరియు మీ ప్రస్తుత ప్రయాణ పురోగతితో ప్లాట్ చేయబడిన గమ్యాన్ని చూడవచ్చు.">
             </div>
             <div class="d-flex align-items-center justify-content-between mb-2">
                 <span class="small fw-bold text-success"><i class="fas fa-circle-play me-1 animate-pulse-slow text-success"></i>Live Journey Tracker</span>
                 <div id="dashboard-tracker-status" class="d-flex flex-wrap align-items-center gap-1 justify-content-end"></div>
-
             </div>
-            <div class="journey-tracker-wrapper">
-                <div class="journey-tracker-inner">
-                    <!-- Dedicated relative container for the timeline bar and its absolute pins/dots/vehicle -->
-                    <div class="position-relative" style="height: 35px; margin-bottom: 20px;">
-                        <!-- Progress track (absolutely centered inside the 35px container) -->
-                        <div class="progress" style="height: 6px; background-color: rgba(45, 106, 79, 0.08); border-radius: 3px; position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); margin: 0;">
-                            <div class="progress-bar bg-success" id="dashboard-tracker-bar" role="progressbar" style="width: 0%; transition: width 1s ease;"></div>
-                        </div>
-                        <!-- Stops Pins -->
-                        <div id="dashboard-tracker-stops-pins"></div>
-                        <!-- Start Point -->
-                        <div class="position-absolute start-0 top-50 translate-middle bg-success border border-white border-2 rounded-circle" style="width: 14px; height: 14px; z-index: 2;" title="Start"></div>
-                        <!-- End Point -->
-                        <div class="position-absolute end-0 top-50 translate-middle bg-danger border border-white border-2 rounded-circle" style="width: 14px; height: 14px; z-index: 2;" title="Destination"></div>
-                        <!-- Moving Vehicle Icon -->
-                        <div class="position-absolute top-50 translate-middle-y" id="dashboard-tracker-vehicle" style="left: 0%; transition: left 1s ease; margin-top: -12px; z-index: 4;">
-                            <!-- Icon populated dynamically -->
-                        </div>
-                    </div>
-                    
-                    <!-- Start/End City Labels (Scrolling with track) -->
-                    <div class="d-flex justify-content-between small text-muted px-1">
-                        <span id="dashboard-tracker-start" style="max-width: 130px; white-space: normal; line-height: 1.2; display: inline-block;">-</span>
-                        <span class="text-success fw-semibold text-center" id="dashboard-tracker-current" style="white-space: normal; line-height: 1.2; display: inline-block;"></span>
-                        <span id="dashboard-tracker-dest" class="text-end" style="max-width: 130px; white-space: normal; line-height: 1.2; display: inline-block;">-</span>
-                    </div>
-                </div>
+            
+            <div id="dashboard-tracker-map" class="rounded mb-3 border" style="height: 250px; z-index: 1;"></div>
+            
+            <div class="d-flex justify-content-between small text-muted px-1 mt-2">
+                <span id="dashboard-tracker-start" class="fw-semibold text-success">-</span>
+                <span class="text-primary fw-bold text-center" id="dashboard-tracker-current"></span>
+                <span id="dashboard-tracker-dest" class="fw-semibold text-danger text-end">-</span>
             </div>
         </div>
     </div>
