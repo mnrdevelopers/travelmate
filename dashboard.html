@@ -284,6 +284,32 @@
                         </small>
                     </div>
                     <div class="mb-3">
+                        <label for="profile-openrouter-model" class="form-label">
+                            <i class="fas fa-microchip me-1 text-info"></i>AI Model Preference
+                        </label>
+                        <select class="form-select" id="profile-openrouter-model">
+                            <option value="auto">Auto-route Free Models (Default)</option>
+                            <option value="google/gemini-2.5-flash">Google Gemini 2.5 Flash (Paid - Very Cheap)</option>
+                            <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B Instruct (Paid - Premium)</option>
+                            <option value="deepseek/deepseek-chat">DeepSeek V3 (Paid - Fast &amp; Smart)</option>
+                            <option value="custom">Custom Model ID...</option>
+                        </select>
+                        <input type="text" class="form-control mt-2 d-none" id="profile-openrouter-custom-model" placeholder="e.g. meta-llama/llama-3-8b-instruct:nitro">
+                        <small class="text-muted">
+                            Daily free model limits are strict. If you have credits on OpenRouter, choose a paid model to avoid rate limits.
+                        </small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="profile-groq-key" class="form-label">
+                            <i class="fas fa-bolt me-1 text-warning"></i>Groq API Key (Fallback AI)
+                        </label>
+                        <input type="password" class="form-control" id="profile-groq-key" placeholder="gsk_...">
+                        <small class="text-muted">
+                            Get a key at <a href="https://console.groq.com/keys" target="_blank">console.groq.com</a>. 
+                            Used as an instant fallback when OpenRouter rate limits are exceeded.
+                        </small>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label">Password</label>
                         <button type="button" class="btn btn-outline-secondary w-100" id="change-password-btn">
                             <i class="fas fa-key me-1"></i>Change Password
@@ -835,19 +861,28 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
     <!-- AI Travel Assistant Chatbot Widget -->
     <div class="ai-chat-widget" id="ai-chat-widget" style="display: none;">
-        <button class="ai-chat-btn" id="ai-chat-toggle" title="Ask TravelMate AI">
-            <i class="fas fa-robot animate-pulse-slow"></i>
+        <button class="ai-chat-btn" id="ai-chat-toggle" title="Ask TravelMate AI" style="padding: 0; overflow: hidden; position: relative;">
+            <img id="ai-chat-toggle-img" src="ai-logo.png" style="width: 100%; height: 100%; object-fit: cover;">
+            <i id="ai-chat-toggle-close-icon" class="fas fa-xmark d-none" style="font-size: 1.4rem; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white;"></i>
         </button>
         
         <div class="ai-chat-container" id="ai-chat-container">
             <div class="ai-chat-header">
-                <div class="ai-chat-header-title">
-                    <i class="fas fa-robot text-warning"></i>
-                    <span>TravelMate AI Companion</span>
+                <div class="ai-chat-header-title d-flex align-items-center flex-wrap" style="gap: 6px;">
+                    <div class="d-flex align-items-center" style="gap: 4px;">
+                        <img src="ai-logo.png" style="width: 22px; height: 22px; border-radius: 50%; object-fit: cover; margin-right: 4px; border: 1px solid rgba(255, 255, 255, 0.25);">
+                        <span>TravelMate AI Companion</span>
+                    </div>
+                    <span id="ai-chat-provider-badge" class="badge bg-secondary-subtle text-secondary" style="font-size: 0.65rem; padding: 0.25em 0.5em; border-radius: 4px; font-weight: normal;">Loading...</span>
                 </div>
-                <button class="ai-chat-header-close" id="ai-chat-close">
-                    <i class="fas fa-xmark"></i>
-                </button>
+                <div class="d-flex align-items-center" style="gap: 10px;">
+                    <button class="btn btn-link text-white p-0 border-0 shadow-none" id="ai-chat-clear" title="Clear Chat History" style="font-size: 0.95rem; opacity: 0.85; transition: opacity 0.2s; background: none;">
+                        <i class="fas fa-trash-can"></i>
+                    </button>
+                    <button class="ai-chat-header-close" id="ai-chat-close" style="padding: 0; background: none; border: none;">
+                        <i class="fas fa-xmark"></i>
+                    </button>
+                </div>
             </div>
             
             <div class="ai-chat-messages" id="ai-chat-messages">

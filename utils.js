@@ -74,10 +74,88 @@ const OR_FREE_MODELS_DISTANCE = [
     'nvidia/nemotron-3-ultra-550b-a55b:free'      // NVIDIA Nemotron Ultra free model
 ];
 
+async function getAILegDistancesGroq(places, apiKey) {
+    if (!apiKey || places.length < 2) return null;
+    
+    const legs = [];
+    for (let i = 0; i < places.length - 1; i++) {
+        legs.push(`${places[i]} → ${places[i + 1]}`);
+    }
+    
+    const prompt = `You are a geography expert with precise knowledge of road distances.
+
+For the following route legs, provide the ACTUAL ROAD distance in kilometres (not straight-line).
+Reply ONLY with a valid JSON array of numbers — one number per leg — nothing else.
+
+Route legs:
+${legs.map((l, i) => `${i + 1}. ${l}`).join('\n')}
+
+Reply format example for 3 legs: [342, 187, 95]
+Do NOT add explanations, units, or any text outside the JSON array.`;
+
+    const groqModels = [
+        'llama-3.3-70b-versatile',
+        'llama3-8b-8192',
+        'mixtral-8x7b-32768'
+    ];
+
+    for (const model of groqModels) {
+        try {
+            console.log(`🤖 Trying Groq model for distance calculation: ${model}`);
+            const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model,
+                    messages: [{ role: 'user', content: prompt }],
+                    max_tokens: 120,
+                    temperature: 0.1
+                })
+            });
+            
+            if (!response.ok) {
+                console.warn(`Groq distance: model ${model} returned ${response.status}, trying next...`);
+                continue;
+            }
+            
+            const data = await response.json();
+            const text = data.choices?.[0]?.message?.content?.trim() || '';
+            
+            // Extract JSON array robustly
+            const match = text.match(/\[[\d.,\s]+\]/);
+            if (!match) { console.warn(`Groq distance: ${model} response not a JSON array:`, text); continue; }
+            
+            const legDistances = JSON.parse(match[0]);
+            if (!Array.isArray(legDistances) || legDistances.length !== legs.length) {
+                console.warn(`Groq distance: ${model} returned wrong count:`, legDistances.length, 'expected', legs.length);
+                continue;
+            }
+            
+            // Validate plausible values
+            const allValid = legDistances.every(d => typeof d === 'number' && d > 0 && d < 5000);
+            if (!allValid) { console.warn(`Groq distance: ${model} returned implausible values:`, legDistances); continue; }
+            
+            console.log(`✅ Groq leg distances (${model}):`, legDistances, 'for', places);
+            return legDistances;
+        } catch (e) {
+            console.warn(`Groq distance model ${model} error:`, e.message);
+        }
+    }
+    return null;
+}
+
 async function getAILegDistances(places) {
     let apiKey = window._openrouterApiKey;
     if (!apiKey) {
         apiKey = await loadOpenRouterKeyShared();
+    }
+    // Check if we should fall straight to Groq if OpenRouter API key is missing but Groq is available
+    if (!apiKey && window._groqApiKey) {
+        console.log('🤖 OpenRouter key missing. Directing to Groq for distance calculation...');
+        return await getAILegDistancesGroq(places, window._groqApiKey);
     }
     if (!apiKey || places.length < 2) return null;
     
@@ -96,8 +174,17 @@ ${legs.map((l, i) => `${i + 1}. ${l}`).join('\n')}
 
 Reply format example for 3 legs: [342, 187, 95]
 Do NOT add explanations, units, or any text outside the JSON array.`;
+    let preferredModel = window._openrouterModel || 'auto';
+    if (preferredModel === 'custom' && window._openrouterCustomModel) {
+        preferredModel = window._openrouterCustomModel;
+    }
     
-    for (const model of OR_FREE_MODELS_DISTANCE) {
+    const modelsToTry = [...OR_FREE_MODELS_DISTANCE];
+    if (preferredModel && preferredModel !== 'auto') {
+        modelsToTry.unshift(preferredModel);
+    }
+    
+    for (const model of modelsToTry) {
         try {
             const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
                 method: 'POST',
@@ -143,6 +230,13 @@ Do NOT add explanations, units, or any text outside the JSON array.`;
         } catch (e) {
             console.warn(`AI distance model ${model} error:`, e.message);
         }
+    }
+    
+    // Fallback to Groq if OpenRouter failed but Groq is configured
+    if (window._groqApiKey) {
+        console.warn('OpenRouter distance calculation failed. Trying Groq fallback...');
+        const groqLegs = await getAILegDistancesGroq(places, window._groqApiKey);
+        if (groqLegs) return groqLegs;
     }
     
     console.warn('All AI distance models failed, falling back to Haversine.');
@@ -992,18 +1086,33 @@ async function calculateAndSaveStopsDistances(trip) {
 }
 
 async function loadOpenRouterKeyShared() {
-    if (window._openrouterApiKey) return window._openrouterApiKey;
     try {
-        if (typeof auth === 'undefined' || !auth.currentUser) return null;
-        const user = auth.currentUser;
-        const doc = await db.collection('users').doc(user.uid).get();
-        if (doc.exists && doc.data().openrouterApiKey) {
-            window._openrouterApiKey = doc.data().openrouterApiKey;
-            return window._openrouterApiKey;
+        let userData = {};
+        if (typeof auth !== 'undefined' && auth.currentUser) {
+            const user = auth.currentUser;
+            const doc = await db.collection('users').doc(user.uid).get();
+            if (doc.exists) userData = doc.data();
         }
+        
+        let sharedData = {};
+        try {
+            if (typeof db !== 'undefined') {
+                const sharedDoc = await db.collection('settings').doc('ai_keys').get();
+                if (sharedDoc.exists) sharedData = sharedDoc.data();
+            }
+        } catch (e) {
+            console.warn('Could not read shared AI keys settings in utils:', e);
+        }
+        
+        window._openrouterApiKey = userData.openrouterApiKey || sharedData.openrouterApiKey || '';
+        window._groqApiKey = userData.groqApiKey || sharedData.groqApiKey || '';
+        window._openrouterModel = userData.openrouterModel || sharedData.openrouterModel || 'auto';
+        window._openrouterCustomModel = userData.openrouterCustomModel || sharedData.openrouterCustomModel || '';
+        
+        return window._openrouterApiKey;
     } catch (e) {
         console.warn('Could not load OpenRouter key in utils:', e);
     }
-    return null;
+    return window._openrouterApiKey || null;
 }
 

@@ -166,6 +166,19 @@ function setupProfileEventListeners() {
     if (avatarUpload) avatarUpload.addEventListener('change', handleAvatarUpload);
     if (leaveAllTripsBtn) leaveAllTripsBtn.addEventListener('click', leaveAllTrips);
     if (changePasswordBtn) changePasswordBtn.addEventListener('click', handleChangePassword);
+    
+    // Model preference event listener
+    const modelSelect = document.getElementById('profile-openrouter-model');
+    const customInput = document.getElementById('profile-openrouter-custom-model');
+    if (modelSelect) {
+        modelSelect.addEventListener('change', () => {
+            if (modelSelect.value === 'custom') {
+                customInput?.classList.remove('d-none');
+            } else {
+                customInput?.classList.add('d-none');
+            }
+        });
+    }
 }
 
 // Add the missing profile functions
@@ -182,11 +195,33 @@ function showProfileModal() {
         setupAvatarFallback(profileAvatar, user.displayName || 'User');
     }
     
-    // Load saved OpenRouter API key from Firestore
+    // Load saved OpenRouter API key & model preferences from Firestore
     db.collection('users').doc(user.uid).get().then(doc => {
-        const keyField = document.getElementById('profile-openrouter-key');
-        if (keyField && doc.exists && doc.data().openrouterApiKey) {
-            keyField.value = doc.data().openrouterApiKey;
+        if (doc.exists) {
+            const data = doc.data();
+            const keyField = document.getElementById('profile-openrouter-key');
+            if (keyField && data.openrouterApiKey) {
+                keyField.value = data.openrouterApiKey;
+            }
+            
+            const groqKeyField = document.getElementById('profile-groq-key');
+            if (groqKeyField && data.groqApiKey) {
+                groqKeyField.value = data.groqApiKey;
+            }
+            
+            const modelSelect = document.getElementById('profile-openrouter-model');
+            const customInput = document.getElementById('profile-openrouter-custom-model');
+            if (modelSelect) {
+                modelSelect.value = data.openrouterModel || 'auto';
+                if (data.openrouterModel === 'custom') {
+                    customInput?.classList.remove('d-none');
+                    if (customInput && data.openrouterCustomModel) {
+                        customInput.value = data.openrouterCustomModel;
+                    }
+                } else {
+                    customInput?.classList.add('d-none');
+                }
+            }
         }
     }).catch(() => {});
     
@@ -241,24 +276,63 @@ async function saveProfile() {
             photoURL: selectedAvatarSrc
         });
         
-        // Save OpenRouter API key if provided
+        // Save OpenRouter API key & settings if provided
         const orKeyInput = document.getElementById('profile-openrouter-key');
         const openrouterApiKey = orKeyInput ? orKeyInput.value.trim() : '';
         if (openrouterApiKey) {
             window._openrouterApiKey = openrouterApiKey;
         }
         
+        const groqKeyInput = document.getElementById('profile-groq-key');
+        const groqApiKey = groqKeyInput ? groqKeyInput.value.trim() : '';
+        if (groqApiKey) {
+            window._groqApiKey = groqApiKey;
+        }
+        
+        const modelSelect = document.getElementById('profile-openrouter-model');
+        const openrouterModel = modelSelect ? modelSelect.value : 'auto';
+        window._openrouterModel = openrouterModel;
+        
+        const customInput = document.getElementById('profile-openrouter-custom-model');
+        const openrouterCustomModel = customInput ? customInput.value.trim() : '';
+        window._openrouterCustomModel = openrouterCustomModel;
+        
         // Update user document in Firestore
         const updatePayload = {
             name: name,
             photoURL: selectedAvatarSrc,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            openrouterModel: openrouterModel,
+            openrouterCustomModel: openrouterCustomModel
         };
-        if (openrouterApiKey) updatePayload.openrouterApiKey = openrouterApiKey;
+        if (openrouterApiKey !== undefined) updatePayload.openrouterApiKey = openrouterApiKey;
+        if (groqApiKey !== undefined) updatePayload.groqApiKey = groqApiKey;
         await db.collection('users').doc(auth.currentUser.uid).update(updatePayload);
         
+        // Sync to shared global config so all users can use it as a fallback
+        try {
+            const sharedPayload = {};
+            if (openrouterApiKey) sharedPayload.openrouterApiKey = openrouterApiKey;
+            if (groqApiKey) sharedPayload.groqApiKey = groqApiKey;
+            if (openrouterModel) sharedPayload.openrouterModel = openrouterModel;
+            if (openrouterCustomModel) sharedPayload.openrouterCustomModel = openrouterCustomModel;
+            
+            if (Object.keys(sharedPayload).length > 0) {
+                sharedPayload.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+                await db.collection('settings').doc('ai_keys').set(sharedPayload, { merge: true });
+                console.log('Synced AI keys globally for all users.');
+            }
+        } catch (sharedErr) {
+            console.warn('Could not sync AI keys globally (might be a permission issue):', sharedErr);
+        }
+        
         // Reinitialize chatbot if key was just added
-        if (openrouterApiKey) initAIChatbot();
+        if (openrouterApiKey || groqApiKey) {
+            initAIChatbot();
+            updateAIProviderBadge();
+        } else {
+            updateAIProviderBadge();
+        }
         
         // Update UI
         loadUserData();
@@ -2192,17 +2266,32 @@ const OPENROUTER_FREE_MODELS = [
 ];
 
 async function loadOpenRouterKey() {
-    if (window._openrouterApiKey) return window._openrouterApiKey;
     try {
         const user = auth.currentUser;
-        if (!user) return null;
-        const doc = await db.collection('users').doc(user.uid).get();
-        if (doc.exists && doc.data().openrouterApiKey) {
-            window._openrouterApiKey = doc.data().openrouterApiKey;
-            return window._openrouterApiKey;
+        let userData = {};
+        if (user) {
+            const doc = await db.collection('users').doc(user.uid).get();
+            if (doc.exists) userData = doc.data();
         }
-    } catch (e) { console.warn('Could not load OpenRouter key:', e); }
-    return null;
+        
+        let sharedData = {};
+        try {
+            const sharedDoc = await db.collection('settings').doc('ai_keys').get();
+            if (sharedDoc.exists) sharedData = sharedDoc.data();
+        } catch (e) {
+            console.warn('Could not read shared AI keys settings:', e);
+        }
+        
+        window._openrouterApiKey = userData.openrouterApiKey || sharedData.openrouterApiKey || '';
+        window._groqApiKey = userData.groqApiKey || sharedData.groqApiKey || '';
+        window._openrouterModel = userData.openrouterModel || sharedData.openrouterModel || 'auto';
+        window._openrouterCustomModel = userData.openrouterCustomModel || sharedData.openrouterCustomModel || '';
+        
+        return window._openrouterApiKey;
+    } catch (e) {
+        console.warn('Could not load OpenRouter key:', e);
+    }
+    return window._openrouterApiKey || null;
 }
 
 function buildTripContext() {
@@ -2270,13 +2359,97 @@ function buildTripContext() {
 - Current location: ${activeTrip.currentLocationName || 'not yet tracked'}`;
 }
 
+const GROQ_MODELS = [
+    'llama-3.3-70b-versatile',
+    'llama3-8b-8192',
+    'mixtral-8x7b-32768'
+];
+
+function buildSystemPrompt(tripContext) {
+    return `You are TravelMate AI, the user's dedicated personal travel assistant.
+Your goal is to help the user manage their trips, optimize routes, calculate distances/mileage, explain budget breakdowns, plan itineraries, and suggest local sightseeing spots.
+
+${tripContext}
+
+IMPORTANT GUIDELINES:
+1. ALWAYS understand the user's intent, even if they use simple, informal, or conversational language. Be highly helpful, polite, and welcoming.
+2. If the user asks a question, explain the answer in detail and in a very clear, step-by-step manner. Do not restrict yourself to extremely short answers; prioritize completeness, clarity, and precision so the user fully understands.
+3. If they ask you to do tasks (like adding stops, recording expenses, or finding sightseeing spots nearby), confirm what you are doing clearly, perform the action, and explain how the update is reflected in their dashboard.
+
+If the user asks you to perform an action on their trip, you can trigger specific functions in the application by appending a command at the VERY END of your reply.
+Available commands:
+1. To add a stop to their current/active trip:
+   [[ACTION: ADD_STOP, "Stop Name"]]
+   Example user request: "Add stop Pune to my trip."
+   Example reply: "I've added Pune as a stop on your active trip!\n\n[[ACTION: ADD_STOP, \"Pune\"]]"
+   
+2. To add an expense to their active trip:
+   [[ACTION: ADD_EXPENSE, amount, "category", "description"]]
+   Valid categories: fuel, hotel, food, activities, other.
+   Example user request: "Add expense 500 for lunch."
+   Example reply: "Sure, I have recorded an expense of ₹500 for lunch.\n\n[[ACTION: ADD_EXPENSE, 500, \"food\", \"Lunch\"]]"
+   
+3. To suggest nearby places based on their current location/GPS:
+   [[ACTION: GPS_SUGGEST]]
+   Example user request: "Find tourist spots near my location."
+   Example reply: "Let's fetch your GPS coordinates and search for local recommendations.\n\n[[ACTION: GPS_SUGGEST]]"
+
+Always explain to the user in your message what you are doing before adding the command. Limit your command block to a single ACTION command at the end of the text. Do not output commands if they are not requested.`;
+}
+
+async function sendToGroq(userMessage, apiKey) {
+    const tripContext = buildTripContext();
+    const systemPrompt = buildSystemPrompt(tripContext);
+
+    const messages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: userMessage }
+    ];
+    
+    let lastError = 'No Groq models available.';
+    for (const model of GROQ_MODELS) {
+        try {
+            console.log(`🤖 Trying Groq model: ${model}`);
+            const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model,
+                    messages,
+                    max_tokens: 1000,
+                    temperature: 0.7
+                })
+            });
+            
+            if (!response.ok) {
+                let errMsg = `Groq ${model} → HTTP ${response.status}`;
+                try { const e = await response.json(); errMsg = e.error?.message || errMsg; } catch (_) {}
+                console.warn('Groq model failed, trying next:', errMsg);
+                lastError = errMsg;
+                continue;
+            }
+            
+            const data = await response.json();
+            const text = data.choices?.[0]?.message?.content?.trim();
+            if (!text) { lastError = `${model} returned empty response`; continue; }
+            
+            console.log(`✅ Groq response from: ${model}`);
+            updateAIProviderBadge('Groq');
+            return text;
+        } catch (err) {
+            console.warn('Groq error for model', model, err.message);
+            lastError = err.message;
+        }
+    }
+    throw new Error(lastError);
+}
+
 async function sendToOpenRouter(userMessage, apiKey) {
     const tripContext = buildTripContext();
-    const systemPrompt = `You are TravelMate AI, a smart travel assistant built into the TravelMate app.
-You help users with route optimization, accurate mileage/distance calculations, travel tips, budget planning, and local sightseeing suggestions.
-Use the trip context below to give specific, accurate, personalized answers. Keep responses concise and friendly (under 200 words).
-
-${tripContext}`;
+    const systemPrompt = buildSystemPrompt(tripContext);
     
     const messages = [
         { role: 'system', content: systemPrompt },
@@ -2285,7 +2458,16 @@ ${tripContext}`;
     
     let lastError = 'No free models available at the moment. Please try again later.';
     
-    for (const model of OPENROUTER_FREE_MODELS) {
+    let modelsToTry = [...OPENROUTER_FREE_MODELS];
+    let preferredModel = window._openrouterModel || 'auto';
+    if (preferredModel === 'custom' && window._openrouterCustomModel) {
+        preferredModel = window._openrouterCustomModel;
+    }
+    if (preferredModel && preferredModel !== 'auto') {
+        modelsToTry.unshift(preferredModel);
+    }
+    
+    for (const model of modelsToTry) {
         try {
             const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
                 method: 'POST',
@@ -2298,7 +2480,7 @@ ${tripContext}`;
                 body: JSON.stringify({
                     model,
                     messages,
-                    max_tokens: 350,
+                    max_tokens: 1000,
                     temperature: 0.7
                 })
             });
@@ -2316,6 +2498,7 @@ ${tripContext}`;
             if (!text) { lastError = `${model} returned empty response`; continue; }
             
             console.log(`✅ OpenRouter response from: ${model}`);
+            updateAIProviderBadge('OpenRouter');
             return text;
             
         } catch (networkErr) {
@@ -2324,23 +2507,458 @@ ${tripContext}`;
         }
     }
     
+    // If all OpenRouter models failed, try Groq fallback
+    if (window._groqApiKey) {
+        console.warn('OpenRouter failed. Attempting fallback to Groq...');
+        try {
+            return await sendToGroq(userMessage, window._groqApiKey);
+        } catch (groqErr) {
+            console.error('Groq fallback failed as well:', groqErr);
+            throw new Error(`OpenRouter failed (${lastError}) AND Groq fallback failed (${groqErr.message})`);
+        }
+    }
+    
     throw new Error(lastError);
 }
 
-function appendChatMessage(role, text) {
+function appendChatMessage(role, text, shouldSave = true) {
     const messagesEl = document.getElementById('ai-chat-messages');
     if (!messagesEl) return;
     
+    // Strip action commands from user-facing display
+    const cleanText = text.replace(/\[\[ACTION:[\s\S]*?\]\]/g, '').trim();
+    
     const div = document.createElement('div');
     div.className = `ai-chat-message ${role}`;
-    // Simple markdown: **bold** and newlines
-    div.innerHTML = text
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\n/g, '<br>');
+    div.dataset.rawText = text; // store the raw unformatted text
+    
+    if (role === 'user') {
+        div.innerHTML = `
+            <div class="d-flex align-items-center justify-content-between w-100">
+                <span class="msg-content-text">${cleanText}</span>
+                <button class="edit-user-msg-btn text-white-50 border-0 bg-transparent btn-sm p-0 ms-2" style="cursor: pointer; background: none; display: flex; align-items: center;" title="Edit Prompt">
+                    <i class="fas fa-pen" style="font-size: 0.7rem;"></i>
+                </button>
+            </div>
+        `;
+    } else {
+        // Simple markdown: **bold**, [links](url), and newlines
+        div.innerHTML = cleanText
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="text-decoration-underline text-success fw-bold">$1</a>')
+            .replace(/\n/g, '<br>');
+    }
     
     messagesEl.appendChild(div);
     messagesEl.scrollTop = messagesEl.scrollHeight;
+    
+    if (shouldSave) {
+        saveMessageToHistory(role, text); // save full text with commands
+    }
+    
     return div;
+}
+
+function getActiveTrip() {
+    const trips = typeof userTrips !== 'undefined' && userTrips.length > 0 ? userTrips : (window.userTrips || []);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    function parseDate(val) {
+        if (!val) return null;
+        if (val.toDate) return val.toDate();
+        if (val.seconds) return new Date(val.seconds * 1000);
+        return new Date(val);
+    }
+    
+    return trips.find(trip => {
+        const start = parseDate(trip.startDate);
+        const end = parseDate(trip.endDate);
+        if (!start || !end) return false;
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        return today >= start && today <= end;
+    });
+}
+
+async function executeAddStop(stopName) {
+    const activeTrip = getActiveTrip();
+    if (!activeTrip) {
+        appendChatMessage('assistant', '⚠️ No active trip found to add the stop.', false);
+        return;
+    }
+    
+    try {
+        const tripRef = db.collection('trips').doc(activeTrip.id);
+        const doc = await tripRef.get();
+        if (!doc.exists) return;
+        
+        const currentStops = doc.data().stops || [];
+        if (currentStops.map(s => s.toLowerCase()).includes(stopName.toLowerCase())) {
+            appendChatMessage('assistant', `💡 *Stop "${stopName}" is already in your trip itinerary.*`, false);
+            return;
+        }
+        
+        currentStops.push(stopName);
+        
+        // Update Firestore
+        await tripRef.update({
+            stops: currentStops,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        // Update local trip representation
+        activeTrip.stops = currentStops;
+        
+        // Trigger background stops calculation
+        if (typeof calculateAndSaveStopsDistances === 'function') {
+            calculateAndSaveStopsDistances(activeTrip);
+        }
+        
+        appendChatMessage('assistant', `✅ *Stop Added:* Successfully added stop "${stopName}" to your active trip "${activeTrip.name}".`, false);
+        
+        // Refresh dashboard display
+        if (typeof displayTrips === 'function') displayTrips();
+        if (typeof updateDashboardActiveTripTracker === 'function') updateDashboardActiveTripTracker();
+        
+    } catch (e) {
+        console.error('Error adding stop from AI:', e);
+        appendChatMessage('assistant', `❌ *Failed to add stop "${stopName}" to your trip.*`, false);
+    }
+}
+
+async function executeAddExpense(amount, category, description) {
+    const activeTrip = getActiveTrip();
+    if (!activeTrip) {
+        appendChatMessage('assistant', '⚠️ No active trip found to record this expense.', false);
+        return;
+    }
+    
+    try {
+        const user = auth.currentUser;
+        if (!user) return;
+        
+        const tripRef = db.collection('trips').doc(activeTrip.id);
+        const doc = await tripRef.get();
+        if (!doc.exists) return;
+        
+        const currentExpenses = doc.data().expenses || [];
+        const cleanCategory = String(category).trim().toLowerCase();
+        
+        const newExpense = {
+            amount: parseFloat(amount),
+            category: ['fuel', 'hotel', 'food', 'activities', 'other'].includes(cleanCategory) ? cleanCategory : 'other',
+            description: description || 'AI Expense',
+            date: new Date().toISOString().split('T')[0],
+            addedBy: user.uid,
+            createdAt: new Date().toISOString(),
+            isPersonal: false,
+            splits: []
+        };
+        
+        currentExpenses.push(newExpense);
+        
+        // Update Firestore
+        await tripRef.update({
+            expenses: currentExpenses,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        // Update local representation
+        activeTrip.expenses = currentExpenses;
+        
+        appendChatMessage('assistant', `✅ *Expense Recorded:* Added ₹${parseFloat(amount).toFixed(2)} under category "${newExpense.category}" for "${newExpense.description}".`, false);
+        
+        // Refresh dashboard
+        if (typeof displayTrips === 'function') displayTrips();
+        
+    } catch (e) {
+        console.error('Error adding expense from AI:', e);
+        appendChatMessage('assistant', `❌ *Failed to record expense.*`, false);
+    }
+}
+
+function executeGPSSuggest() {
+    if (!navigator.geolocation) {
+        appendChatMessage('assistant', '⚠️ GPS Geolocation is not supported by your browser.', false);
+        return;
+    }
+    
+    appendChatMessage('assistant', '🛰️ *Fetching your location from GPS...*', false);
+    
+    navigator.geolocation.getCurrentPosition(async (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        
+        appendChatMessage('assistant', `📍 *Location fetched:* Latitude ${lat.toFixed(4)}, Longitude ${lng.toFixed(4)}. *Opening recommendations viewer in a new tab...*`, false);
+        
+        openAISuggestedPlacesTab(lat, lng);
+        
+    }, (error) => {
+        console.error('GPS error:', error);
+        appendChatMessage('assistant', `❌ *Could not fetch GPS location:* ${error.message}`, false);
+    });
+}
+
+function openAISuggestedPlacesTab(lat, lng) {
+    const newTab = window.open('', '_blank');
+    if (!newTab) {
+        appendChatMessage('assistant', '⚠️ *Pop-up blocked!* Please allow pop-ups to view AI Suggested Places.', false);
+        return;
+    }
+    
+    newTab.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>AI Travel Recommendations</title>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+            <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+            <style>
+                :root {
+                    --primary-color: #2d6a4f;
+                    --secondary-color: #40916c;
+                    --bg-gradient: linear-gradient(135deg, #1b4332 0%, #2d6a4f 100%);
+                }
+                body {
+                    background-color: #f4f7f6;
+                    font-family: 'Outfit', sans-serif;
+                }
+                .hero-section {
+                    background: var(--bg-gradient);
+                    color: white;
+                    padding: 4rem 2rem;
+                    border-bottom-left-radius: 30px;
+                    border-bottom-right-radius: 30px;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+                }
+                .card-suggestion {
+                    border: none;
+                    border-radius: 16px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+                    transition: transform 0.3s ease, box-shadow 0.3s ease;
+                    background: white;
+                    overflow: hidden;
+                }
+                .card-suggestion:hover {
+                    transform: translateY(-8px);
+                    box-shadow: 0 15px 40px rgba(0,0,0,0.1);
+                }
+                .badge-category {
+                    background-color: rgba(45, 106, 79, 0.1);
+                    color: var(--primary-color);
+                    font-weight: 600;
+                    padding: 0.4em 0.8em;
+                    border-radius: 8px;
+                }
+                .map-container {
+                    border-radius: 20px;
+                    overflow: hidden;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                }
+            </style>
+        </head>
+        <body>
+            <div class="hero-section text-center">
+                <div class="container">
+                    <i class="fas fa-wand-magic-sparkles fa-3x mb-3 text-warning"></i>
+                    <h1 class="fw-bold">AI Location Recommendations</h1>
+                    <p class="lead">Nearby attractions and sightseeing suggestions based on your GPS coordinates</p>
+                    <span class="badge bg-light text-dark px-3 py-2 mt-2">
+                        <i class="fas fa-location-dot text-danger me-1"></i>\${lat.toFixed(5)}, \${lng.toFixed(5)}
+                    </span>
+                </div>
+            </div>
+            
+            <div class="container my-5">
+                <div class="row">
+                    <div class="col-lg-8">
+                        <h3 class="fw-bold mb-4"><i class="fas fa-compass me-2 text-success"></i>AI Recommended Places</h3>
+                        <div id="suggestions-loading" class="text-center py-5">
+                            <div class="spinner-border text-success" role="status" style="width: 3rem; height: 3rem;"></div>
+                            <h5 class="mt-3 text-muted">Consulting geography experts...</h5>
+                        </div>
+                        <div id="suggestions-list" class="row g-4 d-none">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                    
+                    <div class="col-lg-4 mt-5 mt-lg-0">
+                        <h3 class="fw-bold mb-4"><i class="fas fa-map-location-dot me-2 text-success"></i>Quick Map</h3>
+                        <div class="map-container">
+                            <iframe 
+                                width="100%" 
+                                height="350" 
+                                frameborder="0" 
+                                scrolling="no" 
+                                marginheight="0" 
+                                marginwidth="0" 
+                                src="https://www.openstreetmap.org/export/embed.html?bbox=\${lng-0.03}%2C\${lat-0.02}%2C\${lng+0.03}%2C\${lat+0.02}&layer=mapnik&marker=\${lat}%2C\${lng}">
+                            </iframe>
+                        </div>
+                        <div class="mt-3 text-center">
+                            <a href="https://www.openstreetmap.org/?mlat=\${lat}&mlon=\${lng}#map=15/\${lat}/\${lng}" target="_blank" class="btn btn-outline-success w-100">
+                                <i class="fas fa-arrow-up-right-from-square me-2"></i>Open Full Map
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <script>
+                // Async request to fetch AI suggestions for these coordinates
+                async function fetchSuggestions() {
+                    const apiKey = "${window._openrouterApiKey || window._groqApiKey || ''}";
+                    const isGroq = !${!!window._openrouterApiKey} && ${!!window._groqApiKey};
+                    
+                    const prompt = \\\`You are a local travel guide. Provide 4 top tourist/sightseeing recommendations near coordinates: Latitude \${lat}, Longitude \${lng}.
+For each place, provide name, category (e.g. Scenic, Historic, Food, Temple, Park), road distance from coordinates (estimate in km), and a short, exciting description (15-25 words).
+Reply ONLY with a valid JSON array of objects with the fields: name, category, distance, description. Example:
+[
+  {"name": "Marine Drive", "category": "Scenic", "distance": "2.5 km", "description": "A beautiful promenade along the sea, perfect for sunsets and late night walks."},
+  {"name": "Gateway of India", "category": "Historic", "distance": "3.8 km", "description": "The iconic arch monument overlooking the Mumbai harbor."}
+]
+Do NOT write any introduction or explanation outside the JSON.\\\`;
+
+                    try {
+                        const url = isGroq ? 'https://api.groq.com/openai/v1/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions';
+                        const headers = { 'Content-Type': 'application/json' };
+                        headers['Authorization'] = 'Bearer ' + apiKey;
+                        
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            headers: headers,
+                            body: JSON.stringify({
+                                model: isGroq ? 'llama-3.3-70b-versatile' : 'openrouter/free',
+                                messages: [{ role: 'user', content: prompt }],
+                                max_tokens: 400,
+                                temperature: 0.6
+                            })
+                        });
+                        
+                        if (!response.ok) throw new Error('API failed');
+                        
+                        const data = await response.json();
+                        const text = data.choices[0].message.content.trim();
+                        const jsonMatch = text.match(/\\\\\\\\[[\\\\\\\s\\\\\\\S]*?\\\\\\\\\]/);
+                        if (!jsonMatch) throw new Error('Invalid JSON structure');
+                        
+                        const places = JSON.parse(jsonMatch[0]);
+                        renderPlaces(places);
+                    } catch (e) {
+                        console.error(e);
+                        document.getElementById('suggestions-loading').innerHTML = \\\`
+                            <div class="alert alert-warning">
+                                <i class="fas fa-circle-exclamation me-2 fs-4"></i>
+                                <strong>Could not load AI recommendations.</strong> Here are some nearby places on the map instead!
+                            </div>
+                        \\\`;
+                    }
+                }
+                
+                function renderPlaces(places) {
+                    const list = document.getElementById('suggestions-list');
+                    list.innerHTML = places.map(place => \\\`
+                        <div class="col-md-6">
+                            <div class="card card-suggestion h-100 p-4">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                    <span class="badge-category">\\\\\\\${place.category}</span>
+                                    <span class="text-muted small"><i class="fas fa-location-arrow me-1"></i>\\\\\\\${place.distance}</span>
+                                </div>
+                                <h5 class="fw-bold text-success mb-2">\\\\\\\${place.name}</h5>
+                                <p class="text-muted mb-0 small">\\\\\\\${place.description}</p>
+                            </div>
+                        </div>
+                    \\\`).join('');
+                    document.getElementById('suggestions-loading').classList.add('d-none');
+                    list.classList.remove('d-none');
+                }
+                
+                fetchSuggestions();
+            </script>
+        </body>
+        </html>
+    `);
+    newTab.document.close();
+}
+
+function handleAIActionParsing(text) {
+    if (!text) return;
+    
+    // Check for ADD_STOP
+    const stopMatch = text.match(/\[\[ACTION:\s*ADD_STOP,\s*"([^"]+)"\]\]/i);
+    if (stopMatch) {
+        const stopName = stopMatch[1];
+        executeAddStop(stopName);
+        return;
+    }
+    
+    // Check for ADD_EXPENSE
+    const expenseMatch = text.match(/\[\[ACTION:\s*ADD_EXPENSE,\s*([\d.]+),\s*"([^"]*)",\s*"([^"]*)"\]\]/i);
+    if (expenseMatch) {
+        const amount = parseFloat(expenseMatch[1]);
+        const category = expenseMatch[2];
+        const description = expenseMatch[3];
+        executeAddExpense(amount, category, description);
+        return;
+    }
+    
+    // Check for GPS_SUGGEST
+    const gpsMatch = text.match(/\[\[ACTION:\s*GPS_SUGGEST\]\]/i);
+    if (gpsMatch) {
+        executeGPSSuggest();
+        return;
+    }
+}
+
+async function saveMessageToHistory(role, text) {
+    const user = auth.currentUser;
+    if (!user) return;
+    
+    try {
+        const userRef = db.collection('users').doc(user.uid);
+        const doc = await userRef.get();
+        let history = [];
+        if (doc.exists && doc.data().chatHistory) {
+            history = doc.data().chatHistory;
+        }
+        
+        history.push({ role, text, timestamp: new Date().toISOString() });
+        
+        // Cap history at 50 messages to keep the document size lightweight
+        if (history.length > 50) {
+            history = history.slice(history.length - 50);
+        }
+        
+        await userRef.update({ chatHistory: history });
+    } catch (e) {
+        console.warn('Error saving chat message to history:', e);
+    }
+}
+
+async function loadChatHistory() {
+    const user = auth.currentUser;
+    if (!user) return;
+    
+    try {
+        const doc = await db.collection('users').doc(user.uid).get();
+        if (doc.exists && doc.data().chatHistory) {
+            const history = doc.data().chatHistory;
+            if (history.length > 0) {
+                const messagesEl = document.getElementById('ai-chat-messages');
+                if (messagesEl) {
+                    messagesEl.innerHTML = ''; // Clear default welcome message
+                    history.forEach(msg => {
+                        appendChatMessage(msg.role, msg.text, false);
+                    });
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('Could not load chat history:', e);
+    }
 }
 
 function showTypingIndicator() {
@@ -2355,18 +2973,11 @@ function showTypingIndicator() {
     return div;
 }
 
-async function handleChatSend() {
-    const input = document.getElementById('ai-chat-input');
-    const message = input ? input.value.trim() : '';
-    if (!message) return;
-    
-    input.value = '';
-    appendChatMessage('user', message);
-    
+async function triggerChatRegeneration(message) {
     const apiKey = await loadOpenRouterKey();
     if (!apiKey) {
         appendChatMessage('assistant',
-            '⚠️ No OpenRouter API key found. Go to **Profile → OpenRouter API Key** and paste your free key from openrouter.ai/keys to enable AI features.');
+            '⚠️ No OpenRouter API key found. Go to **Profile → OpenRouter API Key** and paste your free key to enable AI features.');
         return;
     }
     
@@ -2378,13 +2989,103 @@ async function handleChatSend() {
         const reply = await sendToOpenRouter(message, apiKey);
         if (typingIndicator) typingIndicator.remove();
         appendChatMessage('assistant', reply);
+        
+        // Parse and execute agentic actions from chatbot responses
+        handleAIActionParsing(reply);
     } catch (err) {
         if (typingIndicator) typingIndicator.remove();
         console.error('OpenRouter API error:', err);
-        appendChatMessage('assistant',
-            `❌ **Error**: ${err.message}\n\nCheck your API key is valid at openrouter.ai/keys and has credits for free models.`);
+        let errorMsg = `❌ **Error**: ${err.message}`;
+        appendChatMessage('assistant', errorMsg);
     } finally {
         if (sendBtn) sendBtn.disabled = false;
+    }
+}
+
+async function handleChatSend() {
+    const input = document.getElementById('ai-chat-input');
+    const message = input ? input.value.trim() : '';
+    if (!message) return;
+    
+    input.value = '';
+    appendChatMessage('user', message);
+    
+    const apiKey = await loadOpenRouterKey();
+    if (!apiKey) {
+        appendChatMessage('assistant',
+            '⚠️ No OpenRouter API key found. Go to **Profile → OpenRouter API Key** and paste your free key from [openrouter.ai/keys](https://openrouter.ai/keys) to enable AI features.');
+        return;
+    }
+    
+    const typingIndicator = showTypingIndicator();
+    const sendBtn = document.getElementById('ai-chat-send');
+    if (sendBtn) sendBtn.disabled = true;
+    
+    try {
+        const reply = await sendToOpenRouter(message, apiKey);
+        if (typingIndicator) typingIndicator.remove();
+        appendChatMessage('assistant', reply);
+        
+        // Parse and execute agentic actions from chatbot responses
+        handleAIActionParsing(reply);
+    } catch (err) {
+        if (typingIndicator) typingIndicator.remove();
+        console.error('OpenRouter API error:', err);
+        
+        let errorMsg = `❌ **Error**: ${err.message}`;
+        const errStr = String(err.message).toLowerCase();
+        if (errStr.includes('rate limit') || errStr.includes('rate_limit') || errStr.includes('429')) {
+            errorMsg = `❌ **Rate Limit Exceeded**
+            
+You have reached the daily limit for free AI models on OpenRouter.
+
+**How to fix this:**
+1. **Add credits**: Go to [openrouter.ai/credits](https://openrouter.ai/credits) and add a small amount (minimum $5) to unlock **1000 free requests per day** and use paid models.
+2. **Switch to a Paid Model**: Go to **Profile → AI Model Preference** (click your avatar at top-right) and select a high-quality paid model like **Google Gemini 2.5 Flash** (costs less than $0.05 for hundreds of questions).
+3. **Wait it out**: Your free limit resets daily.`;
+        } else {
+            errorMsg += `\n\nCheck your API key is valid at [openrouter.ai/keys](https://openrouter.ai/keys) and has credits for free models.`;
+        }
+        appendChatMessage('assistant', errorMsg);
+    } finally {
+        if (sendBtn) sendBtn.disabled = false;
+    }
+}
+
+function updateAIProviderBadge(activeProvider) {
+    const badge = document.getElementById('ai-chat-provider-badge');
+    if (!badge) return;
+    
+    if (activeProvider) {
+        if (activeProvider === 'OpenRouter') {
+            let preferredModel = window._openrouterModel || 'auto';
+            if (preferredModel === 'custom' && window._openrouterCustomModel) {
+                preferredModel = window._openrouterCustomModel;
+            }
+            const modelName = preferredModel === 'auto' ? 'Free Models' : preferredModel.split('/').pop();
+            badge.className = 'badge bg-success-subtle text-success';
+            badge.innerHTML = `<i class="fas fa-network-wired me-1"></i>OpenRouter (${modelName})`;
+        } else if (activeProvider === 'Groq') {
+            badge.className = 'badge bg-warning-subtle text-warning';
+            badge.innerHTML = '<i class="fas fa-bolt me-1"></i>Groq (Fallback)';
+        }
+        return;
+    }
+    
+    if (window._openrouterApiKey) {
+        let preferredModel = window._openrouterModel || 'auto';
+        if (preferredModel === 'custom' && window._openrouterCustomModel) {
+            preferredModel = window._openrouterCustomModel;
+        }
+        const modelName = preferredModel === 'auto' ? 'Free Models' : preferredModel.split('/').pop();
+        badge.className = 'badge bg-success-subtle text-success';
+        badge.innerHTML = `<i class="fas fa-network-wired me-1"></i>OpenRouter (${modelName})`;
+    } else if (window._groqApiKey) {
+        badge.className = 'badge bg-warning-subtle text-warning';
+        badge.innerHTML = '<i class="fas fa-bolt me-1"></i>Groq (Fallback)';
+    } else {
+        badge.className = 'badge bg-secondary-subtle text-secondary';
+        badge.innerHTML = '<i class="fas fa-eye-slash me-1"></i>No AI Key';
     }
 }
 
@@ -2408,14 +3109,28 @@ function initAIChatbot() {
     
     toggleBtn.addEventListener('click', () => {
         const isOpen = container.classList.toggle('active');
-        const icon = toggleBtn.querySelector('i');
-        icon.className = isOpen ? 'fas fa-xmark' : 'fas fa-robot animate-pulse-slow';
+        const img = toggleBtn.querySelector('#ai-chat-toggle-img');
+        const icon = toggleBtn.querySelector('#ai-chat-toggle-close-icon');
+        if (img && icon) {
+            if (isOpen) {
+                img.classList.add('d-none');
+                icon.classList.remove('d-none');
+            } else {
+                img.classList.remove('d-none');
+                icon.classList.add('d-none');
+            }
+        }
     });
     
     if (closeBtn) {
         closeBtn.addEventListener('click', () => {
             container.classList.remove('active');
-            toggleBtn.querySelector('i').className = 'fas fa-robot animate-pulse-slow';
+            const img = toggleBtn.querySelector('#ai-chat-toggle-img');
+            const icon = toggleBtn.querySelector('#ai-chat-toggle-close-icon');
+            if (img && icon) {
+                img.classList.remove('d-none');
+                icon.classList.add('d-none');
+            }
         });
     }
     
@@ -2437,13 +3152,139 @@ function initAIChatbot() {
         });
     });
     
+    // Delegated click handler for editing messages
+    const messagesEl = document.getElementById('ai-chat-messages');
+    if (messagesEl) {
+        messagesEl.addEventListener('click', async (e) => {
+            const editBtn = e.target.closest('.edit-user-msg-btn');
+            if (editBtn) {
+                const messageDiv = editBtn.closest('.ai-chat-message');
+                if (!messageDiv) return;
+                
+                // Prevent editing multiple times simultaneously
+                if (messageDiv.classList.contains('editing')) return;
+                messageDiv.classList.add('editing');
+                
+                const rawText = messageDiv.dataset.rawText || '';
+                const contentSpan = messageDiv.querySelector('.msg-content-text');
+                if (!contentSpan) return;
+                
+                // Store original HTML to restore if cancelled
+                const originalHTML = messageDiv.innerHTML;
+                
+                messageDiv.innerHTML = `
+                    <div class="w-100 mt-1">
+                        <textarea class="form-control form-control-sm mb-2 edit-chat-textarea" rows="2" style="font-size: 0.8rem; border-radius: 8px; color: #1e293b; background-color: #fff;">${rawText}</textarea>
+                        <div class="d-flex justify-content-end gap-1">
+                            <button class="btn btn-xs btn-light text-dark py-0 px-2 cancel-edit-btn" style="font-size: 0.75rem; border-radius: 6px;">Cancel</button>
+                            <button class="btn btn-xs btn-success py-0 px-2 save-edit-btn" style="font-size: 0.75rem; border-radius: 6px;">Save & Resend</button>
+                        </div>
+                    </div>
+                `;
+                
+                const textarea = messageDiv.querySelector('.edit-chat-textarea');
+                textarea?.focus();
+                
+                // Handle Cancel
+                messageDiv.querySelector('.cancel-edit-btn').addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    messageDiv.classList.remove('editing');
+                    messageDiv.innerHTML = originalHTML;
+                });
+                
+                // Handle Save
+                messageDiv.querySelector('.save-edit-btn').addEventListener('click', async (ev) => {
+                    ev.stopPropagation();
+                    const newText = textarea.value.trim();
+                    if (!newText) return;
+                    
+                    messageDiv.classList.remove('editing');
+                    
+                    // 1. Get index of this message
+                    const allMessages = Array.from(messagesEl.children);
+                    const index = allMessages.indexOf(messageDiv);
+                    
+                    // 2. Remove all subsequent messages from the DOM
+                    while (messagesEl.children.length > index + 1) {
+                        messagesEl.removeChild(messagesEl.lastChild);
+                    }
+                    
+                    // 3. Update the edited message div text
+                    messageDiv.dataset.rawText = newText;
+                    messageDiv.innerHTML = `
+                        <div class="d-flex align-items-center justify-content-between w-100">
+                            <span class="msg-content-text">${newText}</span>
+                            <button class="edit-user-msg-btn text-white-50 border-0 bg-transparent btn-sm p-0 ms-2" style="cursor: pointer; background: none; display: flex; align-items: center;" title="Edit Prompt">
+                                <i class="fas fa-pen" style="font-size: 0.7rem;"></i>
+                            </button>
+                        </div>
+                    `;
+                    
+                    // 4. Update the Firestore history
+                    const user = auth.currentUser;
+                    if (user) {
+                        try {
+                            const userRef = db.collection('users').doc(user.uid);
+                            const doc = await userRef.get();
+                            if (doc.exists && doc.data().chatHistory) {
+                                let history = doc.data().chatHistory;
+                                history = history.slice(0, index);
+                                history.push({ role: 'user', text: newText, timestamp: new Date().toISOString() });
+                                await userRef.update({ chatHistory: history });
+                            }
+                        } catch (err) {
+                            console.warn('Error updating chat history for edit:', err);
+                        }
+                    }
+                    
+                    // 5. Trigger regeneration of reply
+                    triggerChatRegeneration(newText);
+                });
+            }
+        });
+    }
+    
+    // Clear chat button event listener
+    const clearBtn = document.getElementById('ai-chat-clear');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', async () => {
+            if (confirm('Are you sure you want to clear your chat history?')) {
+                const messagesEl = document.getElementById('ai-chat-messages');
+                if (messagesEl) {
+                    messagesEl.innerHTML = `
+                        <div class="ai-chat-message assistant">
+                            Hello! I am your AI Travel Assistant. If you have an active trip, I can help you optimize your route stops, calculate exact mileage, suggest budget splits, or find cool places to visit. Ask me anything!
+                        </div>
+                    `;
+                }
+                
+                const user = auth.currentUser;
+                if (user) {
+                    try {
+                        await db.collection('users').doc(user.uid).update({
+                            chatHistory: firebase.firestore.FieldValue.delete()
+                        });
+                        showToast('Chat history cleared.', 'success');
+                    } catch (e) {
+                        console.warn('Error clearing chat history:', e);
+                    }
+                }
+            }
+        });
+    }
+    
+    // Load existing chat history from Firestore
+    loadChatHistory();
+    
     // Show setup tip if no key is stored yet
     loadOpenRouterKey().then(key => {
+        updateAIProviderBadge();
         if (!key) {
             const messagesEl = document.getElementById('ai-chat-messages');
-            if (messagesEl && messagesEl.children.length === 1) {
+            if (messagesEl && (messagesEl.children.length === 1 && messagesEl.firstElementChild.classList.contains('assistant'))) {
                 appendChatMessage('assistant',
-                    '💡 **Get started**: Add your free OpenRouter key in **Profile → OpenRouter API Key**.\n\nGet one free at openrouter.ai/keys — then I can optimize your route stops, calculate mileage, and suggest cool places along your journey!');
+                    '💡 **Get started**: Add your free OpenRouter key in **Profile → OpenRouter API Key**.\n\nGet one free at [openrouter.ai/keys](https://openrouter.ai/keys) — then I can optimize your route stops, calculate mileage, and suggest cool places along your journey!',
+                    false); // Don't persist this system tip
             }
         }
     });
