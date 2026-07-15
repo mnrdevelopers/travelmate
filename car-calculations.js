@@ -65,14 +65,55 @@ function setupCarCalculatorEventListeners() {
      // Add fuel fill-up listeners
     setupFuelFillUpEventListeners();
     
+    // Fuel type change listener for label updates
+    const fuelType = document.getElementById('fuel-type');
+    if (fuelType) {
+        fuelType.addEventListener('change', updateFuelLabels);
+    }
+    
     // Auto-calculate on input changes
-    const autoCalculateFields = ['trip-distance', 'mileage', 'fuel-price', 'rental-cost', 'trip-duration'];
+    const autoCalculateFields = ['trip-distance', 'mileage', 'fuel-price', 'rental-cost', 'trip-duration', 'tank-capacity'];
     autoCalculateFields.forEach(field => {
         const element = document.getElementById(field);
         if (element) {
             element.addEventListener('input', debounce(calculateAllCosts, 500));
         }
     });
+}
+
+function updateFuelLabels() {
+    const fuelType = document.getElementById('fuel-type').value;
+    const mileageLabel = document.getElementById('mileage-label');
+    const mileageInput = document.getElementById('mileage');
+    const fuelPriceLabel = document.getElementById('fuel-price-label');
+    const fuelPriceInput = document.getElementById('fuel-price');
+    const tankCapacityLabel = document.getElementById('tank-capacity-label');
+    const tankCapacityInput = document.getElementById('tank-capacity');
+    
+    if (fuelType === 'electric') {
+        if (mileageLabel) mileageLabel.textContent = 'Efficiency (km/kWh)';
+        if (mileageInput) mileageInput.placeholder = 'e.g., 6.5';
+        if (fuelPriceLabel) fuelPriceLabel.textContent = 'Elec. Cost (₹/kWh)';
+        if (fuelPriceInput) fuelPriceInput.placeholder = 'e.g., 8.0';
+        if (tankCapacityLabel) tankCapacityLabel.textContent = 'Battery Cap. (kWh)';
+        if (tankCapacityInput) tankCapacityInput.placeholder = 'e.g., 40';
+    } else if (fuelType === 'cng') {
+        if (mileageLabel) mileageLabel.textContent = 'Mileage (km/kg)';
+        if (mileageInput) mileageInput.placeholder = 'e.g., 22';
+        if (fuelPriceLabel) fuelPriceLabel.textContent = 'CNG Price (₹/kg)';
+        if (fuelPriceInput) fuelPriceInput.placeholder = 'e.g., 85.0';
+        if (tankCapacityLabel) tankCapacityLabel.textContent = 'CNG Tank Cap. (kg)';
+        if (tankCapacityInput) tankCapacityInput.placeholder = 'e.g., 10';
+    } else {
+        if (mileageLabel) mileageLabel.textContent = 'Mileage (km/l)';
+        if (mileageInput) mileageInput.placeholder = 'e.g., 15';
+        if (fuelPriceLabel) fuelPriceLabel.textContent = 'Fuel Price (₹/l)';
+        if (fuelPriceInput) fuelPriceInput.placeholder = 'e.g., 95.5';
+        if (tankCapacityLabel) tankCapacityLabel.textContent = 'Tank Capacity (L)';
+        if (tankCapacityInput) tankCapacityInput.placeholder = 'e.g., 45';
+    }
+    
+    calculateAllCosts();
 }
 
 function toggleRentalFields() {
@@ -155,6 +196,14 @@ function calculateAllCosts() {
     // Cost per km
     calculation.costPerKm = parseFloat((calculation.totalCost / tripDistance).toFixed(2));
     
+    // Calculate CO2 emissions
+    const fuelType = document.getElementById('fuel-type').value;
+    const factor = getEmissionFactor('car', fuelType);
+    calculation.co2Emitted = parseFloat((tripDistance * factor).toFixed(1));
+    calculation.co2Saved = fuelType === 'electric' ? parseFloat((tripDistance * 0.09).toFixed(1)) : 
+                           fuelType === 'cng' ? parseFloat((tripDistance * 0.03).toFixed(1)) : 0;
+    calculation.fuelType = fuelType;
+
     currentCalculation = calculation;
     showCalculationResults(calculation, true);
 }
@@ -169,6 +218,7 @@ function showCalculationResults(calculation, hasData) {
                 <p>Enter trip details to see cost breakdown</p>
             </div>
         `;
+        showEcoCalculationResults({}, false);
         return;
     }
     
@@ -223,6 +273,184 @@ function showCalculationResults(calculation, hasData) {
             </small>
         </div>
     `;
+    showEcoCalculationResults(calculation, true);
+}
+
+function showEcoCalculationResults(calculation, hasData) {
+    const ecoCard = document.getElementById('eco-results-card');
+    const ecoContent = document.getElementById('eco-results-content');
+    const rangeCard = document.getElementById('range-planner-card');
+    const rangeContent = document.getElementById('range-planner-content');
+    const comparisonCard = document.getElementById('comparison-card');
+    const comparisonTableBody = document.getElementById('comparison-table-body');
+    
+    if (!ecoCard || !ecoContent) return;
+    
+    if (!hasData || !calculation || calculation.tripDistance <= 0) {
+        ecoCard.style.display = 'none';
+        if (rangeCard) rangeCard.style.display = 'none';
+        if (comparisonCard) comparisonCard.style.display = 'none';
+        return;
+    }
+    
+    ecoCard.style.display = 'block';
+    
+    const leaf = getLeafRating(calculation.co2Emitted);
+    
+    let fuelDesc = 'Standard Petrol';
+    if (calculation.fuelType === 'diesel') fuelDesc = 'Diesel';
+    if (calculation.fuelType === 'cng') fuelDesc = 'Compressed Natural Gas (CNG)';
+    if (calculation.fuelType === 'electric') fuelDesc = 'Electric Vehicle (EV)';
+    
+    let savingsHTML = '';
+    if (calculation.co2Saved > 0) {
+        savingsHTML = `
+            <div class="alert alert-success mt-2 mb-0 py-2">
+                <small>
+                    <i class="fas fa-tree me-1 text-success"></i>
+                    Choosing <strong>${fuelDesc}</strong> saved <strong>${calculation.co2Saved} kg of CO₂</strong> compared to petrol!
+                </small>
+            </div>
+        `;
+    } else if (calculation.fuelType === 'electric') {
+        savingsHTML = `
+            <div class="alert alert-success mt-2 mb-0 py-2">
+                <small><i class="fas fa-plug me-1 text-success"></i>Electric vehicle driving emits zero direct tailpipe carbon!</small>
+            </div>
+        `;
+    } else {
+        savingsHTML = `
+            <div class="alert alert-warning mt-2 mb-0 py-2">
+                <small>
+                    <i class="fas fa-info-circle me-1 text-warning"></i>
+                    Consider switching to CNG or EV to lower carbon emissions.
+                </small>
+            </div>
+        `;
+    }
+    
+    ecoContent.innerHTML = `
+        <div class="row align-items-center mb-3">
+            <div class="col-8">
+                <h6 class="mb-1 text-success">Total CO₂ Emitted:</h6>
+                <small class="text-muted">For a ${calculation.tripDistance} km trip (${fuelDesc})</small>
+            </div>
+            <div class="col-4 text-end">
+                <h4 class="fw-bold text-success mb-0">${calculation.co2Emitted} kg</h4>
+            </div>
+        </div>
+        
+        <div class="d-flex align-items-center justify-content-between p-2 bg-light rounded mb-2">
+            <span class="small text-muted"><i class="fas fa-leaf me-1 text-success"></i>Trip Eco Rating:</span>
+            <span class="badge bg-light ${leaf.class} fw-bold" title="${leaf.desc}"><i class="fas ${leaf.icon} me-1"></i>${leaf.rating}</span>
+        </div>
+        
+        ${savingsHTML}
+    `;
+
+    // 1. Range & Stops Estimation
+    const tankCapacity = parseFloat(document.getElementById('tank-capacity').value) || 0;
+    if (rangeCard && rangeContent) {
+        if (tankCapacity > 0 && calculation.mileage > 0) {
+            rangeCard.style.display = 'block';
+            
+            // Calculate range
+            const maxRange = tankCapacity * calculation.mileage;
+            const stopsNeeded = Math.max(0, Math.ceil(calculation.tripDistance / maxRange) - 1);
+            
+            let isEv = calculation.fuelType === 'electric';
+            let fuelUnit = isEv ? 'kWh' : (calculation.fuelType === 'cng' ? 'kg' : 'L');
+            let stopType = isEv ? 'Recharge stops' : 'Refuel stops';
+            let iconClass = isEv ? 'fa-bolt text-warning' : 'fa-gas-pump text-primary';
+            
+            let stopsDetailHTML = '';
+            if (stopsNeeded === 0) {
+                stopsDetailHTML = `
+                    <div class="alert alert-success py-2 mb-0 mt-2">
+                        <small><i class="fas fa-check-circle me-1"></i><strong>Full Range:</strong> You can complete this trip on a single charge/tank! (Total range: ${maxRange.toFixed(0)} km)</small>
+                    </div>
+                `;
+            } else {
+                let interval = calculation.tripDistance / (stopsNeeded + 1);
+                stopsDetailHTML = `
+                    <div class="alert alert-warning py-2 mb-0 mt-2">
+                        <small>
+                            <i class="fas fa-exclamation-triangle me-1"></i>
+                            <strong>Range Alert:</strong> Plan to refuel/recharge every <strong>${interval.toFixed(0)} km</strong>.
+                        </small>
+                    </div>
+                `;
+            }
+
+            rangeContent.innerHTML = `
+                <div class="row text-center mb-2">
+                    <div class="col-6 border-end">
+                        <small class="text-muted d-block">Estimated Range</small>
+                        <h4 class="fw-bold mb-0 text-info">${maxRange.toFixed(0)} km</h4>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted d-block">Stops Required</small>
+                        <h4 class="fw-bold mb-0 text-danger">${stopsNeeded}</h4>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center justify-content-between p-2 bg-light rounded mt-2">
+                    <span class="small text-muted"><i class="fas ${iconClass} me-1"></i>Capacity:</span>
+                    <span class="fw-semibold">${tankCapacity} ${fuelUnit}</span>
+                </div>
+                ${stopsDetailHTML}
+            `;
+        } else {
+            rangeCard.style.display = 'none';
+        }
+    }
+
+    // 2. Comparative Fuel & Eco Analysis
+    if (comparisonCard && comparisonTableBody) {
+        comparisonCard.style.display = 'block';
+        
+        // Define average price and efficiency benchmarks for comparison
+        const prices = {
+            petrol: parseFloat(document.getElementById('fuel-price').value) || 95.5,
+            diesel: 89.2,
+            cng: 82.5,
+            electric: 7.5
+        };
+        
+        const mileages = {
+            petrol: parseFloat(document.getElementById('mileage').value) || 15.0,
+            diesel: 18.0,
+            cng: 22.0,
+            electric: 6.2
+        };
+        
+        prices[calculation.fuelType] = calculation.fuelPrice;
+        mileages[calculation.fuelType] = calculation.mileage;
+
+        const modes = [
+            { id: 'petrol', name: 'Petrol Car', icon: 'fa-car text-danger' },
+            { id: 'diesel', name: 'Diesel Car', icon: 'fa-car text-warning' },
+            { id: 'cng', name: 'CNG Car', icon: 'fa-leaf text-success' },
+            { id: 'electric', name: 'Electric (EV)', icon: 'fa-bolt text-info' }
+        ];
+
+        comparisonTableBody.innerHTML = modes.map(m => {
+            const cost = (calculation.tripDistance / mileages[m.id]) * prices[m.id];
+            const emFactor = getEmissionFactor('car', m.id);
+            const co2 = calculation.tripDistance * emFactor;
+            const isCurrent = m.id === calculation.fuelType;
+            
+            return `
+                <tr class="${isCurrent ? 'table-success fw-bold' : ''}">
+                    <td>
+                        <i class="fas ${m.icon} me-1"></i> ${m.name}
+                        ${isCurrent ? ' <small class="badge bg-success py-0" style="font-size:0.6rem;">Selected</small>' : ''}
+                    </td>
+                    <td>₹${cost.toFixed(0)}</td>
+                    <td>${co2.toFixed(1)} kg</td>
+                </tr>
+            `;
+        }).join('');
+    }
 }
 
 async function saveVehicle() {
@@ -734,7 +962,6 @@ function checkAuthState() {
             loadUserData();
             setupCarCalculatorEventListeners();
             loadSavedVehicles();
-            loadTripsForFuelTracking(); // Add this line
         } else {
             // User is signed out
             navigateTo('login.html');
@@ -745,8 +972,11 @@ function checkAuthState() {
 function loadUserData() {
     const user = auth.currentUser;
     document.getElementById('user-name').textContent = user.displayName || 'Traveler';
-    document.getElementById('user-avatar').src = user.photoURL || 
-        `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'Traveler')}&background=4361ee&color=fff`;
+    const userAvatar = document.getElementById('user-avatar');
+    if (userAvatar) {
+        userAvatar.src = getSafeAvatarUrl(user.photoURL, user.displayName || 'Traveler');
+        setupAvatarFallback(userAvatar, user.displayName || 'Traveler');
+    }
 }
 
 function handleLogout() {

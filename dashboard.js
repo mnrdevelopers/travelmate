@@ -79,12 +79,27 @@ function setupDashboardEventListeners() {
     if (createFirstTripBtn) createFirstTripBtn.addEventListener('click', showCreateTripModal);
     if (mobileLogoutBtn) mobileLogoutBtn.addEventListener('click', handleLogout);
     
-    // Distance calculation - check if elements exist
-    const calculateDistance = document.getElementById('calculate-distance');
-    const editCalculateDistance = document.getElementById('edit-calculate-distance');
+    // Dynamic stops wiring
+    const addTripStopBtn = document.getElementById('add-trip-stop-btn');
+    if (addTripStopBtn) {
+        addTripStopBtn.addEventListener('click', () => {
+            addStopField(document.getElementById('trip-stops-container'));
+        });
+    }
     
-    if (calculateDistance) {
-        calculateDistance.addEventListener('change', function() {
+    const editAddTripStopBtn = document.getElementById('edit-add-trip-stop-btn');
+    if (editAddTripStopBtn) {
+        editAddTripStopBtn.addEventListener('click', () => {
+            addStopField(document.getElementById('edit-trip-stops-container'));
+        });
+    }
+    
+    // Distance calculation - check if elements exist
+    const calculateDistanceCheckbox = document.getElementById('calculate-distance');
+    const editCalculateDistanceCheckbox = document.getElementById('edit-calculate-distance');
+    
+    if (calculateDistanceCheckbox) {
+        calculateDistanceCheckbox.addEventListener('change', function() {
             if (this.checked) {
                 calculateDistance();
             } else {
@@ -93,8 +108,8 @@ function setupDashboardEventListeners() {
         });
     }
     
-    if (editCalculateDistance) {
-        editCalculateDistance.addEventListener('change', function() {
+    if (editCalculateDistanceCheckbox) {
+        editCalculateDistanceCheckbox.addEventListener('change', function() {
             if (this.checked) {
                 calculateEditDistance();
             } else {
@@ -160,7 +175,46 @@ function showProfileModal() {
     
     document.getElementById('profile-name').value = user.displayName || '';
     document.getElementById('profile-email').value = user.email || '';
-    document.getElementById('profile-avatar').src = user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}&background=4361ee&color=fff`;
+    
+    const profileAvatar = document.getElementById('profile-avatar');
+    if (profileAvatar) {
+        profileAvatar.src = getSafeAvatarUrl(user.photoURL, user.displayName || 'User');
+        setupAvatarFallback(profileAvatar, user.displayName || 'User');
+    }
+    
+    // Load saved OpenRouter API key from Firestore
+    db.collection('users').doc(user.uid).get().then(doc => {
+        const keyField = document.getElementById('profile-openrouter-key');
+        if (keyField && doc.exists && doc.data().openrouterApiKey) {
+            keyField.value = doc.data().openrouterApiKey;
+        }
+    }).catch(() => {});
+    
+    // Render default eco avatar selectors
+    const container = document.getElementById('avatar-choices-container');
+    if (container) {
+        container.innerHTML = ECO_AVATARS.map(avatar => {
+            const isSelected = (user.photoURL === avatar.value || (!user.photoURL && avatar.id === 'avatar-leaf'));
+            return `
+                <div class="avatar-option rounded-circle p-1 d-flex align-items-center justify-content-center" 
+                     style="width: 42px; height: 42px; cursor: pointer; border: 2px solid ${isSelected ? 'var(--primary-color)' : 'transparent'}; background-color: rgba(45, 106, 79, 0.05);"
+                     data-avatar-val="${avatar.value}"
+                     title="${avatar.name}">
+                     <img src="${avatar.value}" style="width: 28px; height: 28px; object-fit: contain;">
+                </div>
+            `;
+        }).join('');
+        
+        container.querySelectorAll('.avatar-option').forEach(el => {
+            el.addEventListener('click', (e) => {
+                const target = e.currentTarget;
+                const newVal = target.dataset.avatarVal;
+                container.querySelectorAll('.avatar-option').forEach(opt => opt.style.borderColor = 'transparent');
+                target.style.borderColor = 'var(--primary-color)';
+                if (profileAvatar) profileAvatar.src = newVal;
+            });
+        });
+    }
     
     const modal = new bootstrap.Modal(document.getElementById('profileModal'));
     modal.show();
@@ -178,15 +232,33 @@ async function saveProfile() {
         document.getElementById('save-profile-btn').disabled = true;
         document.getElementById('save-profile-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
         
+        // Retrieve selected avatar URL
+        const profileAvatar = document.getElementById('profile-avatar');
+        const selectedAvatarSrc = profileAvatar ? profileAvatar.src : '';
+        
         await auth.currentUser.updateProfile({
-            displayName: name
+            displayName: name,
+            photoURL: selectedAvatarSrc
         });
         
+        // Save OpenRouter API key if provided
+        const orKeyInput = document.getElementById('profile-openrouter-key');
+        const openrouterApiKey = orKeyInput ? orKeyInput.value.trim() : '';
+        if (openrouterApiKey) {
+            window._openrouterApiKey = openrouterApiKey;
+        }
+        
         // Update user document in Firestore
-        await db.collection('users').doc(auth.currentUser.uid).update({
+        const updatePayload = {
             name: name,
+            photoURL: selectedAvatarSrc,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
+        };
+        if (openrouterApiKey) updatePayload.openrouterApiKey = openrouterApiKey;
+        await db.collection('users').doc(auth.currentUser.uid).update(updatePayload);
+        
+        // Reinitialize chatbot if key was just added
+        if (openrouterApiKey) initAIChatbot();
         
         // Update UI
         loadUserData();
@@ -324,6 +396,9 @@ function checkAuthState() {
                 showPrivateDashboard();
                 updateNavigationBasedOnAuth(true);
                 
+                // Initialize AI chatbot (shown only for logged-in users)
+                initAIChatbot();
+                
                 // Show welcome back message if this is a login
                 if (sessionStorage.getItem('justLoggedIn')) {
                     showToast(`Welcome back, ${user.displayName || 'Traveler'}!`, 'success');
@@ -399,7 +474,8 @@ function loadUserData() {
     }
     
     if (userAvatarElement) {
-        userAvatarElement.src = currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || 'Traveler')}&background=4361ee&color=fff`;
+        userAvatarElement.src = getSafeAvatarUrl(currentUser.photoURL, currentUser.displayName || 'Traveler');
+        setupAvatarFallback(userAvatarElement, currentUser.displayName || 'Traveler');
     }
 }
 
@@ -425,6 +501,9 @@ async function loadUserTrips() {
             const dateB = b.createdAt ? (b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt)) : new Date(0);
             return dateB - dateA;
         });
+        
+        // Expose to window so utils.js and the AI chatbot can access it
+        window.userTrips = userTrips;
         
         displayTrips();
         updateDashboardStats();
@@ -518,6 +597,31 @@ function updateDashboardStats() {
     document.getElementById('active-trips-count').textContent = activeTrips;
     document.getElementById('total-spent-amount').textContent = upcomingTrips;
     document.getElementById('car-expenses-amount').textContent = completedTrips;
+
+    // Calculate Eco Metrics
+    let totalEmitted = 0;
+    let totalSaved = 0;
+    let hasRouteData = false;
+
+    userTrips.forEach(trip => {
+        if (trip.route && trip.route.distance) {
+            hasRouteData = true;
+            const carbon = calculateTripCarbon(trip);
+            totalEmitted += carbon.emissions;
+            totalSaved += carbon.saved;
+        }
+    });
+
+    const ecoCard = document.getElementById('dashboard-eco-card');
+    if (ecoCard) {
+        if (hasRouteData && totalTrips > 0) {
+            ecoCard.style.display = 'block';
+            document.getElementById('dashboard-co2-emitted').textContent = `${totalEmitted.toFixed(1)} kg`;
+            document.getElementById('dashboard-co2-saved').textContent = `${totalSaved.toFixed(1)} kg`;
+        } else {
+            ecoCard.style.display = 'none';
+        }
+    }
 }
 
 function showLoadingState(show) {
@@ -623,7 +727,399 @@ function displayTrips() {
 
         completedSection.appendChild(rowDiv);
         tripsContainer.appendChild(completedSection);
+     }
+     
+     // Update Live journey progress animation tracker
+     updateDashboardActiveTripTracker();
+}
+
+function updateDashboardActiveTripTracker() {
+    const card = document.getElementById('dashboard-active-trip-tracker');
+    const bar = document.getElementById('dashboard-tracker-bar');
+    const vehicle = document.getElementById('dashboard-tracker-vehicle');
+    const statusText = document.getElementById('dashboard-tracker-status');
+    const startText = document.getElementById('dashboard-tracker-start');
+    const currentText = document.getElementById('dashboard-tracker-current');
+    const destText = document.getElementById('dashboard-tracker-dest');
+    
+    if (!card || !bar || !vehicle || !statusText || !startText || !destText) return;
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Find active trip
+    const activeTrip = userTrips.find(trip => {
+        const start = new Date(trip.startDate);
+        const end = new Date(trip.endDate);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        return today >= start && today <= end;
+    });
+    
+    if (!activeTrip) {
+        card.style.display = 'none';
+        return;
     }
+    
+    // Trigger background route calculation if stopsDistances is missing OR if AI key
+    // is available but the route was not calculated with AI yet
+    const hasAiKey = !!window._openrouterApiKey;
+    const needsCalc = activeTrip.stops && activeTrip.stops.length > 0 && (
+        !activeTrip.route ||
+        !activeTrip.route.stopsDistances ||
+        (hasAiKey && !activeTrip.route.aiEnhanced)
+    );
+    if (needsCalc) {
+        calculateAndSaveStopsDistances(activeTrip);
+    }
+    
+    // Set Locations text
+    startText.textContent = activeTrip.startLocation || 'Start';
+    destText.textContent = activeTrip.destination || 'Destination';
+    if (currentText) {
+        currentText.innerHTML = activeTrip.currentLocationName ? `<i class="fas fa-location-dot me-1"></i>${activeTrip.currentLocationName}` : '';
+    }
+    
+    // Parse Dates
+    const startDate = new Date(activeTrip.startDate);
+    const endDate = new Date(activeTrip.endDate);
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
+    
+    // Determine vehicle icon and animation class based on transportMode
+    let iconClass = 'fa-car text-success animate-drive';
+    let transportDesc = 'Car';
+    
+    switch(activeTrip.transportMode) {
+        case 'flight':
+            iconClass = 'fa-plane text-info animate-flight';
+            transportDesc = 'Flight';
+            break;
+        case 'train':
+            iconClass = 'fa-train text-primary animate-ride';
+            transportDesc = 'Train';
+            break;
+        case 'bus':
+            iconClass = 'fa-bus text-warning animate-ride';
+            transportDesc = 'Bus';
+            break;
+        case 'public':
+            iconClass = 'fa-train-subway text-success animate-ride';
+            transportDesc = 'Public Transport';
+            break;
+    }
+    
+    // Set Icon HTML
+    vehicle.innerHTML = `<i class="fas ${iconClass}" style="font-size: 1.5rem; text-shadow: 0 2px 4px rgba(0,0,0,0.15);"></i>`;
+    
+    // Calculate progress percentage
+    const totalDistance = parseFloat(activeTrip.route?.distance) || parseFloat(activeTrip.distance) || 0;
+    let progressPercent = 0;
+    let progressText = '';
+    
+    if (totalDistance > 0) {
+        if (activeTrip.currentKm !== undefined && activeTrip.currentKm >= 0) {
+            progressPercent = Math.min(100, (activeTrip.currentKm / totalDistance) * 100);
+            progressText = `: ${activeTrip.currentKm} / ${totalDistance.toFixed(0)} km completed`;
+        } else {
+            const totalTime = endDate.getTime() - startDate.getTime();
+            const elapsedTime = today.getTime() - startDate.getTime();
+            progressPercent = Math.min(100, Math.max(0, (elapsedTime / totalTime) * 100));
+            const estDistance = (totalDistance * (progressPercent / 100)).toFixed(0);
+            progressText = `: ~${estDistance} / ${totalDistance.toFixed(0)} km completed`;
+        }
+    } else {
+        // Fallback to percentage-based progression
+        progressPercent = activeTrip.currentKm !== undefined ? Math.min(100, activeTrip.currentKm) : 0;
+        if (activeTrip.currentKm !== undefined) {
+            progressText = `: ${progressPercent.toFixed(0)}% completed`;
+        } else {
+            const totalTime = endDate.getTime() - startDate.getTime();
+            const elapsedTime = today.getTime() - startDate.getTime();
+            progressPercent = Math.min(100, Math.max(0, (elapsedTime / totalTime) * 100));
+            progressText = `: ~${progressPercent.toFixed(0)}% completed (estimated)`;
+        }
+    }
+    
+    const currentKm = activeTrip.currentKm || 0;
+    const nextStopStatus = getNextStopStatus(activeTrip, currentKm, totalDistance);
+    const nextStopHtml = nextStopStatus ? `<span class="badge bg-primary-subtle text-primary ms-2 animate-bounce-subtle"><i class="fas fa-location-arrow me-1 text-primary"></i>${nextStopStatus}</span>` : '';
+    const aiEnhancedBadge = activeTrip.route?.aiEnhanced
+        ? `<span class="badge ms-2" style="background: linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; font-size:0.65rem;"><i class="fas fa-robot me-1"></i>AI Enhanced</span>`
+        : (window._openrouterApiKey ? `<span class="badge bg-secondary-subtle text-secondary ms-2" style="font-size:0.65rem;"><i class="fas fa-robot me-1"></i>AI Calculating...</span>` : '');
+
+    statusText.innerHTML = `
+        <span class="badge bg-success-subtle text-success animate-pulse-slow">Active Journey${progressText} (${transportDesc})</span>
+        ${nextStopHtml}
+        ${aiEnhancedBadge}
+        <button class="btn btn-outline-success py-0 px-2 ms-2 border-0" style="font-size: 0.75rem; border-radius: 12px; background-color: rgba(45, 106, 79, 0.08);" id="update-dashboard-progress" data-trip-id="${activeTrip.id}" data-total-dist="${totalDistance}">
+            <i class="fas fa-edit me-1"></i>Update Progress
+        </button>
+        ${'geolocation' in navigator ? `
+        <button class="btn btn-outline-primary py-0 px-2 ms-1 border-0" style="font-size: 0.75rem; border-radius: 12px; background-color: rgba(33, 158, 188, 0.08);" id="auto-track-dashboard-btn" data-trip-id="${activeTrip.id}">
+            <i class="fas fa-location-crosshairs me-1 text-info"></i>${activeTrip.route?.aiEnhanced ? 'AI+GPS Track' : 'Auto-Track GPS'}
+        </button>
+        ` : ''}
+    `;
+    
+    card.style.display = 'block';
+    
+    // Render stops pins on progress bar
+    const stopsPinsContainer = document.getElementById('dashboard-tracker-stops-pins');
+    if (stopsPinsContainer) {
+        stopsPinsContainer.innerHTML = '';
+        if (activeTrip.stops && activeTrip.stops.length > 0) {
+            const stopsCount = activeTrip.stops.length;
+            activeTrip.stops.forEach((stopName, index) => {
+                let pct = 0;
+                let legDistText = '';
+                let stopDistText = '';
+                
+                if (activeTrip.route?.stopsDistances && activeTrip.route.stopsDistances[index] !== undefined && totalDistance > 0) {
+                    const stopDist = activeTrip.route.stopsDistances[index];
+                    pct = Math.min(95, Math.max(5, (stopDist / totalDistance) * 100));
+                    
+                    const prevDist = index === 0 ? 0 : activeTrip.route.stopsDistances[index - 1];
+                    const legDist = stopDist - prevDist;
+                    legDistText = `+${legDist.toFixed(0)} km`;
+                    stopDistText = `${stopDist.toFixed(0)} km`;
+                } else {
+                    // Fallback: space evenly
+                    pct = ((index + 1) / (stopsCount + 1)) * 100;
+                    const stopDist = totalDistance * (pct / 100);
+                    const prevDist = index === 0 ? 0 : totalDistance * (((index) / (stopsCount + 1)) * 100 / 100);
+                    const legDist = stopDist - prevDist;
+                    if (totalDistance > 0) {
+                        legDistText = `+${legDist.toFixed(0)} km`;
+                    }
+                }
+                
+                const isCrossed = progressPercent >= pct;
+                
+                const pin = document.createElement('div');
+                pin.className = 'position-absolute top-50 translate-middle';
+                pin.style.left = `${pct}%`;
+                pin.style.zIndex = '3';
+                pin.style.cursor = 'pointer';
+                
+                if (isCrossed) {
+                    pin.innerHTML = '<i class="fas fa-circle-check text-muted opacity-75" style="font-size: 0.85rem; background-color: #fff; border-radius: 50%;"></i>';
+                } else {
+                    pin.innerHTML = '<i class="fas fa-location-dot text-success" style="font-size: 0.85rem; text-shadow: 0 1px 2px rgba(0,0,0,0.2);"></i>';
+                }
+                
+                pin.title = `${stopName}${stopDistText ? ' (' + stopDistText + ')' : ''}`;
+                
+                const label = document.createElement('div');
+                label.className = `position-absolute text-center fw-semibold ${isCrossed ? 'text-muted opacity-75' : 'text-success'}`;
+                label.style.fontSize = '0.65rem';
+                label.style.left = `${pct}%`;
+                label.style.transform = 'translateX(-50%)';
+                label.style.top = '22px';
+                label.style.whiteSpace = 'nowrap';
+                label.innerHTML = `<span>${stopName}</span>${legDistText ? `<br><span style="font-size: 0.55rem; color: #6c757d;">${legDistText}</span>` : ''}`;
+                
+                stopsPinsContainer.appendChild(pin);
+                stopsPinsContainer.appendChild(label);
+            });
+        }
+    }
+    
+    // Wire up prompt and GPS handlers
+    setTimeout(() => {
+        const autoTrackBtn = document.getElementById('auto-track-dashboard-btn');
+        if (autoTrackBtn) {
+            autoTrackBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                autoTrackBtn.disabled = true;
+                autoTrackBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Locating...';
+                
+                navigator.geolocation.getCurrentPosition(async (position) => {
+                    const currentLat = position.coords.latitude;
+                    const currentLon = position.coords.longitude;
+                    
+                    try {
+                        let startCoords = activeTrip.route?.coordinates?.start;
+                        let destCoords = activeTrip.route?.coordinates?.destination;
+                        
+                        if (!startCoords || !destCoords) {
+                            startCoords = await geocodeLocation(activeTrip.startLocation);
+                            destCoords = await geocodeLocation(activeTrip.destination);
+                        }
+                        
+                        if (!startCoords || !destCoords) {
+                            showAlert('Could not determine start/destination coordinates to track progress.', 'warning');
+                            return;
+                        }
+                        
+                        const startLat = startCoords[1];
+                        const startLon = startCoords[0];
+                        const destLat = destCoords[1];
+                        const destLon = destCoords[0];
+                        
+                        const distFromStart = calculateHaversineDistance(startLat, startLon, currentLat, currentLon);
+                        const distToDest = calculateHaversineDistance(currentLat, currentLon, destLat, destLon);
+                        const calculatedTotal = distFromStart + distToDest;
+                        let currentKm = 0;
+                        
+                        // AI-enhanced: snap to closest route segment using AI stop distances
+                        const stopsDistances = activeTrip.route?.stopsDistances;
+                        if (stopsDistances && stopsDistances.length > 0 && totalDistance > 0 && activeTrip.route?.aiEnhanced) {
+                            // Find which segment the user is on by comparing distances to each stop geocode
+                            const allStopNames = [activeTrip.startLocation, ...activeTrip.stops, activeTrip.destination];
+                            const allStopCoords = [startCoords];
+                            for (const sn of activeTrip.stops) {
+                                try { allStopCoords.push(await geocodeLocation(sn)); } catch(e) { allStopCoords.push(null); }
+                            }
+                            allStopCoords.push(destCoords);
+                            
+                            // Find closest segment start to current position
+                            let bestSegment = 0;
+                            let minSegDist = Infinity;
+                            for (let si = 0; si < allStopCoords.length - 1; si++) {
+                                const sc = allStopCoords[si];
+                                if (!sc) continue;
+                                const d = calculateHaversineDistance(sc[1], sc[0], currentLat, currentLon);
+                                if (d < minSegDist) { minSegDist = d; bestSegment = si; }
+                            }
+                            
+                            // Cumulative km at the start of best segment
+                            const segStartKm = bestSegment === 0 ? 0 : stopsDistances[bestSegment - 1];
+                            const segEndKm = bestSegment < stopsDistances.length ? stopsDistances[bestSegment] : totalDistance;
+                            const segLen = segEndKm - segStartKm;
+                            
+                            const sc1 = allStopCoords[bestSegment];
+                            const sc2 = allStopCoords[bestSegment + 1];
+                            if (sc1 && sc2) {
+                                const segFullLen = calculateHaversineDistance(sc1[1], sc1[0], sc2[1], sc2[0]);
+                                const progressInSeg = segFullLen > 0
+                                    ? calculateHaversineDistance(sc1[1], sc1[0], currentLat, currentLon) / segFullLen
+                                    : 0;
+                                currentKm = Math.min(totalDistance, parseFloat((segStartKm + segLen * Math.min(1, progressInSeg)).toFixed(1)));
+                            } else {
+                                currentKm = Math.min(totalDistance, parseFloat((totalDistance * (distFromStart / calculatedTotal)).toFixed(1)));
+                            }
+                        } else if (totalDistance > 0) {
+                            const ratio = distFromStart / calculatedTotal;
+                            currentKm = Math.min(totalDistance, parseFloat((totalDistance * ratio).toFixed(1)));
+                        } else {
+                            const ratio = distFromStart / calculatedTotal;
+                            currentKm = Math.min(100, parseFloat((100 * ratio).toFixed(1)));
+                        }
+                        
+                        // Reverse geocode to get village, district, state name
+                        let currentLocationName = '';
+                        try {
+                            const revGeoResponse = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${currentLat}&lon=${currentLon}&format=json&accept-language=en`);
+                            if (revGeoResponse.ok) {
+                                const geoData = await revGeoResponse.json();
+                                const addr = geoData.address || {};
+                                
+                                const parts = [];
+                                // Local: Village, Suburb, Town, or City
+                                const local = addr.village || addr.suburb || addr.town || addr.city || addr.hamlet;
+                                if (local) parts.push(local);
+                                
+                                // District: District, County, or City District
+                                const dist = addr.district || addr.county || addr.city_district;
+                                if (dist) parts.push(dist);
+                                
+                                // State
+                                const state = addr.state;
+                                if (state) parts.push(state);
+                                
+                                currentLocationName = parts.join(', ') || 'Active Location';
+                            }
+                        } catch (geoErr) {
+                            console.warn('Reverse geocoding failed:', geoErr);
+                            currentLocationName = `${currentLat.toFixed(2)}, ${currentLon.toFixed(2)}`;
+                        }
+                        
+                        await db.collection('trips').doc(activeTrip.id).update({
+                            currentKm: currentKm,
+                            currentLocationName: currentLocationName
+                        });
+                        
+                        activeTrip.currentKm = currentKm;
+                        activeTrip.currentLocationName = currentLocationName;
+                        displayTrips();
+                        showAlert(`GPS tracking complete! Location: ${currentLocationName || 'Determined'}. Distance Traveled: ${currentKm}${totalDistance > 0 ? ' km' : '%'}`, 'success');
+                    } catch (err) {
+                        console.error('Error auto-tracking location:', err);
+                        showAlert('Error auto-tracking location. Make sure GPS is enabled.', 'danger');
+                    } finally {
+                        autoTrackBtn.disabled = false;
+                        autoTrackBtn.innerHTML = '<i class="fas fa-location-crosshairs me-1 text-info"></i>Auto-Track GPS';
+                    }
+                }, (error) => {
+                    console.error('Geolocation error:', error);
+                    showAlert('Failed to access GPS. Please check location permissions.', 'warning');
+                    autoTrackBtn.disabled = false;
+                    autoTrackBtn.innerHTML = '<i class="fas fa-location-crosshairs me-1 text-info"></i>Auto-Track GPS';
+                }, {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                });
+            });
+        }
+        const updateBtn = document.getElementById('update-dashboard-progress');
+        if (updateBtn) {
+            updateBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const tripId = updateBtn.dataset.tripId;
+                const totalDist = parseFloat(updateBtn.dataset.totalDist) || 0;
+                
+                let promptMsg = '';
+                let maxVal = 100;
+                let isPercent = totalDist <= 0;
+                
+                if (isPercent) {
+                    promptMsg = 'Trip distance is not calculated. Enter your journey progress as a percentage (0 to 100%):';
+                    maxVal = 100;
+                } else {
+                    promptMsg = `Enter your current distance traveled in km (0 to ${totalDist.toFixed(0)} km):`;
+                    maxVal = totalDist;
+                }
+                
+                const currentKmStr = prompt(promptMsg, activeTrip.currentKm || '0');
+                if (currentKmStr !== null) {
+                    const currentKm = parseFloat(currentKmStr);
+                    if (isNaN(currentKm) || currentKm < 0 || currentKm > maxVal) {
+                        showAlert(`Please enter a valid value between 0 and ${maxVal.toFixed(0)}${isPercent ? '%' : ' km'}`, 'warning');
+                        return;
+                    }
+                    
+                    try {
+                        await db.collection('trips').doc(tripId).update({
+                            currentKm: currentKm
+                        });
+                        activeTrip.currentKm = currentKm;
+                        displayTrips();
+                        showAlert('Journey progress updated!', 'success');
+                    } catch (error) {
+                        console.error('Error updating progress:', error);
+                        showAlert('Failed to update progress.', 'danger');
+                    }
+                }
+            });
+        }
+    }, 50);
+    
+    // Animate smoothly
+    setTimeout(() => {
+        bar.style.width = `${progressPercent}%`;
+        
+        let offsetPercent = progressPercent;
+        if (offsetPercent < 2) offsetPercent = 0;
+        if (offsetPercent > 98) offsetPercent = 100;
+        
+        vehicle.style.left = `calc(${offsetPercent}% - 12px)`;
+    }, 100);
 }
 
 function createTripCard(trip) {
@@ -663,6 +1159,14 @@ function createTripCard(trip) {
     } else {
         statusBadge = '<span class="badge bg-success">Active</span>';
     }
+
+    // Carbon footprint calculation for card
+    let carbonBadge = '';
+    if (trip.route && trip.route.distance) {
+        const carbon = calculateTripCarbon(trip);
+        const leaf = getLeafRating(carbon.emissions);
+        carbonBadge = `<span class="badge bg-light ${leaf.class} ms-1" style="font-size: 0.75rem;" title="${leaf.desc}"><i class="fas ${leaf.icon} me-1"></i>${leaf.rating}</span>`;
+    }
     
     const isCreator = trip.createdBy === currentUser.uid;
     
@@ -673,7 +1177,7 @@ function createTripCard(trip) {
                     <div class="flex-grow-1">
                         <h5 class="card-title mb-1">${trip.name}</h5>
                         <p class="card-text mb-1">${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}</p>
-                        ${statusBadge}
+                        ${statusBadge}${carbonBadge}
                     </div>
                     ${isCreator ? `
                         <div class="dropdown">
@@ -693,9 +1197,14 @@ function createTripCard(trip) {
                 </div>
             </div>
             <div class="card-body">
-                <p class="card-text">
+                <p class="card-text mb-1">
                     <i class="fas fa-map-marker-alt me-2"></i>${trip.startLocation} → ${trip.destination}
                 </p>
+                ${trip.stops && trip.stops.length > 0 ? `
+                <p class="card-text small text-muted mb-2">
+                    <i class="fas fa-map-pin me-2 text-success"></i>Stops: ${trip.stops.join(', ')}
+                </p>
+                ` : ''}
                 
                 <!-- Trip-specific Budget Progress -->
                 <div class="mb-3">
@@ -792,6 +1301,10 @@ function showCreateTripModal() {
     document.getElementById('distance-results').classList.add('d-none');
     document.getElementById('calculate-distance').checked = false;
     
+    // Clear stops
+    const stopsContainer = document.getElementById('trip-stops-container');
+    if (stopsContainer) stopsContainer.innerHTML = '';
+    
     const today = new Date();
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -812,6 +1325,17 @@ function showEditTripModal(trip) {
     document.getElementById('edit-start-date').value = trip.startDate;
     document.getElementById('edit-end-date').value = trip.endDate;
     document.getElementById('edit-trip-budget').value = trip.budget;
+    
+    // Populate stops container
+    const editStopsContainer = document.getElementById('edit-trip-stops-container');
+    if (editStopsContainer) {
+        editStopsContainer.innerHTML = '';
+        if (trip.stops && Array.isArray(trip.stops)) {
+            trip.stops.forEach(stop => {
+                addStopField(editStopsContainer, stop);
+            });
+        }
+    }
     
     document.getElementById('edit-distance-results').classList.add('d-none');
     document.getElementById('edit-calculate-distance').checked = false;
@@ -863,6 +1387,11 @@ async function calculateDistance() {
         return;
     }
     
+    // Extract stops
+    const stops = Array.from(document.querySelectorAll('#trip-stops-container .trip-stop-input'))
+        .map(input => input.value.trim())
+        .filter(val => val.length > 0);
+    
     try {
         document.getElementById('distance-details').innerHTML = `
             <div class="text-center">
@@ -872,7 +1401,7 @@ async function calculateDistance() {
         `;
         document.getElementById('distance-results').classList.remove('d-none');
         
-        const routeData = await calculateRealDistance(startLocation, destination);
+        const routeData = await calculateRealDistance(startLocation, destination, stops);
         
         displayDistanceResults(routeData.distance, routeData.duration);
         
@@ -897,6 +1426,11 @@ async function calculateEditDistance() {
         return;
     }
     
+    // Extract stops
+    const stops = Array.from(document.querySelectorAll('#edit-trip-stops-container .trip-stop-input'))
+        .map(input => input.value.trim())
+        .filter(val => val.length > 0);
+    
     try {
         document.getElementById('edit-distance-details').innerHTML = `
             <div class="text-center">
@@ -906,7 +1440,7 @@ async function calculateEditDistance() {
         `;
         document.getElementById('edit-distance-results').classList.remove('d-none');
         
-        const routeData = await calculateRealDistance(startLocation, destination);
+        const routeData = await calculateRealDistance(startLocation, destination, stops);
         
         document.getElementById('edit-distance-details').innerHTML = `
             <p><strong>Distance:</strong> ${routeData.distance}</p>
@@ -948,7 +1482,7 @@ async function saveTrip() {
     const startDate = document.getElementById('start-date').value;
     const endDate = document.getElementById('end-date').value;
     const budget = parseFloat(document.getElementById('trip-budget').value);
-    const calculateDistance = document.getElementById('calculate-distance').checked;
+    const calculateDistanceVal = document.getElementById('calculate-distance').checked;
     
     if (!name || !validateLocation(startLocation) || !validateLocation(destination) || !startDate || !endDate || !budget) {
         showAlert('Please fill in all fields with valid data', 'warning');
@@ -965,6 +1499,11 @@ async function saveTrip() {
         return;
     }
     
+    // Extract stops
+    const stops = Array.from(document.querySelectorAll('#trip-stops-container .trip-stop-input'))
+        .map(input => input.value.trim())
+        .filter(val => val.length > 0);
+    
     const code = generateTripCode();
     
     // Create trip data with proper structure
@@ -973,26 +1512,26 @@ async function saveTrip() {
         transportMode,
         startLocation: startLocation.trim(),
         destination: destination.trim(),
+        stops: stops,
         startDate,
         endDate,
         budget,
         code,
         createdBy: currentUser.uid,
         members: [currentUser.uid],
-        // Initialize as empty objects instead of arrays, or omit them entirely
-        expenses: [], // This should work as it's a top-level array
-        itinerary: [], // This should work as it's a top-level array
+        expenses: [],
+        itinerary: [],
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
     
     // Calculate route if requested
-    if (calculateDistance) {
+    if (calculateDistanceVal) {
         try {
             document.getElementById('save-trip-btn').disabled = true;
             document.getElementById('save-trip-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Calculating Route...';
             
-            const routeData = await calculateRealDistance(startLocation, destination);
+            const routeData = await calculateRealDistance(startLocation, destination, stops);
             tripData.route = {
                 distance: routeData.distance,
                 duration: routeData.duration,
@@ -1003,7 +1542,6 @@ async function saveTrip() {
             
         } catch (error) {
             console.error('Error calculating route during trip creation:', error);
-            // Continue without route data if calculation fails
             showAlert('Trip created but route calculation failed. You can calculate it later.', 'warning');
         }
     }
@@ -1018,9 +1556,10 @@ async function saveTrip() {
         // Add the new trip to the local array with proper date handling
         const newTrip = {
             ...tripData,
-            createdAt: new Date() // Use current date for local display
+            createdAt: new Date()
         };
         userTrips.unshift(newTrip);
+        window.userTrips = userTrips; // keep chatbot context in sync
         displayTrips();
         
         const modal = bootstrap.Modal.getInstance(document.getElementById('createTripModal'));
@@ -1033,10 +1572,6 @@ async function saveTrip() {
     } catch (error) {
         console.error('Error creating trip:', error);
         showAlert('Error creating trip. Please try again.', 'danger');
-        
-        // Log the exact error and trip data for debugging
-        console.error('Full error details:', error);
-        console.error('Trip data that caused error:', tripData);
     } finally {
         document.getElementById('save-trip-btn').disabled = false;
         document.getElementById('save-trip-btn').innerHTML = 'Create Trip';
@@ -1052,7 +1587,7 @@ async function updateTrip() {
     const startDate = document.getElementById('edit-start-date').value;
     const endDate = document.getElementById('edit-end-date').value;
     const budget = parseFloat(document.getElementById('edit-trip-budget').value);
-    const recalculateDistance = document.getElementById('edit-calculate-distance').checked;
+    const recalculateDistanceVal = document.getElementById('edit-calculate-distance').checked;
     
     if (!name || !validateLocation(startLocation) || !validateLocation(destination) || !startDate || !endDate || !budget) {
         showAlert('Please fill in all fields with valid data', 'warning');
@@ -1069,6 +1604,11 @@ async function updateTrip() {
         return;
     }
     
+    // Extract stops
+    const stops = Array.from(document.querySelectorAll('#edit-trip-stops-container .trip-stop-input'))
+        .map(input => input.value.trim())
+        .filter(val => val.length > 0);
+    
     try {
         document.getElementById('update-trip-btn').disabled = true;
         document.getElementById('update-trip-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Updating...';
@@ -1078,6 +1618,7 @@ async function updateTrip() {
             transportMode,
             startLocation: startLocation.trim(),
             destination: destination.trim(),
+            stops: stops,
             startDate,
             endDate,
             budget,
@@ -1085,9 +1626,9 @@ async function updateTrip() {
         };
         
         // Recalculate route if requested
-        if (recalculateDistance) {
+        if (recalculateDistanceVal) {
             try {
-                const routeData = await calculateRealDistance(startLocation, destination);
+                const routeData = await calculateRealDistance(startLocation, destination, stops);
                 updateData.route = {
                     distance: routeData.distance,
                     duration: routeData.duration,
@@ -1136,6 +1677,7 @@ async function deleteTrip() {
         
         // Remove from local array
         userTrips = userTrips.filter(trip => trip.id !== tripId);
+        window.userTrips = userTrips; // keep chatbot context in sync
         displayTrips();
         
         const modal = bootstrap.Modal.getInstance(document.getElementById('deleteTripModal'));
@@ -1468,12 +2010,17 @@ function updateNavigationBasedOnAuth(isLoggedIn) {
     if (isLoggedIn && currentUser) {
         // User is logged in
         navAuthSection.innerHTML = `
-            <img id="user-avatar" class="user-avatar me-2" src="${currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || 'User')}&background=4361ee&color=fff`}" alt="User Avatar">
+            <img id="user-avatar" class="user-avatar me-2" src="${getSafeAvatarUrl(currentUser.photoURL, currentUser.displayName || 'User')}" alt="User Avatar">
             <span class="me-3" id="user-name">${currentUser.displayName || 'User'}</span>
             <button class="btn btn-outline-primary btn-sm" id="logout-btn">
                 <i class="fas fa-sign-out-alt me-1"></i>Logout
             </button>
         `;
+        
+        const userAvatar = document.getElementById('user-avatar');
+        if (userAvatar) {
+            setupAvatarFallback(userAvatar, currentUser.displayName || 'User');
+        }
         
         // Re-attach logout event listener
         setTimeout(() => {
@@ -1589,3 +2136,319 @@ function getToastIcon(type) {
         default: return 'fa-info-circle';
     }
 }
+
+function addStopField(container, value = '') {
+    if (!container) return;
+    
+    const div = document.createElement('div');
+    div.className = 'd-flex align-items-center gap-2 stop-input-row animate-fade-in';
+    
+    const span = document.createElement('span');
+    span.className = 'text-muted small';
+    span.innerHTML = '<i class="fas fa-map-pin text-success"></i>';
+    
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'form-control form-control-sm trip-stop-input';
+    input.placeholder = 'Stop name/city';
+    input.value = value;
+    input.required = true;
+    
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-outline-danger btn-sm py-1 px-2 border-0';
+    btn.innerHTML = '<i class="fas fa-trash-can"></i>';
+    btn.addEventListener('click', () => {
+        div.remove();
+    });
+    
+    div.appendChild(span);
+    div.appendChild(input);
+    div.appendChild(btn);
+    
+    container.appendChild(div);
+}
+
+window.addEventListener('tripRouteUpdated', () => {
+    console.log('Trip route data refreshed. Updating dashboard...');
+    displayTrips();
+    updateDashboardActiveTripTracker();
+});
+
+// ============================================================
+// AI TRAVEL COMPANION CHATBOT  (powered by OpenRouter)
+// Free model priority list — first available wins.
+// ============================================================
+
+// Ordered list of models to try.
+// 'openrouter/free' is an official auto-router slug that always picks a
+// currently-available free model — no more 404s from rotated-out models.
+const OPENROUTER_FREE_MODELS = [
+    'openrouter/free',                              // OpenRouter's official free auto-router (ALWAYS works for free tier!)
+    'tencent/hy3:free',                            // Tencent Hy3 free model
+    'poolside/laguna-xs-2.1:free',                  // Poolside Laguna free model
+    'cohere/north-mini-code:free',                  // Cohere North Mini Code free model
+    'nvidia/nemotron-3-ultra-550b-a55b:free'        // NVIDIA Nemotron Ultra free model
+];
+
+async function loadOpenRouterKey() {
+    if (window._openrouterApiKey) return window._openrouterApiKey;
+    try {
+        const user = auth.currentUser;
+        if (!user) return null;
+        const doc = await db.collection('users').doc(user.uid).get();
+        if (doc.exists && doc.data().openrouterApiKey) {
+            window._openrouterApiKey = doc.data().openrouterApiKey;
+            return window._openrouterApiKey;
+        }
+    } catch (e) { console.warn('Could not load OpenRouter key:', e); }
+    return null;
+}
+
+function buildTripContext() {
+    // Use the module-level userTrips array (window.userTrips is synced after load)
+    const trips = typeof userTrips !== 'undefined' && userTrips.length > 0 ? userTrips : (window.userTrips || []);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Helper: parse Firestore Timestamp or date string to Date object
+    function parseDate(val) {
+        if (!val) return null;
+        if (val.toDate) return val.toDate();       // Firestore Timestamp
+        if (val.seconds) return new Date(val.seconds * 1000); // Firestore Timestamp object
+        return new Date(val);                       // ISO string or Date
+    }
+    
+    const activeTrip = trips.find(trip => {
+        const start = parseDate(trip.startDate);
+        const end = parseDate(trip.endDate);
+        if (!start || !end) return false;
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        return today >= start && today <= end;
+    });
+    
+    if (!activeTrip) {
+        const upcoming = trips.filter(t => {
+            const s = parseDate(t.startDate);
+            return s && s > today;
+        });
+        if (upcoming.length > 0) {
+            const next = upcoming.sort((a,b) => parseDate(a.startDate) - parseDate(b.startDate))[0];
+            const sd = parseDate(next.startDate);
+            return `User has an upcoming trip named "${next.name}" from ${next.startLocation} to ${next.destination}` +
+                   (next.stops && next.stops.length > 0 ? ` with stops at: ${next.stops.join(', ')}` : '') +
+                   `. Transport: ${next.transportMode || 'car'}. Budget: ₹${next.budget || 'not set'}.` +
+                   ` Distance: ${next.route?.distance || next.distance || 'unknown'}.` +
+                   (sd ? ` Starting on: ${sd.toLocaleDateString()}.` : '');
+        }
+        return `User has no active trip today (${today.toLocaleDateString()}). They have ${trips.length} trip(s) in total.`;
+    }
+    
+    const totalKm = parseFloat(activeTrip.route?.distance || activeTrip.distance) || 0;
+    const currentKm = activeTrip.currentKm || 0;
+    const pct = totalKm > 0 ? ((currentKm / totalKm) * 100).toFixed(1) : 0;
+    const stopsInfo = activeTrip.stops && activeTrip.stops.length > 0
+        ? `Stops: ${activeTrip.stops.join(' → ')}.`
+        : 'No intermediate stops.';
+    const stopsDistInfo = activeTrip.route?.stopsDistances
+        ? `Cumulative km to each stop from start: ${activeTrip.route.stopsDistances.join(', ')}.`
+        : '';
+    const startD = parseDate(activeTrip.startDate);
+    const endD = parseDate(activeTrip.endDate);
+    
+    return `ACTIVE TRIP CONTEXT:
+- Name: ${activeTrip.name}
+- Route: ${activeTrip.startLocation} → ${activeTrip.destination}
+- ${stopsInfo}
+- ${stopsDistInfo}
+- Transport: ${activeTrip.transportMode || 'car'}
+- Total distance: ${totalKm} km${activeTrip.route?.aiEnhanced ? ' (AI-verified)' : ''}
+- Progress: ${currentKm} km traveled (${pct}% complete)
+- Budget: ₹${activeTrip.budget || 0}
+- Dates: ${startD ? startD.toLocaleDateString() : activeTrip.startDate} to ${endD ? endD.toLocaleDateString() : activeTrip.endDate}
+- Current location: ${activeTrip.currentLocationName || 'not yet tracked'}`;
+}
+
+async function sendToOpenRouter(userMessage, apiKey) {
+    const tripContext = buildTripContext();
+    const systemPrompt = `You are TravelMate AI, a smart travel assistant built into the TravelMate app.
+You help users with route optimization, accurate mileage/distance calculations, travel tips, budget planning, and local sightseeing suggestions.
+Use the trip context below to give specific, accurate, personalized answers. Keep responses concise and friendly (under 200 words).
+
+${tripContext}`;
+    
+    const messages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: userMessage }
+    ];
+    
+    let lastError = 'No free models available at the moment. Please try again later.';
+    
+    for (const model of OPENROUTER_FREE_MODELS) {
+        try {
+            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`,
+                    'HTTP-Referer': window.location.origin,
+                    'X-Title': 'TravelMate AI'
+                },
+                body: JSON.stringify({
+                    model,
+                    messages,
+                    max_tokens: 350,
+                    temperature: 0.7
+                })
+            });
+            
+            if (!response.ok) {
+                let errMsg = `${model} → HTTP ${response.status}`;
+                try { const e = await response.json(); errMsg = e.error?.message || errMsg; } catch (_) {}
+                console.warn('OpenRouter model failed, trying next:', errMsg);
+                lastError = errMsg;
+                continue; // try next model
+            }
+            
+            const data = await response.json();
+            const text = data.choices?.[0]?.message?.content?.trim();
+            if (!text) { lastError = `${model} returned empty response`; continue; }
+            
+            console.log(`✅ OpenRouter response from: ${model}`);
+            return text;
+            
+        } catch (networkErr) {
+            console.warn('Network error for model', model, networkErr.message);
+            lastError = networkErr.message;
+        }
+    }
+    
+    throw new Error(lastError);
+}
+
+function appendChatMessage(role, text) {
+    const messagesEl = document.getElementById('ai-chat-messages');
+    if (!messagesEl) return;
+    
+    const div = document.createElement('div');
+    div.className = `ai-chat-message ${role}`;
+    // Simple markdown: **bold** and newlines
+    div.innerHTML = text
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\n/g, '<br>');
+    
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return div;
+}
+
+function showTypingIndicator() {
+    const messagesEl = document.getElementById('ai-chat-messages');
+    if (!messagesEl) return null;
+    const div = document.createElement('div');
+    div.className = 'ai-chat-message assistant';
+    div.id = 'ai-typing-indicator';
+    div.innerHTML = '<span class="typing-dots"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></span>';
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return div;
+}
+
+async function handleChatSend() {
+    const input = document.getElementById('ai-chat-input');
+    const message = input ? input.value.trim() : '';
+    if (!message) return;
+    
+    input.value = '';
+    appendChatMessage('user', message);
+    
+    const apiKey = await loadOpenRouterKey();
+    if (!apiKey) {
+        appendChatMessage('assistant',
+            '⚠️ No OpenRouter API key found. Go to **Profile → OpenRouter API Key** and paste your free key from openrouter.ai/keys to enable AI features.');
+        return;
+    }
+    
+    const typingIndicator = showTypingIndicator();
+    const sendBtn = document.getElementById('ai-chat-send');
+    if (sendBtn) sendBtn.disabled = true;
+    
+    try {
+        const reply = await sendToOpenRouter(message, apiKey);
+        if (typingIndicator) typingIndicator.remove();
+        appendChatMessage('assistant', reply);
+    } catch (err) {
+        if (typingIndicator) typingIndicator.remove();
+        console.error('OpenRouter API error:', err);
+        appendChatMessage('assistant',
+            `❌ **Error**: ${err.message}\n\nCheck your API key is valid at openrouter.ai/keys and has credits for free models.`);
+    } finally {
+        if (sendBtn) sendBtn.disabled = false;
+    }
+}
+
+function initAIChatbot() {
+    const widget    = document.getElementById('ai-chat-widget');
+    const toggleBtn = document.getElementById('ai-chat-toggle');
+    const closeBtn  = document.getElementById('ai-chat-close');
+    const container = document.getElementById('ai-chat-container');
+    const sendBtn   = document.getElementById('ai-chat-send');
+    const inputEl   = document.getElementById('ai-chat-input');
+    const chips     = document.querySelectorAll('.ai-chat-suggestion-chip');
+    
+    if (!widget || !toggleBtn) return;
+    
+    // Prevent double-binding on re-init
+    if (widget.dataset.chatInitialized) return;
+    widget.dataset.chatInitialized = 'true';
+    
+    // Show the widget only for logged-in users
+    widget.style.display = 'block';
+    
+    toggleBtn.addEventListener('click', () => {
+        const isOpen = container.classList.toggle('active');
+        const icon = toggleBtn.querySelector('i');
+        icon.className = isOpen ? 'fas fa-xmark' : 'fas fa-robot animate-pulse-slow';
+    });
+    
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            container.classList.remove('active');
+            toggleBtn.querySelector('i').className = 'fas fa-robot animate-pulse-slow';
+        });
+    }
+    
+    if (sendBtn) sendBtn.addEventListener('click', handleChatSend);
+    
+    if (inputEl) {
+        inputEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleChatSend();
+            }
+        });
+    }
+    
+    chips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            if (inputEl) inputEl.value = chip.dataset.query;
+            handleChatSend();
+        });
+    });
+    
+    // Show setup tip if no key is stored yet
+    loadOpenRouterKey().then(key => {
+        if (!key) {
+            const messagesEl = document.getElementById('ai-chat-messages');
+            if (messagesEl && messagesEl.children.length === 1) {
+                appendChatMessage('assistant',
+                    '💡 **Get started**: Add your free OpenRouter key in **Profile → OpenRouter API Key**.\n\nGet one free at openrouter.ai/keys — then I can optimize your route stops, calculate mileage, and suggest cool places along your journey!');
+            }
+        }
+    });
+}
+
+// Initialize chatbot when auth state confirms the user is logged in
+// (called inside the onAuthStateChanged listener)
+

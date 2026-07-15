@@ -1,4 +1,4 @@
-const CACHE_NAME = 'travelmate-cache-v2';
+const CACHE_NAME = 'travelmate-cache-v5';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -15,8 +15,9 @@ const ASSETS_TO_CACHE = [
   '/icon.png',
 ];
 
-// Install event: caching app shell
+// Install event: cache assets and force skip waiting
 self.addEventListener('install', event => {
+  self.skipWaiting(); // Force the waiting service worker to become active immediately
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS_TO_CACHE))
   );
@@ -29,21 +30,41 @@ self.addEventListener('activate', event => {
       Promise.all(keys.map(key => key !== CACHE_NAME && caches.delete(key)))
     )
   );
-  self.clients.claim();
+  self.clients.claim(); // Become controller immediately for all open client tabs
 });
 
-// Fetch event: serve cached content
+// Fetch event: Stale-While-Revalidate caching strategy
 self.addEventListener('fetch', event => {
+  // Only intercept local GET requests (skip APIs, Firebase DB, CDN auth calls)
+  if (
+    event.request.method !== 'GET' ||
+    !event.request.url.startsWith(self.location.origin)
+  ) {
+    return;
+  }
+
   event.respondWith(
-    caches.match(event.request).then(cached =>
-      cached || fetch(event.request)
-    )
+    caches.open(CACHE_NAME).then(cache => {
+      return cache.match(event.request).then(cachedResponse => {
+        const fetchPromise = fetch(event.request).then(networkResponse => {
+          if (networkResponse && networkResponse.status === 200) {
+            cache.put(event.request, networkResponse.clone());
+          }
+          return networkResponse;
+        }).catch(err => {
+          console.warn('[ServiceWorker] Fetch failed, relying on cache:', err);
+        });
+
+        // Return cache instantly (fast loading), fallback to network promise
+        return cachedResponse || fetchPromise;
+      });
+    })
   );
 });
 
-// Optional: Listen for sync messages (for offline sync)
+// Sync data logic (optional)
 self.addEventListener('message', event => {
   if (event.data && event.data.type === 'SYNCDATA') {
-    // Add your custom sync logic here if needed
+    // Add custom offline data syncing if needed
   }
 });

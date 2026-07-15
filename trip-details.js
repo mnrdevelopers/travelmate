@@ -221,6 +221,14 @@ function setupTripDetailsEventListeners() {
     // Add event listener for update trip button in trip details page
     document.getElementById('update-trip-btn-trip-details').addEventListener('click', updateTripFromDetails);
     
+    // Wire up edit add stop button
+    const editAddTripStopBtn = document.getElementById('edit-add-trip-stop-btn');
+    if (editAddTripStopBtn) {
+        editAddTripStopBtn.addEventListener('click', () => {
+            addStopField(document.getElementById('edit-trip-stops-container'));
+        });
+    }
+    
     // Profile navigation - check if element exists first
     const navProfile = document.getElementById('nav-profile');
     if (navProfile) {
@@ -310,6 +318,9 @@ function checkAuthState() {
             navigateTo('login.html');
         } else {
             loadUserData();
+            if (typeof loadOpenRouterKeyShared === 'function') {
+                await loadOpenRouterKeyShared();
+            }
             await loadTripDetails();
         }
     });
@@ -318,7 +329,11 @@ function checkAuthState() {
 function loadUserData() {
     const user = auth.currentUser;
     document.getElementById('user-name').textContent = user.displayName || 'Traveler';
-    document.getElementById('user-avatar').src = user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'Traveler')}&background=4361ee&color=fff`;
+    const userAvatar = document.getElementById('user-avatar');
+    if (userAvatar) {
+        userAvatar.src = getSafeAvatarUrl(user.photoURL, user.displayName || 'Traveler');
+        setupAvatarFallback(userAvatar, user.displayName || 'Traveler');
+    }
 }
 
 async function loadTripDetails() {
@@ -416,11 +431,470 @@ async function loadTripOverview(trip) {
         document.getElementById('overview-distance').textContent = 'Not calculated';
     }
 
+    // Calculate and populate Eco Impact
+    const ecoCard = document.getElementById('trip-eco-card');
+    if (ecoCard) {
+        if (trip.route && trip.route.distance) {
+            ecoCard.style.display = 'block';
+            const carbon = calculateTripCarbon(trip);
+            const leaf = getLeafRating(carbon.emissions);
+            
+            document.getElementById('eco-co2-emissions').textContent = `${carbon.emissions.toFixed(1)} kg`;
+            document.getElementById('eco-co2-saved').textContent = `${carbon.saved.toFixed(1)} kg`;
+            
+            const ratingBadge = document.getElementById('eco-leaf-rating');
+            if (ratingBadge) {
+                ratingBadge.className = `badge bg-light ${leaf.class}`;
+                ratingBadge.innerHTML = `<i class="fas ${leaf.icon} me-1"></i>${leaf.rating}`;
+                ratingBadge.title = leaf.desc;
+            }
+            
+            // Generate eco tips based on transport mode
+            const tipsContainer = document.getElementById('eco-travel-tips');
+            if (tipsContainer) {
+                let tipsHTML = '';
+                
+                if (trip.transportMode === 'car') {
+                    tipsHTML = `
+                        <div class="mb-1"><i class="fas fa-check text-success me-1"></i>Carpooling with ${trip.members.length + (trip.manualMembers ? trip.manualMembers.length : 0)} companions divides your footprint!</div>
+                        <div class="mb-1"><i class="fas fa-info-circle text-primary me-1"></i>Drive at moderate speeds and maintain constant acceleration to optimize fuel efficiency by 15-30%.</div>
+                        <div><i class="fas fa-lightbulb text-warning me-1"></i>Keep tires properly inflated to reduce carbon emissions by up to 3%.</div>
+                    `;
+                } else if (trip.transportMode === 'flight') {
+                    tipsHTML = `
+                        <div class="mb-1"><i class="fas fa-info-circle text-danger me-1"></i>Aviation has a high carbon density (${carbon.emissions.toFixed(1)} kg CO₂).</div>
+                        <div class="mb-1"><i class="fas fa-check text-success me-1"></i>Pack light! Every kg saved reduces fuel burn and total emissions.</div>
+                        <div><i class="fas fa-tree text-success me-1"></i>Consider purchasing certified Gold Standard carbon offsets for this flight.</div>
+                    `;
+                } else if (trip.transportMode === 'train') {
+                    tipsHTML = `
+                        <div class="mb-1"><i class="fas fa-star text-warning me-1"></i>Excellent choice! Train travel is highly efficient (90% cleaner than flying).</div>
+                        <div class="mb-1"><i class="fas fa-check text-success me-1"></i>You saved approximately <strong>${carbon.saved.toFixed(1)} kg CO₂</strong> by choosing the tracks!</div>
+                        <div><i class="fas fa-store text-success me-1"></i>Support local vendors at transit stations to foster sustainable eco-tourism.</div>
+                    `;
+                } else if (trip.transportMode === 'bus') {
+                    tipsHTML = `
+                        <div class="mb-1"><i class="fas fa-thumbs-up text-primary me-1"></i>Great choice! Riding the bus emits 75% less carbon than driving alone.</div>
+                        <div class="mb-1"><i class="fas fa-check text-success me-1"></i>Your journey saved <strong>${carbon.saved.toFixed(1)} kg CO₂</strong>!</div>
+                        <div><i class="fas fa-walking text-success me-1"></i>Walk or cycle for the last-mile transit to achieve zero local emissions.</div>
+                    `;
+                } else {
+                    tipsHTML = `
+                        <div class="mb-1"><i class="fas fa-check text-success me-1"></i>Public transport minimizes traffic congestion and carbon footprints.</div>
+                        <div class="mb-1"><i class="fas fa-leaf text-success me-1"></i>Shared transits emit significantly less greenhouse gas per passenger-km.</div>
+                        <div><i class="fas fa-tint text-primary me-1"></i>Carry a reusable bottle on your journey to reduce plastic single-use waste.</div>
+                    `;
+                }
+                tipsContainer.innerHTML = tipsHTML;
+            }
+        } else {
+            ecoCard.style.display = 'none';
+        }
+    }
+
+    // Load Journey progress animation
+    loadTravelAnimation(trip);
+
     // Add car expense section
     addCarExpenseSection(trip);
     
     // Load members
     await loadTripMembers(trip);
+}
+
+function loadTravelAnimation(trip) {
+    const card = document.getElementById('travel-animation-card');
+    const bar = document.getElementById('travel-animation-bar');
+    const vehicle = document.getElementById('travel-animation-vehicle');
+    const statusText = document.getElementById('travel-animation-status');
+    const startText = document.getElementById('travel-animation-start');
+    const currentText = document.getElementById('travel-animation-current');
+    const destText = document.getElementById('travel-animation-dest');
+    
+    if (!card || !bar || !vehicle || !statusText || !startText || !destText) return;
+    
+    // Trigger background route calculation if stopsDistances is missing OR if AI key
+    // is available but the route was not calculated with AI yet
+    const hasAiKey = !!window._openrouterApiKey;
+    const needsCalc = trip.stops && trip.stops.length > 0 && (
+        !trip.route ||
+        !trip.route.stopsDistances ||
+        (hasAiKey && !trip.route.aiEnhanced)
+    );
+    if (needsCalc) {
+        calculateAndSaveStopsDistances(trip);
+    }
+    
+    // Set Locations text
+    startText.textContent = trip.startLocation || 'Start';
+    destText.textContent = trip.destination || 'Destination';
+    if (currentText) {
+        currentText.innerHTML = trip.currentLocationName ? `<i class="fas fa-location-dot me-1"></i>${trip.currentLocationName}` : '';
+    }
+    
+    // Parse Dates
+    const startDate = new Date(trip.startDate);
+    const endDate = new Date(trip.endDate);
+    const today = new Date();
+    
+    // Set dates bounds
+    startDate.setHours(0,0,0,0);
+    endDate.setHours(23,59,59,999);
+    
+    // Determine vehicle icon and animation class based on transportMode
+    let iconClass = 'fa-car text-success animate-drive';
+    let transportDesc = 'Car';
+    
+    switch(trip.transportMode) {
+        case 'flight':
+            iconClass = 'fa-plane text-info animate-flight';
+            transportDesc = 'Flight';
+            break;
+        case 'train':
+            iconClass = 'fa-train text-primary animate-ride';
+            transportDesc = 'Train';
+            break;
+        case 'bus':
+            iconClass = 'fa-bus text-warning animate-ride';
+            transportDesc = 'Bus';
+            break;
+        case 'public':
+            iconClass = 'fa-train-subway text-success animate-ride';
+            transportDesc = 'Public Transport';
+            break;
+    }
+    
+    // Set Icon HTML
+    vehicle.innerHTML = `<i class="fas ${iconClass}" style="font-size: 1.5rem; text-shadow: 0 2px 4px rgba(0,0,0,0.15);"></i>`;
+    
+    // Calculate progress
+    const totalDistance = parseFloat(trip.route?.distance) || parseFloat(trip.distance) || 0;
+    let progressPercent = 0;
+    let progressText = '';
+    
+    if (totalDistance > 0) {
+        if (trip.currentKm !== undefined && trip.currentKm >= 0) {
+            progressPercent = Math.min(100, (trip.currentKm / totalDistance) * 100);
+            progressText = `: ${trip.currentKm} / ${totalDistance.toFixed(0)} km completed`;
+        } else {
+            if (today < startDate) {
+                progressPercent = 0;
+            } else if (today > endDate) {
+                progressPercent = 100;
+            } else {
+                const totalTime = endDate.getTime() - startDate.getTime();
+                const elapsedTime = today.getTime() - startDate.getTime();
+                progressPercent = Math.min(100, Math.max(0, (elapsedTime / totalTime) * 100));
+                const estDistance = (totalDistance * (progressPercent / 100)).toFixed(0);
+                progressText = `: ~${estDistance} / ${totalDistance.toFixed(0)} km completed`;
+            }
+        }
+    } else {
+        // Fallback to percentage-based progression
+        progressPercent = trip.currentKm !== undefined ? Math.min(100, trip.currentKm) : 0;
+        if (trip.currentKm !== undefined) {
+            progressText = `: ${progressPercent.toFixed(0)}% completed`;
+        } else {
+            if (today < startDate) {
+                progressPercent = 0;
+            } else if (today > endDate) {
+                progressPercent = 100;
+            } else {
+                const totalTime = endDate.getTime() - startDate.getTime();
+                const elapsedTime = today.getTime() - startDate.getTime();
+                progressPercent = Math.min(100, Math.max(0, (elapsedTime / totalTime) * 100));
+                progressText = `: ~${progressPercent.toFixed(0)}% completed (estimated)`;
+            }
+        }
+    }
+    
+    if (today < startDate) {
+        statusText.innerHTML = `<span class="badge bg-info">Upcoming trip by ${transportDesc}</span>`;
+    } else if (today > endDate) {
+        statusText.innerHTML = `<span class="badge bg-secondary">Completed trip by ${transportDesc}</span>`;
+    } else {
+        const currentKm = trip.currentKm || 0;
+        const nextStopStatus = getNextStopStatus(trip, currentKm, totalDistance);
+        const nextStopHtml = nextStopStatus ? `<span class="badge bg-primary-subtle text-primary ms-2 animate-bounce-subtle"><i class="fas fa-location-arrow me-1 text-primary"></i>${nextStopStatus}</span>` : '';
+        const aiEnhancedBadge = trip.route?.aiEnhanced
+            ? `<span class="badge ms-2" style="background: linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; font-size:0.65rem;"><i class="fas fa-robot me-1"></i>AI Enhanced</span>`
+            : (window._openrouterApiKey ? `<span class="badge bg-secondary-subtle text-secondary ms-2" style="font-size:0.65rem;"><i class="fas fa-robot me-1"></i>AI Calculating...</span>` : '');
+
+        statusText.innerHTML = `
+            <span class="badge bg-success-subtle text-success animate-pulse-slow">Active Journey${progressText} (${transportDesc})</span>
+            ${nextStopHtml}
+            ${aiEnhancedBadge}
+            <button class="btn btn-outline-success py-0 px-2 ms-2 border-0" style="font-size: 0.75rem; border-radius: 12px; background-color: rgba(45, 106, 79, 0.08);" id="update-details-progress" data-trip-id="${trip.id}" data-total-dist="${totalDistance}">
+                <i class="fas fa-edit me-1"></i>Update Progress
+            </button>
+            ${'geolocation' in navigator ? `
+            <button class="btn btn-outline-primary py-0 px-2 ms-1 border-0" style="font-size: 0.75rem; border-radius: 12px; background-color: rgba(33, 158, 188, 0.08);" id="auto-track-details-btn" data-trip-id="${trip.id}">
+                <i class="fas fa-location-crosshairs me-1 text-info"></i>${trip.route?.aiEnhanced ? 'AI+GPS Track' : 'Auto-Track GPS'}
+            </button>
+            ` : ''}
+        `;
+
+    }
+    
+    card.style.display = 'block';
+    
+    // Render stops pins on progress bar in trip details
+    const stopsPinsContainer = document.getElementById('travel-animation-stops-pins');
+    if (stopsPinsContainer) {
+        stopsPinsContainer.innerHTML = '';
+        if (trip.stops && trip.stops.length > 0) {
+            const stopsCount = trip.stops.length;
+            trip.stops.forEach((stopName, index) => {
+                let pct = 0;
+                let legDistText = '';
+                let stopDistText = '';
+                
+                if (trip.route?.stopsDistances && trip.route.stopsDistances[index] !== undefined && totalDistance > 0) {
+                    const stopDist = trip.route.stopsDistances[index];
+                    pct = Math.min(95, Math.max(5, (stopDist / totalDistance) * 100));
+                    
+                    const prevDist = index === 0 ? 0 : trip.route.stopsDistances[index - 1];
+                    const legDist = stopDist - prevDist;
+                    legDistText = `+${legDist.toFixed(0)} km`;
+                    stopDistText = `${stopDist.toFixed(0)} km`;
+                } else {
+                    // Fallback: space evenly
+                    pct = ((index + 1) / (stopsCount + 1)) * 100;
+                    const stopDist = totalDistance * (pct / 100);
+                    const prevDist = index === 0 ? 0 : totalDistance * (((index) / (stopsCount + 1)) * 100 / 100);
+                    const legDist = stopDist - prevDist;
+                    if (totalDistance > 0) {
+                        legDistText = `+${legDist.toFixed(0)} km`;
+                    }
+                }
+                
+                const isCrossed = progressPercent >= pct;
+                
+                const pin = document.createElement('div');
+                pin.className = 'position-absolute top-50 translate-middle';
+                pin.style.left = `${pct}%`;
+                pin.style.zIndex = '3';
+                pin.style.cursor = 'pointer';
+                
+                if (isCrossed) {
+                    pin.innerHTML = '<i class="fas fa-circle-check text-muted opacity-75" style="font-size: 0.85rem; background-color: #fff; border-radius: 50%;"></i>';
+                } else {
+                    pin.innerHTML = '<i class="fas fa-location-dot text-success" style="font-size: 0.85rem; text-shadow: 0 1px 2px rgba(0,0,0,0.2);"></i>';
+                }
+                
+                pin.title = `${stopName}${stopDistText ? ' (' + stopDistText + ')' : ''}`;
+                
+                const label = document.createElement('div');
+                label.className = `position-absolute text-center fw-semibold ${isCrossed ? 'text-muted opacity-75' : 'text-success'}`;
+                label.style.fontSize = '0.65rem';
+                label.style.left = `${pct}%`;
+                label.style.transform = 'translateX(-50%)';
+                label.style.top = '22px';
+                label.style.whiteSpace = 'nowrap';
+                label.innerHTML = `<span>${stopName}</span>${legDistText ? `<br><span style="font-size: 0.55rem; color: #6c757d;">${legDistText}</span>` : ''}`;
+                
+                stopsPinsContainer.appendChild(pin);
+                stopsPinsContainer.appendChild(label);
+            });
+        }
+    }
+    
+    // Wire up prompt and GPS handlers
+    setTimeout(() => {
+        const autoTrackBtn = document.getElementById('auto-track-details-btn');
+        if (autoTrackBtn) {
+            autoTrackBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                autoTrackBtn.disabled = true;
+                autoTrackBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Locating...';
+                
+                navigator.geolocation.getCurrentPosition(async (position) => {
+                    const currentLat = position.coords.latitude;
+                    const currentLon = position.coords.longitude;
+                    
+                    try {
+                        let startCoords = trip.route?.coordinates?.start;
+                        let destCoords = trip.route?.coordinates?.destination;
+                        
+                        if (!startCoords || !destCoords) {
+                            startCoords = await geocodeLocation(trip.startLocation);
+                            destCoords = await geocodeLocation(trip.destination);
+                        }
+                        
+                        if (!startCoords || !destCoords) {
+                            showAlert('Could not determine start/destination coordinates to track progress.', 'warning');
+                            return;
+                        }
+                        
+                        const startLat = startCoords[1];
+                        const startLon = startCoords[0];
+                        const destLat = destCoords[1];
+                        const destLon = destCoords[0];
+                        
+                        const distFromStart = calculateHaversineDistance(startLat, startLon, currentLat, currentLon);
+                        const distToDest = calculateHaversineDistance(currentLat, currentLon, destLat, destLon);
+                        const calculatedTotal = distFromStart + distToDest;
+                        let currentKm = 0;
+                        
+                        // AI-enhanced: snap to closest route segment using AI stop distances
+                        const stopsDistances = trip.route?.stopsDistances;
+                        if (stopsDistances && stopsDistances.length > 0 && totalDistance > 0 && trip.route?.aiEnhanced) {
+                            // Find which segment the user is on by comparing distances to each stop geocode
+                            const allStopNames = [trip.startLocation, ...trip.stops, trip.destination];
+                            const allStopCoords = [startCoords];
+                            for (const sn of trip.stops) {
+                                try { allStopCoords.push(await geocodeLocation(sn)); } catch(e) { allStopCoords.push(null); }
+                            }
+                            allStopCoords.push(destCoords);
+                            
+                            // Find closest segment start to current position
+                            let bestSegment = 0;
+                            let minSegDist = Infinity;
+                            for (let si = 0; si < allStopCoords.length - 1; si++) {
+                                const sc = allStopCoords[si];
+                                if (!sc) continue;
+                                const d = calculateHaversineDistance(sc[1], sc[0], currentLat, currentLon);
+                                if (d < minSegDist) { minSegDist = d; bestSegment = si; }
+                            }
+                            
+                            // Cumulative km at the start of best segment
+                            const segStartKm = bestSegment === 0 ? 0 : stopsDistances[bestSegment - 1];
+                            const segEndKm = bestSegment < stopsDistances.length ? stopsDistances[bestSegment] : totalDistance;
+                            const segLen = segEndKm - segStartKm;
+                            
+                            const sc1 = allStopCoords[bestSegment];
+                            const sc2 = allStopCoords[bestSegment + 1];
+                            if (sc1 && sc2) {
+                                const segFullLen = calculateHaversineDistance(sc1[1], sc1[0], sc2[1], sc2[0]);
+                                const progressInSeg = segFullLen > 0
+                                    ? calculateHaversineDistance(sc1[1], sc1[0], currentLat, currentLon) / segFullLen
+                                    : 0;
+                                currentKm = Math.min(totalDistance, parseFloat((segStartKm + segLen * Math.min(1, progressInSeg)).toFixed(1)));
+                            } else {
+                                currentKm = Math.min(totalDistance, parseFloat((totalDistance * (distFromStart / calculatedTotal)).toFixed(1)));
+                            }
+                        } else if (totalDistance > 0) {
+                            const ratio = distFromStart / calculatedTotal;
+                            currentKm = Math.min(totalDistance, parseFloat((totalDistance * ratio).toFixed(1)));
+                        } else {
+                            const ratio = distFromStart / calculatedTotal;
+                            currentKm = Math.min(100, parseFloat((100 * ratio).toFixed(1)));
+                        }
+
+                        
+                        // Reverse geocode to get village, district, state name
+                        let currentLocationName = '';
+                        try {
+                            const revGeoResponse = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${currentLat}&lon=${currentLon}&format=json&accept-language=en`);
+                            if (revGeoResponse.ok) {
+                                const geoData = await revGeoResponse.json();
+                                const addr = geoData.address || {};
+                                
+                                const parts = [];
+                                // Local: Village, Suburb, Town, or City
+                                const local = addr.village || addr.suburb || addr.town || addr.city || addr.hamlet;
+                                if (local) parts.push(local);
+                                
+                                // District: District, County, or City District
+                                const dist = addr.district || addr.county || addr.city_district;
+                                if (dist) parts.push(dist);
+                                
+                                // State
+                                const state = addr.state;
+                                if (state) parts.push(state);
+                                
+                                currentLocationName = parts.join(', ') || 'Active Location';
+                            }
+                        } catch (geoErr) {
+                            console.warn('Reverse geocoding failed:', geoErr);
+                            currentLocationName = `${currentLat.toFixed(2)}, ${currentLon.toFixed(2)}`;
+                        }
+                        
+                        await db.collection('trips').doc(trip.id).update({
+                            currentKm: currentKm,
+                            currentLocationName: currentLocationName
+                        });
+                        
+                        trip.currentKm = currentKm;
+                        trip.currentLocationName = currentLocationName;
+                        loadTravelAnimation(trip);
+                        showAlert(`GPS tracking complete! Location: ${currentLocationName || 'Determined'}. Distance Traveled: ${currentKm}${totalDistance > 0 ? ' km' : '%'}`, 'success');
+                    } catch (err) {
+                        console.error('Error auto-tracking location:', err);
+                        showAlert('Error auto-tracking location. Make sure GPS is enabled.', 'danger');
+                    } finally {
+                        autoTrackBtn.disabled = false;
+                        autoTrackBtn.innerHTML = '<i class="fas fa-location-crosshairs me-1 text-info"></i>Auto-Track GPS';
+                    }
+                }, (error) => {
+                    console.error('Geolocation error:', error);
+                    showAlert('Failed to access GPS. Please check location permissions.', 'warning');
+                    autoTrackBtn.disabled = false;
+                    autoTrackBtn.innerHTML = '<i class="fas fa-location-crosshairs me-1 text-info"></i>Auto-Track GPS';
+                }, {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                });
+            });
+        }
+        const updateBtn = document.getElementById('update-details-progress');
+        if (updateBtn) {
+            updateBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const tripId = updateBtn.dataset.tripId;
+                const totalDist = parseFloat(updateBtn.dataset.totalDist) || 0;
+                
+                let promptMsg = '';
+                let maxVal = 100;
+                let isPercent = totalDist <= 0;
+                
+                if (isPercent) {
+                    promptMsg = 'Trip distance is not calculated. Enter your journey progress as a percentage (0 to 100%):';
+                    maxVal = 100;
+                } else {
+                    promptMsg = `Enter your current distance traveled in km (0 to ${totalDist.toFixed(0)} km):`;
+                    maxVal = totalDist;
+                }
+                
+                const currentKmStr = prompt(promptMsg, trip.currentKm || '0');
+                if (currentKmStr !== null) {
+                    const currentKm = parseFloat(currentKmStr);
+                    if (isNaN(currentKm) || currentKm < 0 || currentKm > maxVal) {
+                        showAlert(`Please enter a valid value between 0 and ${maxVal.toFixed(0)}${isPercent ? '%' : ' km'}`, 'warning');
+                        return;
+                    }
+                    
+                    try {
+                        await db.collection('trips').doc(tripId).update({
+                            currentKm: currentKm
+                        });
+                        trip.currentKm = currentKm;
+                        loadTravelAnimation(trip);
+                        showAlert('Journey progress updated!', 'success');
+                    } catch (error) {
+                        console.error('Error updating progress:', error);
+                        showAlert('Failed to update progress.', 'danger');
+                    }
+                }
+            });
+        }
+    }, 50);
+    
+    // Set styles smoothly
+    setTimeout(() => {
+        bar.style.width = `${progressPercent}%`;
+        
+        let offsetPercent = progressPercent;
+        if (offsetPercent < 2) offsetPercent = 0;
+        if (offsetPercent > 98) offsetPercent = 100;
+        
+        vehicle.style.left = `calc(${offsetPercent}% - 12px)`;
+    }, 100);
 
     // Add trip actions (edit/delete/leave buttons)
     addTripActions(trip);
@@ -602,9 +1076,7 @@ async function loadTripMembers(trip) {
         members.forEach((member) => {
             const memberDiv = document.createElement('div');
             memberDiv.className = 'd-flex align-items-center mb-3 p-3 border rounded bg-light';
-            
-            const avatarSrc = member.photoURL || 
-                `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}&background=4361ee&color=fff&size=128&bold=true`;
+            const avatarSrc = getSafeAvatarUrl(member.photoURL, member.name);
             
             // Create badges
             const badges = [];
@@ -617,7 +1089,7 @@ async function loadTripMembers(trip) {
             
             memberDiv.innerHTML = `
                 <img src="${avatarSrc}" class="user-avatar me-3 flex-shrink-0" alt="${member.name}" 
-                     style="width: 50px; height: 50px; object-fit: cover; border: 2px solid ${member.isCreator ? '#4361ee' : member.isCurrentUser ? '#28a745' : '#dee2e6'};">
+                     style="width: 50px; height: 50px; object-fit: cover; border: 2px solid ${member.isCreator ? '#2d6a4f' : member.isCurrentUser ? '#52b788' : '#dee2e6'};">
                 <div class="flex-grow-1">
                     <div class="d-flex align-items-center mb-1">
                         <strong class="mb-0 me-2" style="font-size: 1.1rem;">${member.name}</strong>
@@ -627,6 +1099,11 @@ async function loadTripMembers(trip) {
                     <small class="text-muted">Trip Member</small>
                 </div>
             `;
+            
+            const imgEl = memberDiv.querySelector('img');
+            if (imgEl) {
+                setupAvatarFallback(imgEl, member.name);
+            }
             
             membersList.appendChild(memberDiv);
         });
@@ -661,7 +1138,7 @@ async function loadTripMembers(trip) {
             if (isCreator) badges.push('<span class="badge bg-primary me-1"><i class="fas fa-crown me-1"></i>Creator</span>');
             if (isCurrentUser) badges.push('<span class="badge bg-success me-1"><i class="fas fa-user me-1"></i>You</span>');
             
-            const avatarSrc = `https://ui-avatars.com/api/?name=${encodeURIComponent(memberName)}&background=4361ee&color=fff&size=128`;
+            const avatarSrc = getDefaultAvatar(memberName);
             
             memberDiv.innerHTML = `
                 <img src="${avatarSrc}" class="user-avatar me-3 flex-shrink-0" alt="${memberName}" 
@@ -674,6 +1151,11 @@ async function loadTripMembers(trip) {
                     <small class="text-muted">${isCreator ? 'Trip Creator' : 'Trip Member'}</small>
                 </div>
             `;
+            
+            const imgEl = memberDiv.querySelector('img');
+            if (imgEl) {
+                setupAvatarFallback(imgEl, memberName);
+            }
             
             membersList.appendChild(memberDiv);
         });
@@ -1219,6 +1701,25 @@ function loadTripRoute(trip) {
                         </div>
                     </div>
                 </div>
+                
+                ${trip.stops && trip.stops.length > 0 ? `
+                <div class="mt-4">
+                    <div class="card bg-light bg-opacity-50 border border-success-subtle">
+                        <div class="card-body py-3 px-4">
+                            <h6 class="mb-2 text-success fw-bold" style="font-size: 0.9rem;"><i class="fas fa-map-pin me-2 text-success"></i>Route Stops</h6>
+                            <div class="d-flex flex-wrap align-items-center gap-2 small text-muted">
+                                <span class="fw-semibold text-dark">${trip.startLocation}</span>
+                                ${trip.stops.map(stop => `
+                                    <i class="fas fa-arrow-right-long text-success opacity-50 px-1"></i>
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle py-1 px-2">${stop}</span>
+                                `).join('')}
+                                <i class="fas fa-arrow-right-long text-success opacity-50 px-1"></i>
+                                <span class="fw-semibold text-dark">${trip.destination}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
                 <div class="row mt-4">
                     <div class="col-md-6">
                         <div class="card bg-primary text-white">
@@ -1294,7 +1795,7 @@ async function loadTripMap(trip) {
     const pathCoordinates = [];
 
     // Helper to add marker and collect coordinates
-    const addMarker = async (name, type, details) => {
+    const addMarker = async (name, type, details, isRoute = true) => {
         try {
             const coords = await geocodeLocation(name);
             // OpenRouteService returns [lon, lat], Leaflet needs [lat, lon]
@@ -1304,16 +1805,31 @@ async function loadTripMap(trip) {
                 .bindPopup(`<b>${type}:</b> ${name}${details ? '<br>' + details : ''}`);
             
             tripMarkers[name] = marker;
-            pathCoordinates.push(latLng);
+            if (isRoute) {
+                pathCoordinates.push(latLng);
+            }
         } catch (e) {
             console.warn(`Could not map location: ${name}`);
         }
     };
 
     // 1. Start Location
-    if (trip.startLocation) await addMarker(trip.startLocation, 'Start', '');
+    if (trip.startLocation) await addMarker(trip.startLocation, 'Start', '', true);
 
-    // 2. Itinerary Items (Sorted Chronologically)
+    // 2. Stops (in order)
+    if (trip.stops && Array.isArray(trip.stops)) {
+        for (let i = 0; i < trip.stops.length; i++) {
+            const stop = trip.stops[i];
+            if (stop) {
+                await addMarker(stop, `Stop #${i + 1}`, '', true);
+            }
+        }
+    }
+
+    // 3. Destination
+    if (trip.destination) await addMarker(trip.destination, 'Destination', '', true);
+
+    // 4. Itinerary Items (Sorted Chronologically) - add markers only (don't draw route through them)
     if (trip.itinerary && trip.itinerary.length > 0) {
         const sortedItinerary = [...trip.itinerary].sort((a, b) => {
             if (a.day !== b.day) return a.day - b.day;
@@ -1321,14 +1837,11 @@ async function loadTripMap(trip) {
         });
 
         for (const activity of sortedItinerary) {
-            if (activity.place) {
-                await addMarker(activity.place, `Day ${activity.day}`, `${activity.time} - ${activity.notes || ''}`);
+            if (activity.place && !tripMarkers[activity.place]) {
+                await addMarker(activity.place, `Day ${activity.day}`, `${activity.time} - ${activity.notes || ''}`, false);
             }
         }
     }
-
-    // 3. Destination
-    if (trip.destination) await addMarker(trip.destination, 'Destination', '');
 
     // Draw Polyline connecting all points
     if (pathCoordinates.length > 1) {
@@ -1580,102 +2093,7 @@ async function saveActivity() {
     }
 }
 
-// REAL OpenRouteService API Integration
-async function geocodeLocation(locationName) {
-    try {
-        const response = await fetch(`https://api.openrouteservice.org/geocode/search?api_key=${OPENROUTESERVICE_API_KEY}&text=${encodeURIComponent(locationName)}`);
-        const data = await response.json();
-        
-        if (data.features && data.features.length > 0) {
-            return data.features[0].geometry.coordinates; // [longitude, latitude]
-        }
-        throw new Error('Location not found');
-    } catch (error) {
-        console.error('Geocoding error:', error);
-        throw error;
-    }
-}
-
-async function calculateRealDistance(startLocation, destination) {
-    try {
-        console.log('Calculating real distance using OpenRouteService API...');
-        
-        // First, geocode both locations to get coordinates
-        const startCoords = await geocodeLocation(startLocation);
-        const destCoords = await geocodeLocation(destination);
-        
-        console.log('Start coordinates:', startCoords);
-        console.log('Destination coordinates:', destCoords);
-        
-        // Now calculate the route
-        const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
-            method: 'POST',
-            headers: {
-                'Authorization': OPENROUTESERVICE_API_KEY,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                coordinates: [startCoords, destCoords],
-                format: 'json'
-            })
-        });
-        
-        if (!response.ok) {
-            throw new Error(`API request failed: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data.routes && data.routes.length > 0) {
-            const route = data.routes[0];
-            const distance = (route.summary.distance / 1000).toFixed(1); // Convert to km
-            const duration = formatDuration(route.summary.duration); // Convert seconds to readable format
-            
-            return {
-                distance: `${distance} km`,
-                duration: duration,
-                coordinates: {
-                    start: startCoords,
-                    destination: destCoords
-                }
-            };
-        } else {
-            throw new Error('No route found');
-        }
-        
-    } catch (error) {
-        console.error('OpenRouteService API error:', error);
-        console.log('Falling back to simulated distance calculation...');
-        
-        // Fallback to simulation if API fails
-        return calculateSimulatedDistance(startLocation, destination);
-    }
-}
-
-function calculateSimulatedDistance(start, destination) {
-    // Fallback simulation when API fails
-    const baseDistance = 350;
-    const randomVariation = Math.random() * 200 - 100;
-    const distance = Math.max(50, baseDistance + randomVariation);
-    const hours = distance / 80;
-    const totalMinutes = Math.round(hours * 60);
-    
-    const hoursPart = Math.floor(totalMinutes / 60);
-    const minutesPart = totalMinutes % 60;
-    
-    let duration;
-    if (hoursPart > 0) {
-        duration = `${hoursPart} hour${hoursPart > 1 ? 's' : ''} ${minutesPart} minute${minutesPart > 1 ? 's' : ''}`;
-    } else {
-        duration = `${minutesPart} minute${minutesPart > 1 ? 's' : ''}`;
-    }
-    
-    return {
-        distance: `${distance.toFixed(1)} km`,
-        duration: duration,
-        simulated: true // Flag to indicate this is simulated data
-    };
-}
+// Routing and geocoding helpers are imported globally from utils.js
 
 async function calculateRoute() {
     if (!currentTrip) return;
@@ -1692,8 +2110,8 @@ async function calculateRoute() {
         document.getElementById('calculate-route-btn').disabled = true;
         document.getElementById('calculate-route-btn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Calculating...';
         
-        // Use the utility function from utils.js
-        const routeData = await calculateRealDistance(currentTrip.startLocation, currentTrip.destination);
+        // Use the utility function from utils.js with stops
+        const routeData = await calculateRealDistance(currentTrip.startLocation, currentTrip.destination, currentTrip.stops || []);
         
         console.log('Route calculated in trip details:', routeData);
         
@@ -2238,6 +2656,17 @@ function editCurrentTrip() {
     document.getElementById('edit-end-date').value = currentTrip.endDate;
     document.getElementById('edit-trip-budget').value = currentTrip.budget;
     
+    // Populate stops container
+    const editStopsContainer = document.getElementById('edit-trip-stops-container');
+    if (editStopsContainer) {
+        editStopsContainer.innerHTML = '';
+        if (currentTrip.stops && Array.isArray(currentTrip.stops)) {
+            currentTrip.stops.forEach(stop => {
+                addStopField(editStopsContainer, stop);
+            });
+        }
+    }
+    
     document.getElementById('edit-distance-results').classList.add('d-none');
     document.getElementById('edit-calculate-distance').checked = false;
     
@@ -2303,7 +2732,13 @@ function showProfileModal() {
                     <div class="modal-body">
                         <form id="profile-form">
                             <div class="text-center mb-4">
-                                <img id="profile-avatar" class="user-avatar mb-3" style="width: 100px; height: 100px;" src="${user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}&background=4361ee&color=fff`}" alt="Profile">
+                                <img id="profile-avatar" class="user-avatar mb-3" style="width: 100px; height: 100px; border: 3px solid var(--primary-color);" src="${getSafeAvatarUrl(user.photoURL, user.displayName || 'User')}" alt="Profile">
+                                <div class="mt-2">
+                                    <label class="form-label d-block small text-muted">Select an Eco Avatar</label>
+                                    <div class="d-flex justify-content-center gap-2 mt-2" id="avatar-choices-container">
+                                        <!-- Choices populated below -->
+                                    </div>
+                                </div>
                             </div>
                             <div class="mb-3">
                                 <label for="profile-name" class="form-label">Display Name</label>
@@ -2340,6 +2775,38 @@ function showProfileModal() {
     // Add modal to DOM
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     
+    // Render default eco avatar selectors
+    const container = document.getElementById('avatar-choices-container');
+    const profileAvatar = document.getElementById('profile-avatar');
+    if (container && profileAvatar) {
+        setupAvatarFallback(profileAvatar, user.displayName || 'User');
+        container.innerHTML = ECO_AVATARS.map(avatar => {
+            const isSelected = (user.photoURL === avatar.value || (!user.photoURL && avatar.id === 'avatar-leaf'));
+            return `
+                <div class="avatar-option rounded-circle p-1 d-flex align-items-center justify-content-center" 
+                     style="width: 42px; height: 42px; cursor: pointer; border: 2px solid ${isSelected ? 'var(--primary-color)' : 'transparent'}; background-color: rgba(45, 106, 79, 0.05);"
+                     data-avatar-val="${avatar.value}"
+                     title="${avatar.name}">
+                     <img src="${avatar.value}" style="width: 28px; height: 28px; object-fit: contain;">
+                </div>
+            `;
+        }).join('');
+        
+        container.querySelectorAll('.avatar-option').forEach(el => {
+            el.addEventListener('click', (e) => {
+                const target = e.currentTarget;
+                const newVal = target.dataset.avatarVal;
+                
+                // Highlight choice
+                container.querySelectorAll('.avatar-option').forEach(opt => opt.style.borderColor = 'transparent');
+                target.style.borderColor = 'var(--primary-color)';
+                
+                // Update preview
+                profileAvatar.src = newVal;
+            });
+        });
+    }
+    
     // Show the modal
     const modal = new bootstrap.Modal(document.getElementById('profileModal'));
     modal.show();
@@ -2359,13 +2826,19 @@ async function updateProfile() {
         saveBtn.disabled = true;
         saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
         
+        // Retrieve selected avatar URL
+        const profileAvatar = document.getElementById('profile-avatar');
+        const selectedAvatarSrc = profileAvatar ? profileAvatar.src : '';
+        
         await auth.currentUser.updateProfile({
-            displayName: name
+            displayName: name,
+            photoURL: selectedAvatarSrc
         });
         
         // Update user document in Firestore
         await db.collection('users').doc(auth.currentUser.uid).update({
             name: name,
+            photoURL: selectedAvatarSrc,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         
@@ -2431,6 +2904,11 @@ async function updateTripFromDetails() {
         return;
     }
     
+    // Extract stops
+    const stops = Array.from(document.querySelectorAll('#edit-trip-stops-container .trip-stop-input'))
+        .map(input => input.value.trim())
+        .filter(val => val.length > 0);
+        
     try {
         const updateBtn = document.getElementById('update-trip-btn-trip-details');
         updateBtn.disabled = true;
@@ -2441,6 +2919,7 @@ async function updateTripFromDetails() {
             transportMode,
             startLocation: startLocation.trim(),
             destination: destination.trim(),
+            stops: stops,
             startDate,
             endDate,
             budget,
@@ -2450,7 +2929,7 @@ async function updateTripFromDetails() {
         // Recalculate route if requested
         if (recalculateDistance) {
             try {
-                const routeData = await calculateRealDistance(startLocation, destination);
+                const routeData = await calculateRealDistance(startLocation, destination, stops);
                 updateData.route = {
                     ...routeData,
                     calculatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -3454,3 +3933,40 @@ async function loadTripWeather(trip) {
         `;
     }
 }
+
+function addStopField(container, value = '') {
+    if (!container) return;
+    
+    const div = document.createElement('div');
+    div.className = 'd-flex align-items-center gap-2 stop-input-row animate-fade-in';
+    
+    const span = document.createElement('span');
+    span.className = 'text-muted small';
+    span.innerHTML = '<i class="fas fa-map-pin text-success"></i>';
+    
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'form-control form-control-sm trip-stop-input';
+    input.placeholder = 'Stop name/city';
+    input.value = value;
+    input.required = true;
+    
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-outline-danger btn-sm py-1 px-2 border-0';
+    btn.innerHTML = '<i class="fas fa-trash-can"></i>';
+    btn.addEventListener('click', () => {
+        div.remove();
+    });
+    
+    div.appendChild(span);
+    div.appendChild(input);
+    div.appendChild(btn);
+    
+    container.appendChild(div);
+}
+
+window.addEventListener('tripRouteUpdated', () => {
+    console.log('Trip route data refreshed. Updating trip details...');
+    loadTripDetails();
+});

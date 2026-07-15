@@ -78,7 +78,7 @@
                             </div>
                         </div>
                         <div class="row">
-                            <div class="col-md-4 mb-3">
+                            <div class="col-md-3 mb-3">
                                 <label for="fuel-type" class="form-label">Fuel Type</label>
                                 <select class="form-select" id="fuel-type">
                                     <option value="petrol">Petrol</option>
@@ -87,13 +87,17 @@
                                     <option value="electric">Electric</option>
                                 </select>
                             </div>
-                            <div class="col-md-4 mb-3">
-                                <label for="mileage" class="form-label">Mileage (km/l)</label>
+                            <div class="col-md-3 mb-3">
+                                <label for="mileage" id="mileage-label" class="form-label">Mileage (km/l)</label>
                                 <input type="number" class="form-control" id="mileage" min="0" step="0.1" placeholder="e.g., 15">
                             </div>
-                            <div class="col-md-4 mb-3">
-                                <label for="fuel-price" class="form-label">Fuel Price (₹/l)</label>
+                            <div class="col-md-3 mb-3">
+                                <label for="fuel-price" id="fuel-price-label" class="form-label">Fuel Price (₹/l)</label>
                                 <input type="number" class="form-control" id="fuel-price" min="0" step="0.1" placeholder="e.g., 95.5">
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="tank-capacity" id="tank-capacity-label" class="form-label">Tank Capacity (L)</label>
+                                <input type="number" class="form-control" id="tank-capacity" min="0" step="0.1" placeholder="e.g., 45">
                             </div>
                         </div>
                         <div class="row" id="rental-fields" style="display: none;">
@@ -270,6 +274,53 @@
                                 <i class="fas fa-calculator fa-3x mb-3"></i>
                                 <p>Enter trip details to see cost breakdown</p>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Eco Footprint Card -->
+                <div class="card mb-4 border-success" id="eco-results-card" style="display: none;">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="fas fa-leaf me-2"></i>Eco Footprint Results</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="eco-results-content">
+                            <!-- Carbon footprint calculations go here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Range & Stops Estimator Card -->
+                <div class="card mb-4 border-info shadow-sm" id="range-planner-card" style="display: none;">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="fas fa-gas-pump me-2"></i>Range & Stops Estimator</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="range-planner-content">
+                            <!-- Dynamic range estimations -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Comparative Analysis Card -->
+                <div class="card mb-4 border-primary shadow-sm" id="comparison-card" style="display: none;">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="fas fa-balance-scale me-2"></i>Fuel & Eco Comparison</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover table-striped mb-0 align-middle" style="font-size: 0.85rem;">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Fuel Type</th>
+                                        <th>Est. Cost</th>
+                                        <th>CO₂ Emitted</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="comparison-table-body">
+                                    <!-- Dynamic comparison rows -->
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>

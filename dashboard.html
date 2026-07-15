@@ -274,6 +274,16 @@
                         <small class="text-muted">Email cannot be changed</small>
                     </div>
                     <div class="mb-3">
+                        <label for="profile-openrouter-key" class="form-label">
+                            <i class="fas fa-robot me-1 text-success"></i>OpenRouter API Key (Free AI)
+                        </label>
+                        <input type="password" class="form-control" id="profile-openrouter-key" placeholder="sk-or-v1-...">
+                        <small class="text-muted">
+                            Get a free key at <a href="https://openrouter.ai/keys" target="_blank">openrouter.ai/keys</a>. 
+                            Enables AI route optimization, travel tips &amp; accurate mileage — using free models like Llama 3 &amp; Mistral.
+                        </small>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label">Password</label>
                         <button type="button" class="btn btn-outline-secondary w-100" id="change-password-btn">
                             <i class="fas fa-key me-1"></i>Change Password
@@ -383,6 +393,45 @@
         </div>
     </div>
     
+    <!-- Dashboard Live Travel Tracker -->
+    <div class="card mb-4 border-0 shadow-sm overflow-hidden" id="dashboard-active-trip-tracker" style="display: none;">
+        <div class="card-body py-3 px-4 bg-white" style="border-radius: var(--border-radius-md);">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="small fw-bold text-success"><i class="fas fa-circle-play me-1 animate-pulse-slow text-success"></i>Live Journey Tracker</span>
+                <div id="dashboard-tracker-status" class="d-flex flex-wrap align-items-center gap-1 justify-content-end"></div>
+
+            </div>
+            <div class="journey-tracker-wrapper">
+                <div class="journey-tracker-inner">
+                    <!-- Dedicated relative container for the timeline bar and its absolute pins/dots/vehicle -->
+                    <div class="position-relative" style="height: 35px; margin-bottom: 20px;">
+                        <!-- Progress track (absolutely centered inside the 35px container) -->
+                        <div class="progress" style="height: 6px; background-color: rgba(45, 106, 79, 0.08); border-radius: 3px; position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); margin: 0;">
+                            <div class="progress-bar bg-success" id="dashboard-tracker-bar" role="progressbar" style="width: 0%; transition: width 1s ease;"></div>
+                        </div>
+                        <!-- Stops Pins -->
+                        <div id="dashboard-tracker-stops-pins"></div>
+                        <!-- Start Point -->
+                        <div class="position-absolute start-0 top-50 translate-middle bg-success border border-white border-2 rounded-circle" style="width: 14px; height: 14px; z-index: 2;" title="Start"></div>
+                        <!-- End Point -->
+                        <div class="position-absolute end-0 top-50 translate-middle bg-danger border border-white border-2 rounded-circle" style="width: 14px; height: 14px; z-index: 2;" title="Destination"></div>
+                        <!-- Moving Vehicle Icon -->
+                        <div class="position-absolute top-50 translate-middle-y" id="dashboard-tracker-vehicle" style="left: 0%; transition: left 1s ease; margin-top: -12px; z-index: 4;">
+                            <!-- Icon populated dynamically -->
+                        </div>
+                    </div>
+                    
+                    <!-- Start/End City Labels (Scrolling with track) -->
+                    <div class="d-flex justify-content-between small text-muted px-1">
+                        <span id="dashboard-tracker-start" style="max-width: 130px; white-space: normal; line-height: 1.2; display: inline-block;">-</span>
+                        <span class="text-success fw-semibold text-center" id="dashboard-tracker-current" style="white-space: normal; line-height: 1.2; display: inline-block;"></span>
+                        <span id="dashboard-tracker-dest" class="text-end" style="max-width: 130px; white-space: normal; line-height: 1.2; display: inline-block;">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
    <!-- In dashboard.html, update the statistics cards section -->
 <div class="row g-2 g-md-4 mb-4">
     <div class="col-3 col-md-3">
@@ -439,6 +488,32 @@
     </div>
 </div>
 
+    <!-- Eco Impact & Carbon Dashboard -->
+    <div class="card mb-4 border-0 shadow-sm overflow-hidden" id="dashboard-eco-card" style="display: none;">
+        <div class="card-body p-4" style="background: linear-gradient(135deg, #1b4332 0%, #2d6a4f 100%); color: white; border-radius: var(--border-radius-md);">
+            <div class="row align-items-center">
+                <div class="col-md-7">
+                    <h4 class="fw-bold mb-2">
+                        <i class="fas fa-leaf text-success me-2"></i>My Eco-Travel Carbon Tracker
+                    </h4>
+                    <p class="mb-0 text-light opacity-90 small">
+                        Track the environmental footprint of your journeys. Choose cleaner transport options (Train, Bus, or EV) to accumulate CO₂ savings and lower your impact!
+                    </p>
+                </div>
+                <div class="col-md-5 text-md-end mt-3 mt-md-0 d-flex justify-content-md-end gap-2">
+                    <div class="text-center px-3 py-2 bg-white bg-opacity-10 rounded" style="min-width: 110px;">
+                        <div style="font-size: 0.75rem;" class="text-light opacity-75">CO₂ Emitted</div>
+                        <h4 class="fw-bold mb-0 text-warning" id="dashboard-co2-emitted">0.0 kg</h4>
+                    </div>
+                    <div class="text-center px-3 py-2 bg-white bg-opacity-10 rounded" style="min-width: 110px;">
+                        <div style="font-size: 0.75rem;" class="text-light opacity-75">CO₂ Saved</div>
+                        <h4 class="fw-bold mb-0 text-success" id="dashboard-co2-saved">0.0 kg</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="trips-container" class="row">
         <!-- Trips will be loaded here -->
     </div>
@@ -489,6 +564,20 @@
                                 <input type="text" class="form-control" id="trip-destination" placeholder="City, Country" required>
                             </div>
                         </div>
+                        
+                        <!-- Dynamic Stops Section -->
+                        <div class="mb-3 border p-3 rounded bg-light bg-opacity-50">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="form-label mb-0 fw-semibold"><i class="fas fa-map-pin text-primary me-2"></i>Route Stops (Optional)</label>
+                                <button type="button" class="btn btn-outline-success btn-xs" id="add-trip-stop-btn">
+                                    <i class="fas fa-plus me-1"></i>Add Stop
+                                </button>
+                            </div>
+                            <div id="trip-stops-container" class="d-flex flex-column gap-2">
+                                <!-- Dynamic stop inputs will appear here -->
+                            </div>
+                        </div>
+
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="start-date" class="form-label">Start Date</label>
@@ -560,6 +649,20 @@
                                 <input type="text" class="form-control" id="edit-trip-destination" placeholder="City, Country" required>
                             </div>
                         </div>
+                        
+                        <!-- Dynamic Stops Section for Edit -->
+                        <div class="mb-3 border p-3 rounded bg-light bg-opacity-50">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="form-label mb-0 fw-semibold"><i class="fas fa-map-pin text-primary me-2"></i>Route Stops (Optional)</label>
+                                <button type="button" class="btn btn-outline-success btn-xs" id="edit-add-trip-stop-btn">
+                                    <i class="fas fa-plus me-1"></i>Add Stop
+                                </button>
+                            </div>
+                            <div id="edit-trip-stops-container" class="d-flex flex-column gap-2">
+                                <!-- Dynamic stop inputs will appear here -->
+                            </div>
+                        </div>
+
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="edit-start-date" class="form-label">Start Date</label>
@@ -730,5 +833,43 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+    <!-- AI Travel Assistant Chatbot Widget -->
+    <div class="ai-chat-widget" id="ai-chat-widget" style="display: none;">
+        <button class="ai-chat-btn" id="ai-chat-toggle" title="Ask TravelMate AI">
+            <i class="fas fa-robot animate-pulse-slow"></i>
+        </button>
+        
+        <div class="ai-chat-container" id="ai-chat-container">
+            <div class="ai-chat-header">
+                <div class="ai-chat-header-title">
+                    <i class="fas fa-robot text-warning"></i>
+                    <span>TravelMate AI Companion</span>
+                </div>
+                <button class="ai-chat-header-close" id="ai-chat-close">
+                    <i class="fas fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="ai-chat-messages" id="ai-chat-messages">
+                <div class="ai-chat-message assistant">
+                    Hello! I am your AI Travel Assistant. If you have an active trip, I can help you optimize your route stops, calculate exact mileage, suggest budget splits, or find cool places to visit. Ask me anything!
+                </div>
+            </div>
+            
+            <div class="ai-chat-input-area">
+                <div class="ai-chat-suggestions">
+                    <span class="ai-chat-suggestion-chip" data-query="Optimize route stops for my active trip">🤖 Optimize Stops</span>
+                    <span class="ai-chat-suggestion-chip" data-query="Give me eco-friendly tips for my current journey">🌱 Eco Tips</span>
+                    <span class="ai-chat-suggestion-chip" data-query="Suggest local sightseeing places near my stops">🗺️ Local Sightseeing</span>
+                </div>
+                <div class="ai-chat-input-row">
+                    <input type="text" class="ai-chat-input" id="ai-chat-input" placeholder="Type a message...">
+                    <button class="ai-chat-send" id="ai-chat-send">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
