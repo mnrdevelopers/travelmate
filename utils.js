@@ -1149,6 +1149,18 @@ function initSectionGuides() {
         if (card.dataset.initialized) return;
         card.dataset.initialized = 'true';
         
+        // Create title row
+        const titleRow = document.createElement('div');
+        titleRow.className = 'section-guide-title-row';
+        titleRow.innerHTML = `
+            <span><i class="fas fa-circle-question text-success me-2"></i>Quick Help Guide / मार्गदर्शिका / మార్గదర్శిని</span>
+            <i class="fas fa-chevron-down section-guide-toggle-icon"></i>
+        `;
+        
+        // Create collapsible body
+        const body = document.createElement('div');
+        body.className = 'section-guide-body';
+        
         const header = document.createElement('div');
         header.className = 'section-guide-langs';
         
@@ -1159,6 +1171,7 @@ function initSectionGuides() {
             btn.textContent = lang.name;
             btn.addEventListener('click', (e) => {
                 e.preventDefault();
+                e.stopPropagation(); // prevent collapsing when clicking language buttons
                 updateAllGuides(lang.id);
             });
             header.appendChild(btn);
@@ -1167,9 +1180,27 @@ function initSectionGuides() {
         const content = document.createElement('p');
         content.className = 'section-guide-content';
         
+        body.appendChild(header);
+        body.appendChild(content);
+        
         card.innerHTML = '';
-        card.appendChild(header);
-        card.appendChild(content);
+        card.appendChild(titleRow);
+        card.appendChild(body);
+        
+        // Toggle collapse/expand
+        titleRow.addEventListener('click', (e) => {
+            e.preventDefault();
+            const isExpanded = card.classList.contains('expanded');
+            
+            // Close other guides
+            document.querySelectorAll('.section-guide-card').forEach(otherCard => {
+                if (otherCard !== card) {
+                    otherCard.classList.remove('expanded');
+                }
+            });
+            
+            card.classList.toggle('expanded', !isExpanded);
+        });
     });
     
     updateAllGuides(currentLang);

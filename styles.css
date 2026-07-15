@@ -1995,6 +1995,33 @@ body.dark-mode .btn-close {
 .section-guide-card:hover {
     box-shadow: 0 4px 10px rgba(45, 106, 79, 0.04);
 }
+.section-guide-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #2d6a4f;
+}
+.section-guide-toggle-icon {
+    font-size: 0.75rem;
+    transition: transform 0.2s ease;
+    color: #2d6a4f;
+}
+.section-guide-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.25s ease-out, margin-top 0.2s ease;
+}
+.section-guide-card.expanded .section-guide-body {
+    max-height: 250px;
+    margin-top: 8px;
+}
+.section-guide-card.expanded .section-guide-toggle-icon {
+    transform: rotate(180deg);
+}
 .section-guide-langs {
     display: flex;
     gap: 6px;
