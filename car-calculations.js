@@ -105,6 +105,11 @@ function setupCarCalculatorEventListeners() {
     if (saveVehicleDocsBtn) {
         saveVehicleDocsBtn.addEventListener('click', saveVehicleDocuments);
     }
+    
+    const fetchTollBtn = document.getElementById('fetch-toll-btn');
+    if (fetchTollBtn) {
+        fetchTollBtn.addEventListener('click', calculateLiveTolls);
+    }
 }
 
 function updateFuelLabels() {
@@ -1799,4 +1804,136 @@ function setupFuelFillUpEventListeners() {
     
     // Load saved fill-ups if any
     loadSavedFillUps();
+}
+
+async function calculateLiveTolls() {
+    const startLoc = document.getElementById('calc-start-location').value.trim();
+    const destLoc = document.getElementById('calc-dest-location').value.trim();
+    
+    if (!startLoc || !destLoc) {
+        showAlert('Please enter both Start and Destination Locations to compute tolls', 'warning');
+        return;
+    }
+    
+    const fetchBtn = document.getElementById('fetch-toll-btn');
+    const originalHtml = fetchBtn.innerHTML;
+    
+    try {
+        fetchBtn.disabled = true;
+        fetchBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Calculating Tolls & Distance...';
+        
+        // Load Toll API key from user document in Firestore
+        let apiKey = null;
+        if (auth.currentUser) {
+            const userDoc = await db.collection('users').doc(auth.currentUser.uid).get();
+            if (userDoc.exists) {
+                apiKey = userDoc.data().tollApiKey;
+            }
+        }
+        
+        // Fallback to localStorage
+        if (!apiKey) {
+            apiKey = localStorage.getItem('travelmate_toll_api_key');
+        }
+        
+        if (!apiKey) {
+            throw new Error("Toll/RapidAPI Key is not configured. Please add your RapidAPI/Tollguru Key in the Dashboard Profile Settings to fetch live tolls.");
+        }
+        
+        // Call Tollguru API via RapidAPI
+        const response = await fetch('https://tollguru.p.rapidapi.com/v1/calc', {
+            method: 'POST',
+            headers: {
+                'x-rapidapi-host': 'tollguru.p.rapidapi.com',
+                'x-rapidapi-key': apiKey,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                from: { address: startLoc },
+                to: { address: destLoc },
+                vehicle: { type: '2AxlesAuto' }
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Toll API request failed with status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.routes || data.routes.length === 0) {
+            throw new Error("No routes found between these locations on Tollguru.");
+        }
+        
+        const route = data.routes[0];
+        const estToll = route.costs ? (route.costs.tag !== undefined ? route.costs.tag : route.costs.cash) : 0;
+        const distanceKm = route.summary ? (route.summary.distance ? (route.summary.distance.value / 1000) : 0) : 0;
+        
+        // Update input fields automatically
+        if (estToll > 0) {
+            document.getElementById('toll-cost').value = Math.round(estToll);
+        }
+        if (distanceKm > 0) {
+            document.getElementById('trip-distance').value = Math.round(distanceKm);
+        }
+        
+        // Build and display Toll details card
+        const cardEl = document.getElementById('toll-calculator-card');
+        const contentEl = document.getElementById('toll-calculator-content');
+        
+        if (cardEl && contentEl) {
+            cardEl.style.display = 'block';
+            
+            let tollsHtml = '';
+            if (route.tolls && route.tolls.length > 0) {
+                tollsHtml = `
+                    <div class="table-responsive mt-3">
+                        <table class="table table-sm table-striped mb-0" style="font-size: 0.8rem;">
+                            <thead>
+                                <tr>
+                                    <th>Toll Plaza Name</th>
+                                    <th class="text-end">FASTag Fare (₹)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${route.tolls.map(t => `
+                                    <tr>
+                                        <td><i class="fas fa-barcode text-primary me-1"></i>${t.name || 'Toll Plaza'}</td>
+                                        <td class="text-end fw-bold text-success">₹${(t.price || 0).toFixed(2)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } else {
+                tollsHtml = '<div class="alert alert-info mt-3 py-2 px-3 small">No toll plazas detected on this route. Enjoy a toll-free trip!</div>';
+            }
+            
+            contentEl.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <small class="text-muted d-block font-monospace">ROUTE: ${startLoc.toUpperCase()} ➡️ ${destLoc.toUpperCase()}</small>
+                        <span class="fs-5 fw-bold text-primary">₹${(estToll).toFixed(2)}</span>
+                    </div>
+                    <span class="badge bg-info"><i class="fas fa-road me-1"></i>${Math.round(distanceKm)} km</span>
+                </div>
+                <div class="small text-muted mb-2">
+                    <i class="fas fa-circle-info text-primary me-1"></i>Tolls have been automatically applied to the cost calculator summary.
+                </div>
+                ${tollsHtml}
+            `;
+        }
+        
+        // Trigger recalculation of the whole page costs
+        calculateAllCosts();
+        showAlert('Toll and route distances fetched live successfully!', 'success');
+        
+    } catch (e) {
+        console.error('Toll calculation error:', e);
+        showAlert(e.message || 'Failed to fetch live toll data from Tollguru', 'danger');
+    } finally {
+        fetchBtn.disabled = false;
+        fetchBtn.innerHTML = originalHtml;
+    }
 }

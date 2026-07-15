@@ -130,6 +130,23 @@
                     <div class="card-body">
                         <div class="row">
                             <div class="col-md-6 mb-3">
+                                <label for="calc-start-location" class="form-label">Start Location</label>
+                                <input type="text" class="form-control" id="calc-start-location" placeholder="e.g. Mumbai">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="calc-dest-location" class="form-label">Destination Location</label>
+                                <input type="text" class="form-control" id="calc-dest-location" placeholder="e.g. Pune">
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <button class="btn btn-outline-success w-100" type="button" id="fetch-toll-btn">
+                                    <i class="fas fa-search-location me-1"></i>Calculate Route Tolls & Distance via FASTag
+                                </button>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
                                 <label for="trip-distance" class="form-label">Trip Distance (km)</label>
                                 <input type="number" class="form-control" id="trip-distance" min="0" step="0.1">
                             </div>
@@ -307,6 +324,18 @@
                     <div class="card-body">
                         <div id="range-planner-content">
                             <!-- Dynamic range estimations -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FASTag Toll & Route Calculator Card -->
+                <div class="card mb-4 border-primary shadow-sm" id="toll-calculator-card" style="display: none;">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="fas fa-ticket me-2"></i>FASTag Toll & Route Estimator</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="toll-calculator-content">
+                            <!-- Dynamic toll calculation details -->
                         </div>
                     </div>
                 </div>

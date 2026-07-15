@@ -225,6 +225,11 @@ function showProfileModal() {
                 fastagKeyField.value = data.fastagApiKey;
             }
             
+            const tollKeyField = document.getElementById('profile-toll-api-key');
+            if (tollKeyField && data.tollApiKey) {
+                tollKeyField.value = data.tollApiKey;
+            }
+            
             const modelSelect = document.getElementById('profile-openrouter-model');
             const customInput = document.getElementById('profile-openrouter-custom-model');
             if (modelSelect) {
@@ -311,6 +316,9 @@ async function saveProfile() {
         const fastagKeyInput = document.getElementById('profile-fastag-api-key');
         const fastagApiKey = fastagKeyInput ? fastagKeyInput.value.trim() : '';
         
+        const tollKeyInput = document.getElementById('profile-toll-api-key');
+        const tollApiKey = tollKeyInput ? tollKeyInput.value.trim() : '';
+        
         const modelSelect = document.getElementById('profile-openrouter-model');
         const openrouterModel = modelSelect ? modelSelect.value : 'auto';
         window._openrouterModel = openrouterModel;
@@ -331,6 +339,7 @@ async function saveProfile() {
         if (groqApiKey !== undefined) updatePayload.groqApiKey = groqApiKey;
         if (fastagApiUrl !== undefined) updatePayload.fastagApiUrl = fastagApiUrl;
         if (fastagApiKey !== undefined) updatePayload.fastagApiKey = fastagApiKey;
+        if (tollApiKey !== undefined) updatePayload.tollApiKey = tollApiKey;
         await db.collection('users').doc(auth.currentUser.uid).update(updatePayload);
         
         // Sync to shared global config so all users can use it as a fallback
