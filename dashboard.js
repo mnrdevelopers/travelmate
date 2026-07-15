@@ -1045,18 +1045,74 @@ function updateDashboardActiveTripTracker() {
             vehicleLatLng = startLatLng;
         }
         
-        if (pathCoordinates.length > 1) {
-            const polyline = L.polyline(pathCoordinates, {
-                color: '#2d6a4f',
-                weight: 4,
-                opacity: 0.8,
-                dashArray: '6, 6',
-                lineJoin: 'round'
-            }).addTo(dashboardTrackerMap);
-            
-            dashboardTrackerMap.fitBounds(polyline.getBounds().pad(0.15));
-        } else if (pathCoordinates.length === 1) {
-            dashboardTrackerMap.setView(pathCoordinates[0], 11);
+        let routeCoords = null;
+        if (activeTrip.transportMode !== 'flight') {
+            routeCoords = await fetchRouteGeometryCoords(activeTrip.startLocation, activeTrip.destination, activeTrip.stops);
+        }
+        
+        const finalCoords = routeCoords && routeCoords.length > 1 ? routeCoords : pathCoordinates;
+        
+        if (finalCoords.length > 1) {
+            if (activeTrip.transportMode === 'train') {
+                // Train track style: solid dark gray casing with white dashes on top
+                L.polyline(finalCoords, {
+                    color: '#333333',
+                    weight: 6,
+                    opacity: 0.9,
+                    lineJoin: 'round'
+                }).addTo(dashboardTrackerMap);
+                
+                const dashes = L.polyline(finalCoords, {
+                    color: '#ffffff',
+                    weight: 4,
+                    opacity: 1,
+                    dashArray: '8, 8',
+                    lineJoin: 'round'
+                }).addTo(dashboardTrackerMap);
+                
+                dashboardTrackerMap.fitBounds(dashes.getBounds().pad(0.15));
+            } else if (activeTrip.transportMode === 'flight') {
+                // Flight curve style: curved dashed blue/indigo line
+                const startPt = pathCoordinates[0];
+                const endPt = pathCoordinates[pathCoordinates.length - 1];
+                const curvedCoords = [];
+                const steps = 60;
+                for (let i = 0; i <= steps; i++) {
+                    const t = i / steps;
+                    const lat = startPt[0] + (endPt[0] - startPt[0]) * t;
+                    const lng = startPt[1] + (endPt[1] - startPt[1]) * t;
+                    const offset = Math.sin(t * Math.PI) * (Math.abs(endPt[1] - startPt[1]) * 0.15 + 2);
+                    curvedCoords.push([lat + offset, lng]);
+                }
+                const flightLine = L.polyline(curvedCoords, {
+                    color: '#6366f1',
+                    weight: 3.5,
+                    opacity: 0.85,
+                    dashArray: '6, 8',
+                    lineJoin: 'round'
+                }).addTo(dashboardTrackerMap);
+                
+                dashboardTrackerMap.fitBounds(flightLine.getBounds().pad(0.15));
+            } else {
+                // Road transport: solid dark green highway
+                L.polyline(finalCoords, {
+                    color: '#1b4332',
+                    weight: 6,
+                    opacity: 0.4,
+                    lineJoin: 'round'
+                }).addTo(dashboardTrackerMap);
+                
+                const roadLine = L.polyline(finalCoords, {
+                    color: '#2d6a4f',
+                    weight: 4,
+                    opacity: 0.9,
+                    lineJoin: 'round'
+                }).addTo(dashboardTrackerMap);
+                
+                dashboardTrackerMap.fitBounds(roadLine.getBounds().pad(0.15));
+            }
+        } else if (finalCoords.length === 1) {
+            dashboardTrackerMap.setView(finalCoords[0], 11);
         }
     };
     

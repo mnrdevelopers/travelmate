@@ -1887,18 +1887,74 @@ async function loadTripMap(trip) {
     }
 
     // Draw Polyline connecting all points
-    if (pathCoordinates.length > 1) {
-        routePolyline = L.polyline(pathCoordinates, {
-            color: '#6366f1', // Primary color
-            weight: 4,
-            opacity: 0.7,
-            dashArray: '10, 10',
-            lineJoin: 'round'
-        }).addTo(tripMap);
-        
-        tripMap.fitBounds(routePolyline.getBounds().pad(0.1));
-    } else if (pathCoordinates.length === 1) {
-        tripMap.setView(pathCoordinates[0], 10);
+    let routeCoords = null;
+    if (trip.transportMode !== 'flight') {
+        routeCoords = await fetchRouteGeometryCoords(trip.startLocation, trip.destination, trip.stops);
+    }
+    
+    const finalCoords = routeCoords && routeCoords.length > 1 ? routeCoords : pathCoordinates;
+    
+    if (finalCoords.length > 1) {
+        if (trip.transportMode === 'train') {
+            // Train track style: solid dark gray casing with white dashes on top
+            L.polyline(finalCoords, {
+                color: '#333333',
+                weight: 6,
+                opacity: 0.9,
+                lineJoin: 'round'
+            }).addTo(tripMap);
+            
+            routePolyline = L.polyline(finalCoords, {
+                color: '#ffffff',
+                weight: 4,
+                opacity: 1,
+                dashArray: '8, 8',
+                lineJoin: 'round'
+            }).addTo(tripMap);
+            
+            tripMap.fitBounds(routePolyline.getBounds().pad(0.15));
+        } else if (trip.transportMode === 'flight') {
+            // Flight curve style: curved dashed blue/indigo line
+            const startPt = pathCoordinates[0];
+            const endPt = pathCoordinates[pathCoordinates.length - 1];
+            const curvedCoords = [];
+            const steps = 60;
+            for (let i = 0; i <= steps; i++) {
+                const t = i / steps;
+                const lat = startPt[0] + (endPt[0] - startPt[0]) * t;
+                const lng = startPt[1] + (endPt[1] - startPt[1]) * t;
+                const offset = Math.sin(t * Math.PI) * (Math.abs(endPt[1] - startPt[1]) * 0.15 + 2);
+                curvedCoords.push([lat + offset, lng]);
+            }
+            routePolyline = L.polyline(curvedCoords, {
+                color: '#6366f1',
+                weight: 3.5,
+                opacity: 0.85,
+                dashArray: '6, 8',
+                lineJoin: 'round'
+            }).addTo(tripMap);
+            
+            tripMap.fitBounds(routePolyline.getBounds().pad(0.15));
+        } else {
+            // Road transport: solid dark green highway
+            L.polyline(finalCoords, {
+                color: '#1b4332',
+                weight: 6,
+                opacity: 0.4,
+                lineJoin: 'round'
+            }).addTo(tripMap);
+            
+            routePolyline = L.polyline(finalCoords, {
+                color: '#2d6a4f',
+                weight: 4,
+                opacity: 0.9,
+                lineJoin: 'round'
+            }).addTo(tripMap);
+            
+            tripMap.fitBounds(routePolyline.getBounds().pad(0.15));
+        }
+    } else if (finalCoords.length === 1) {
+        tripMap.setView(finalCoords[0], 10);
     }
 }
 

@@ -1177,3 +1177,88 @@ function initSectionGuides() {
 
 document.addEventListener('DOMContentLoaded', initSectionGuides);
 
+function decodePolyline(str, precision) {
+    var index = 0,
+        lat = 0,
+        lng = 0,
+        coordinates = [],
+        shift = 0,
+        result = 0,
+        byte = null,
+        latitude_change,
+        longitude_change,
+        factor = Math.pow(10, precision || 5);
+
+    while (index < str.length) {
+        byte = null;
+        shift = 0;
+        result = 0;
+
+        do {
+            byte = str.charCodeAt(index++) - 63;
+            result |= (byte & 0x1f) << shift;
+            shift += 5;
+        } while (byte >= 0x20);
+
+        latitude_change = ((result & 1) ? ~(result >> 1) : (result >> 1));
+
+        shift = 0;
+        result = 0;
+
+        do {
+            byte = str.charCodeAt(index++) - 63;
+            result |= (byte & 0x1f) << shift;
+            shift += 5;
+        } while (byte >= 0x20);
+
+        longitude_change = ((result & 1) ? ~(result >> 1) : (result >> 1));
+
+        lat += latitude_change;
+        lng += longitude_change;
+
+        coordinates.push([lat / factor, lng / factor]);
+    }
+
+    return coordinates;
+}
+
+async function fetchRouteGeometryCoords(startLocation, destination, stops = []) {
+    try {
+        const startCoords = await geocodeLocation(startLocation);
+        const destCoords = await geocodeLocation(destination);
+        const coordsList = [startCoords];
+        
+        for (const stop of stops) {
+            if (stop && stop.trim().length > 2) {
+                try {
+                    const stopCoords = await geocodeLocation(stop);
+                    coordsList.push(stopCoords);
+                } catch (e) {}
+            }
+        }
+        coordsList.push(destCoords);
+        
+        const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
+            method: 'POST',
+            headers: {
+                'Authorization': OPENROUTESERVICE_API_KEY,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                coordinates: coordsList,
+                format: 'json'
+            })
+        });
+        
+        if (!response.ok) throw new Error('Failed to fetch routing geometry');
+        
+        const data = await response.json();
+        if (data.routes && data.routes.length > 0 && data.routes[0].geometry) {
+            return decodePolyline(data.routes[0].geometry);
+        }
+    } catch (e) {
+        console.error('Error fetching ORS route geometry:', e);
+    }
+    return null;
+}
+
