@@ -1018,7 +1018,6 @@ function updateDashboardActiveTripTracker() {
     };
     
     loadTrackerMapData();
-}
     
     // Wire up prompt and GPS handlers
     setTimeout(() => {
@@ -1204,17 +1203,6 @@ function updateDashboardActiveTripTracker() {
             });
         }
     }, 50);
-    
-    // Animate smoothly
-    setTimeout(() => {
-        bar.style.width = `${progressPercent}%`;
-        
-        let offsetPercent = progressPercent;
-        if (offsetPercent < 2) offsetPercent = 0;
-        if (offsetPercent > 98) offsetPercent = 100;
-        
-        vehicle.style.left = `calc(${offsetPercent}% - 12px)`;
-    }, 100);
 }
 
 function createTripCard(trip) {
