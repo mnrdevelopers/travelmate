@@ -1983,3 +1983,45 @@ body.dark-mode .btn-close {
     }
 }
 
+/* Section Guide Styles */
+.section-guide-card {
+    border: 1px solid rgba(45, 106, 79, 0.12);
+    background-color: #f8faf9;
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    transition: all 0.2s ease-in-out;
+}
+.section-guide-card:hover {
+    box-shadow: 0 4px 10px rgba(45, 106, 79, 0.04);
+}
+.section-guide-langs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+    padding-bottom: 4px;
+}
+.section-guide-lang-btn {
+    font-size: 0.7rem;
+    padding: 1px 6px;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    background: white;
+    cursor: pointer;
+    font-weight: 500;
+    color: #64748b;
+    transition: all 0.12s;
+}
+.section-guide-lang-btn.active {
+    background: #2d6a4f;
+    color: white;
+    border-color: #2d6a4f;
+}
+.section-guide-content {
+    font-size: 0.76rem;
+    line-height: 1.45;
+    color: #475569;
+    margin: 0;
+}
+

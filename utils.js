@@ -1116,3 +1116,64 @@ async function loadOpenRouterKeyShared() {
     return window._openrouterApiKey || null;
 }
 
+function initSectionGuides() {
+    const guides = document.querySelectorAll('.section-guide-card');
+    if (guides.length === 0) return;
+    
+    let currentLang = localStorage.getItem('travelmate_guide_lang') || 'en';
+    
+    const langs = [
+        { id: 'en', name: 'English' },
+        { id: 'hi', name: 'हिन्दी' },
+        { id: 'te', name: 'తెలుగు' }
+    ];
+    
+    function updateAllGuides(langId) {
+        localStorage.setItem('travelmate_guide_lang', langId);
+        currentLang = langId;
+        
+        document.querySelectorAll('.section-guide-card').forEach(card => {
+            card.querySelectorAll('.section-guide-lang-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.lang === langId);
+            });
+            
+            const contentEl = card.querySelector('.section-guide-content');
+            if (contentEl) {
+                const text = card.getAttribute(`data-guide-${langId}`) || card.getAttribute('data-guide-en') || '';
+                contentEl.innerHTML = `<i class="fas fa-circle-info text-success me-1"></i> ${text}`;
+            }
+        });
+    }
+    
+    guides.forEach(card => {
+        if (card.dataset.initialized) return;
+        card.dataset.initialized = 'true';
+        
+        const header = document.createElement('div');
+        header.className = 'section-guide-langs';
+        
+        langs.forEach(lang => {
+            const btn = document.createElement('button');
+            btn.className = `section-guide-lang-btn ${lang.id === currentLang ? 'active' : ''}`;
+            btn.dataset.lang = lang.id;
+            btn.textContent = lang.name;
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                updateAllGuides(lang.id);
+            });
+            header.appendChild(btn);
+        });
+        
+        const content = document.createElement('p');
+        content.className = 'section-guide-content';
+        
+        card.innerHTML = '';
+        card.appendChild(header);
+        card.appendChild(content);
+    });
+    
+    updateAllGuides(currentLang);
+}
+
+document.addEventListener('DOMContentLoaded', initSectionGuides);
+
