@@ -1778,6 +1778,49 @@ async function loadTripMap(trip) {
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
         }).addTo(tripMap);
+        
+        // Add Live Location Button Control
+        const LiveButtonControl = L.Control.extend({
+            options: { position: 'topleft' },
+            onAdd: function(map) {
+                const btn = L.DomUtil.create('button', 'leaflet-bar leaflet-control leaflet-control-custom btn btn-light p-0 d-flex align-items-center justify-content-center');
+                btn.style.width = '30px';
+                btn.style.height = '30px';
+                btn.style.backgroundColor = '#ffffff';
+                btn.style.borderRadius = '4px';
+                btn.style.border = '2px solid rgba(0,0,0,0.2)';
+                btn.style.cursor = 'pointer';
+                btn.innerHTML = '<i class="fas fa-location-crosshairs text-success" style="font-size: 1rem;"></i>';
+                btn.title = 'Pan to live location';
+                
+                L.DomEvent.disableClickPropagation(btn);
+                
+                btn.onclick = function() {
+                    if ('geolocation' in navigator) {
+                        navigator.geolocation.getCurrentPosition((pos) => {
+                            const lat = pos.coords.latitude;
+                            const lon = pos.coords.longitude;
+                            map.setView([lat, lon], 14);
+                            
+                            // Draw a live location circle/marker
+                            L.circle([lat, lon], {
+                                radius: 80,
+                                color: '#147df5',
+                                fillColor: '#147df5',
+                                fillOpacity: 0.4
+                            }).addTo(map).bindPopup('Your Current GPS Location').openPopup();
+                        }, (err) => {
+                            console.error(err);
+                            alert('Could not determine GPS coordinates: ' + err.message);
+                        });
+                    } else {
+                        alert('Geolocation is not supported by this browser.');
+                    }
+                };
+                return btn;
+            }
+        });
+        tripMap.addControl(new LiveButtonControl());
     } else {
         tripMap.invalidateSize();
     }
