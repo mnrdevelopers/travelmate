@@ -732,36 +732,85 @@ async function simulateFastagFetch() {
     
     const refreshBtn = document.getElementById('refresh-fastag-btn');
     const originalHtml = refreshBtn.innerHTML;
-    refreshBtn.disabled = true;
-    refreshBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Fetching...';
     
-    setTimeout(() => {
-        // Random balance, sometimes low (below 250) for testing alerts
-        const isLow = Math.random() < 0.45;
-        const mockBalance = isLow ? (Math.random() * 200 + 40) : (Math.random() * 1500 + 300);
+    try {
+        refreshBtn.disabled = true;
+        refreshBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Connecting Live...';
         
-        document.getElementById('manage-fastag-balance').textContent = `₹${mockBalance.toFixed(2)}`;
+        // Fetch credentials from Firestore
+        const userDoc = await db.collection('users').doc(auth.currentUser.uid).get();
+        const userData = userDoc.exists ? userDoc.data() : {};
+        
+        const apiUrl = userData.fastagApiUrl;
+        const apiKey = userData.fastagApiKey;
+        
+        if (!apiUrl) {
+            throw new Error("Live FASTag API URL is not configured. Please go to the Dashboard -> Profile Settings to link your Setu, Surepass, or RapidAPI credentials.");
+        }
+        
+        // Retrieve plate number of the vehicle if available
+        const plateNumber = document.getElementById('manage-plate-number').value.trim();
+        
+        // Make the actual HTTP API call!
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': apiKey || ''
+            },
+            body: JSON.stringify({
+                tagId: tagId,
+                vehicleNumber: plateNumber || ''
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`FASTag API server returned status ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // Parse balance dynamically from common response structures
+        let balance = null;
+        if (data.balance !== undefined) balance = data.balance;
+        else if (data.data && data.data.balance !== undefined) balance = data.data.balance;
+        else if (data.availableBalance !== undefined) balance = data.availableBalance;
+        else if (data.fastagBalance !== undefined) balance = data.fastagBalance;
+        else if (data.wallet && data.wallet.balance !== undefined) balance = data.wallet.balance;
+        
+        if (balance === null || isNaN(parseFloat(balance))) {
+            throw new Error("Could not parse balance from API response. Check response structure or JSON path.");
+        }
+        
+        const parsedBalance = parseFloat(balance);
+        
+        document.getElementById('manage-fastag-balance').textContent = `₹${parsedBalance.toFixed(2)}`;
         
         const alertEl = document.getElementById('fastag-low-balance-alert');
         if (alertEl) {
-            alertEl.style.display = mockBalance < 250 ? 'flex' : 'none';
+            alertEl.style.display = parsedBalance < 250 ? 'flex' : 'none';
         }
         
         // Save dynamically into current savedVehicles memory
         if (activeManagerIndex !== null && savedVehicles[activeManagerIndex]) {
-            savedVehicles[activeManagerIndex].fastagBalance = mockBalance;
+            savedVehicles[activeManagerIndex].fastagBalance = parsedBalance;
             savedVehicles[activeManagerIndex].fastagId = tagId;
         }
         
-        refreshBtn.disabled = false;
-        refreshBtn.innerHTML = originalHtml;
-        showAlert('FASTag balance fetched successfully via simulated query!', 'success');
+        showAlert('FASTag balance fetched successfully from your API!', 'success');
         
         // Low balance notification check
-        if (mockBalance < 250) {
-            triggerNativeNotification('Low FASTag Balance Alert!', `FASTag Tag ${tagId} has critically low balance: ₹${mockBalance.toFixed(2)}.`);
+        if (parsedBalance < 250) {
+            triggerNativeNotification('Low FASTag Balance Alert!', `FASTag Tag ${tagId} has critically low balance: ₹${parsedBalance.toFixed(2)}.`);
         }
-    }, 1200);
+        
+    } catch (error) {
+        console.error('FASTag API Fetch Error:', error);
+        showAlert(error.message || 'Error communicating with the FASTag API server', 'danger');
+    } finally {
+        refreshBtn.disabled = false;
+        refreshBtn.innerHTML = originalHtml;
+    }
 }
 
 async function saveVehicleDocuments() {

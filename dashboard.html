@@ -311,6 +311,18 @@
                             Used as an instant fallback when OpenRouter rate limits are exceeded.
                         </small>
                     </div>
+                    <hr class="my-3">
+                    <h6 class="fw-bold text-primary mb-3"><i class="fas fa-ticket me-2"></i>Live FASTag Integration Settings</h6>
+                    <div class="mb-3">
+                        <label for="profile-fastag-api-url" class="form-label">FASTag API Endpoint URL</label>
+                        <input type="text" class="form-control" id="profile-fastag-api-url" placeholder="https://api.surepass.io/api/v1/fastag/balance">
+                        <small class="text-muted">Enter your third-party provider balance inquiry endpoint (Setu, Surepass, RapidAPI, etc.)</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="profile-fastag-api-key" class="form-label">FASTag API Authorization Key/Token</label>
+                        <input type="password" class="form-control" id="profile-fastag-api-key" placeholder="Bearer or API Key token">
+                    </div>
+                    
                     <div class="mb-3">
                         <label class="form-label">Password</label>
                         <button type="button" class="btn btn-outline-secondary w-100" id="change-password-btn">

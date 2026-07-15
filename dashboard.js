@@ -214,6 +214,16 @@ function showProfileModal() {
             if (groqKeyField && data.groqApiKey) {
                 groqKeyField.value = data.groqApiKey;
             }
+
+            const fastagUrlField = document.getElementById('profile-fastag-api-url');
+            if (fastagUrlField && data.fastagApiUrl) {
+                fastagUrlField.value = data.fastagApiUrl;
+            }
+            
+            const fastagKeyField = document.getElementById('profile-fastag-api-key');
+            if (fastagKeyField && data.fastagApiKey) {
+                fastagKeyField.value = data.fastagApiKey;
+            }
             
             const modelSelect = document.getElementById('profile-openrouter-model');
             const customInput = document.getElementById('profile-openrouter-custom-model');
@@ -295,6 +305,12 @@ async function saveProfile() {
             window._groqApiKey = groqApiKey;
         }
         
+        const fastagUrlInput = document.getElementById('profile-fastag-api-url');
+        const fastagApiUrl = fastagUrlInput ? fastagUrlInput.value.trim() : '';
+        
+        const fastagKeyInput = document.getElementById('profile-fastag-api-key');
+        const fastagApiKey = fastagKeyInput ? fastagKeyInput.value.trim() : '';
+        
         const modelSelect = document.getElementById('profile-openrouter-model');
         const openrouterModel = modelSelect ? modelSelect.value : 'auto';
         window._openrouterModel = openrouterModel;
@@ -313,6 +329,8 @@ async function saveProfile() {
         };
         if (openrouterApiKey !== undefined) updatePayload.openrouterApiKey = openrouterApiKey;
         if (groqApiKey !== undefined) updatePayload.groqApiKey = groqApiKey;
+        if (fastagApiUrl !== undefined) updatePayload.fastagApiUrl = fastagApiUrl;
+        if (fastagApiKey !== undefined) updatePayload.fastagApiKey = fastagApiKey;
         await db.collection('users').doc(auth.currentUser.uid).update(updatePayload);
         
         // Sync to shared global config so all users can use it as a fallback
