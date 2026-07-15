@@ -9,6 +9,10 @@ let activeTripTrackerTimeout = null;
 document.addEventListener('DOMContentLoaded', function () {
     console.log('DOM loaded, initializing dashboard...');
     
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+    }
+    
     // Initially hide both dashboards until auth state is determined
     document.getElementById('public-dashboard').classList.add('d-none');
     const privateDashboard = document.querySelector('.container.mt-4');
@@ -471,6 +475,9 @@ function checkAuthState() {
                 ]);
                 showPrivateDashboard();
                 updateNavigationBasedOnAuth(true);
+                
+                // Scan saved vehicles for low FASTag balance and document expirations
+                checkDashboardVehicleAlerts();
                 
                 // Initialize AI chatbot (shown only for logged-in users)
                 initAIChatbot();
@@ -3432,6 +3439,96 @@ function initAIChatbot() {
             }
         }
     });
+}
+
+async function checkDashboardVehicleAlerts() {
+    if (!currentUser) return;
+    try {
+        const userDoc = await db.collection('users').doc(currentUser.uid).get();
+        if (userDoc.exists && userDoc.data().vehicles) {
+            const savedVehicles = userDoc.data().vehicles;
+            const alertsContainer = document.getElementById('vehicle-alerts-container');
+            if (!alertsContainer) return;
+            
+            alertsContainer.innerHTML = '';
+            const alertsList = [];
+            
+            savedVehicles.forEach(vehicle => {
+                // FASTag low balance alert
+                if (vehicle.fastagBalance !== undefined && vehicle.fastagBalance < 250) {
+                    alertsList.push({
+                        type: 'warning',
+                        title: `Low FASTag Balance (${vehicle.name})`,
+                        desc: `FASTag balance is ₹${vehicle.fastagBalance.toFixed(2)}. Please recharge soon.`,
+                        icon: 'fas fa-ticket'
+                    });
+                }
+                
+                // Expiry alerts
+                const docs = vehicle.documents || {};
+                const docLabels = {
+                    rc: 'Registration Certificate (RC)',
+                    dl: 'Driving License (DL)',
+                    puc: 'Pollution Certificate (PUC)',
+                    ins: 'Vehicle Insurance'
+                };
+                
+                Object.keys(docLabels).forEach(key => {
+                    const doc = docs[key];
+                    if (doc && doc.expiryDate) {
+                        const expiryDate = new Date(doc.expiryDate);
+                        expiryDate.setHours(0,0,0,0);
+                        const today = new Date();
+                        today.setHours(0,0,0,0);
+                        
+                        const diffTime = expiryDate - today;
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        
+                        if (diffDays < 0) {
+                            alertsList.push({
+                                type: 'danger',
+                                title: `${docLabels[key]} Expired`,
+                                desc: `Document for vehicle ${vehicle.name} expired on ${doc.expiryDate}!`,
+                                icon: 'fas fa-exclamation-circle'
+                            });
+                        } else if (diffDays <= 30) {
+                            alertsList.push({
+                                type: 'warning',
+                                title: `${docLabels[key]} Expiring Soon`,
+                                desc: `Document for vehicle ${vehicle.name} expires in ${diffDays} days (${doc.expiryDate}).`,
+                                icon: 'fas fa-clock'
+                            });
+                        }
+                    }
+                });
+            });
+            
+            if (alertsList.length === 0) return;
+            
+            alertsList.forEach(alert => {
+                const banner = document.createElement('div');
+                banner.className = `vehicle-alert-banner ${alert.type === 'warning' ? 'warning' : ''}`;
+                banner.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        <i class="${alert.icon} fs-5 me-3"></i>
+                        <div>
+                            <h6 class="mb-0 fw-bold">${alert.title}</h6>
+                            <small>${alert.desc}</small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close ms-3" onclick="this.parentElement.remove()" style="font-size: 0.8rem;"></button>
+                `;
+                alertsContainer.appendChild(banner);
+                
+                // Trigger native push notification
+                if (Notification.permission === 'granted') {
+                    new Notification(alert.title, { body: alert.desc, icon: 'icon.png' });
+                }
+            });
+        }
+    } catch (e) {
+        console.warn('Could not load vehicle alerts:', e);
+    }
 }
 
 // Initialize chatbot when auth state confirms the user is logged in

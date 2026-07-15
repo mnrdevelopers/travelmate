@@ -8,6 +8,9 @@ let currentFillUpTrip = null;
 document.addEventListener('DOMContentLoaded', function() {
     checkAuthState();
     setupTheme();
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+    }
 });
 
 function setupCarCalculatorEventListeners() {
@@ -79,6 +82,29 @@ function setupCarCalculatorEventListeners() {
             element.addEventListener('input', debounce(calculateAllCosts, 500));
         }
     });
+
+    // Setup document file input listener displays
+    ['rc', 'dl', 'puc', 'ins'].forEach(type => {
+        const fileEl = document.getElementById(`doc-${type}-file`);
+        if (fileEl) {
+            fileEl.addEventListener('change', (e) => {
+                const label = document.getElementById(`doc-${type}-file-name`);
+                if (label && e.target.files.length > 0) {
+                    label.textContent = `Selected: ${e.target.files[0].name}`;
+                }
+            });
+        }
+    });
+    
+    const refreshFastagBtn = document.getElementById('refresh-fastag-btn');
+    if (refreshFastagBtn) {
+        refreshFastagBtn.addEventListener('click', simulateFastagFetch);
+    }
+    
+    const saveVehicleDocsBtn = document.getElementById('save-vehicle-docs-btn');
+    if (saveVehicleDocsBtn) {
+        saveVehicleDocsBtn.addEventListener('click', saveVehicleDocuments);
+    }
 }
 
 function updateFuelLabels() {
@@ -544,17 +570,22 @@ async function loadSavedVehicles() {
                 return;
             }
             
-            vehiclesList.innerHTML = savedVehicles.map((vehicle, index) => `
+            vehiclesList.innerHTML = savedVehicles.map((vehicle, index) => {
+                const plateText = vehicle.plateNumber ? ` • <span class="badge bg-secondary font-monospace">${vehicle.plateNumber}</span>` : '';
+                return `
                 <div class="card mb-2 vehicle-item" data-index="${index}">
                     <div class="card-body py-2">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <h6 class="mb-1">${vehicle.name}</h6>
+                                <h6 class="mb-1 fw-bold">${vehicle.name}${plateText}</h6>
                                 <small class="text-muted">
                                     ${vehicle.type} • ${vehicle.mileage} km/l
                                 </small>
                             </div>
                             <div>
+                                <button class="btn btn-sm btn-outline-info manage-vehicle-btn me-1" title="Manage Details & Docs">
+                                    <i class="fas fa-folder-open"></i>
+                                </button>
                                 <button class="btn btn-sm btn-outline-primary load-vehicle-btn me-1" title="Load Vehicle">
                                     <i class="fas fa-upload"></i>
                                 </button>
@@ -565,7 +596,8 @@ async function loadSavedVehicles() {
                         </div>
                     </div>
                 </div>
-            `).join('');
+                `;
+            }).join('');
             
             // Add event listeners
             document.querySelectorAll('.load-vehicle-btn').forEach(btn => {
@@ -575,12 +607,22 @@ async function loadSavedVehicles() {
                 });
             });
             
+            document.querySelectorAll('.manage-vehicle-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const index = parseInt(e.target.closest('.vehicle-item').dataset.index);
+                    openVehicleManager(index);
+                });
+            });
+            
             document.querySelectorAll('.delete-vehicle-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     const index = e.target.closest('.vehicle-item').dataset.index;
                     deleteVehicle(index);
                 });
             });
+            
+            // Check alerts on load
+            checkVehicleAlertsOnLoad();
             
         } else {
             vehiclesList.innerHTML = `
@@ -600,6 +642,285 @@ async function loadSavedVehicles() {
             `;
         }
     }
+}
+
+function updateDocumentStatusBadge(badgeId, expiryDateStr) {
+    const badgeEl = document.getElementById(badgeId);
+    if (!badgeEl) return;
+    
+    if (!expiryDateStr) {
+        badgeEl.textContent = 'N/A';
+        badgeEl.className = 'badge bg-secondary';
+        return;
+    }
+    
+    const expiryDate = new Date(expiryDateStr);
+    expiryDate.setHours(0,0,0,0);
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    
+    const diffTime = expiryDate - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) {
+        badgeEl.textContent = 'Expired';
+        badgeEl.className = 'badge bg-danger';
+    } else if (diffDays <= 30) {
+        badgeEl.textContent = `Expiring Soon (${diffDays}d)`;
+        badgeEl.className = 'badge bg-warning text-dark';
+    } else {
+        badgeEl.textContent = 'Active';
+        badgeEl.className = 'badge bg-success';
+    }
+}
+
+let activeManagerIndex = null;
+
+function openVehicleManager(index) {
+    activeManagerIndex = index;
+    const vehicle = savedVehicles[index];
+    if (!vehicle) return;
+    
+    document.getElementById('manage-vehicle-index').value = index;
+    document.getElementById('manage-vehicle-name').value = vehicle.name;
+    document.getElementById('manage-plate-number').value = vehicle.plateNumber || '';
+    document.getElementById('manage-fastag-id').value = vehicle.fastagId || '';
+    
+    const balance = vehicle.fastagBalance !== undefined ? vehicle.fastagBalance : 500;
+    document.getElementById('manage-fastag-balance').textContent = `₹${balance.toFixed(2)}`;
+    
+    // Check low balance alert display
+    const alertEl = document.getElementById('fastag-low-balance-alert');
+    if (alertEl) {
+        alertEl.style.display = balance < 250 ? 'flex' : 'none';
+    }
+    
+    // Documents
+    const docs = vehicle.documents || {};
+    const docTypes = ['rc', 'dl', 'puc', 'ins'];
+    docTypes.forEach(type => {
+        const doc = docs[type] || {};
+        document.getElementById(`doc-${type}-number`).value = doc.docNumber || '';
+        document.getElementById(`doc-${type}-expiry`).value = doc.expiryDate || '';
+        document.getElementById(`doc-${type}-file`).value = ''; // clear input
+        
+        const fileNameEl = document.getElementById(`doc-${type}-file-name`);
+        if (fileNameEl) {
+            fileNameEl.textContent = doc.fileName ? `Uploaded: ${doc.fileName}` : 'No file attached';
+        }
+        updateDocumentStatusBadge(`${type}-status-badge`, doc.expiryDate);
+    });
+    
+    const modalEl = document.getElementById('vehicleManagerModal');
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+}
+
+async function simulateFastagFetch() {
+    const tagId = document.getElementById('manage-fastag-id').value.trim();
+    if (!tagId) {
+        showAlert('Please enter a FASTag ID/Tag Number first', 'warning');
+        return;
+    }
+    
+    const refreshBtn = document.getElementById('refresh-fastag-btn');
+    const originalHtml = refreshBtn.innerHTML;
+    refreshBtn.disabled = true;
+    refreshBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Fetching...';
+    
+    setTimeout(() => {
+        // Random balance, sometimes low (below 250) for testing alerts
+        const isLow = Math.random() < 0.45;
+        const mockBalance = isLow ? (Math.random() * 200 + 40) : (Math.random() * 1500 + 300);
+        
+        document.getElementById('manage-fastag-balance').textContent = `₹${mockBalance.toFixed(2)}`;
+        
+        const alertEl = document.getElementById('fastag-low-balance-alert');
+        if (alertEl) {
+            alertEl.style.display = mockBalance < 250 ? 'flex' : 'none';
+        }
+        
+        // Save dynamically into current savedVehicles memory
+        if (activeManagerIndex !== null && savedVehicles[activeManagerIndex]) {
+            savedVehicles[activeManagerIndex].fastagBalance = mockBalance;
+            savedVehicles[activeManagerIndex].fastagId = tagId;
+        }
+        
+        refreshBtn.disabled = false;
+        refreshBtn.innerHTML = originalHtml;
+        showAlert('FASTag balance fetched successfully via simulated query!', 'success');
+        
+        // Low balance notification check
+        if (mockBalance < 250) {
+            triggerNativeNotification('Low FASTag Balance Alert!', `FASTag Tag ${tagId} has critically low balance: ₹${mockBalance.toFixed(2)}.`);
+        }
+    }, 1200);
+}
+
+async function saveVehicleDocuments() {
+    if (activeManagerIndex === null) return;
+    
+    const index = activeManagerIndex;
+    const vehicle = savedVehicles[index];
+    if (!vehicle) return;
+    
+    const plateNumber = document.getElementById('manage-plate-number').value.trim();
+    const fastagId = document.getElementById('manage-fastag-id').value.trim();
+    
+    // Parse current balance text
+    const balanceText = document.getElementById('manage-fastag-balance').textContent.replace('₹', '');
+    const fastagBalance = parseFloat(balanceText) || 0;
+    
+    const docs = vehicle.documents || {};
+    const docTypes = ['rc', 'dl', 'puc', 'ins'];
+    
+    docTypes.forEach(type => {
+        const numberVal = document.getElementById(`doc-${type}-number`).value.trim();
+        const expiryVal = document.getElementById(`doc-${type}-expiry`).value;
+        const fileInput = document.getElementById(`doc-${type}-file`);
+        
+        let fileName = docs[type] ? docs[type].fileName : null;
+        if (fileInput.files.length > 0) {
+            fileName = fileInput.files[0].name;
+        }
+        
+        docs[type] = {
+            docNumber: numberVal,
+            expiryDate: expiryVal,
+            fileName: fileName
+        };
+    });
+    
+    vehicle.plateNumber = plateNumber;
+    vehicle.fastagId = fastagId;
+    vehicle.fastagBalance = fastagBalance;
+    vehicle.documents = docs;
+    
+    try {
+        const saveBtn = document.getElementById('save-vehicle-docs-btn');
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+        
+        await db.collection('users').doc(auth.currentUser.uid).update({
+            vehicles: savedVehicles,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        showAlert('Vehicle details and documents updated successfully!', 'success');
+        
+        // Close modal
+        const modalEl = document.getElementById('vehicleManagerModal');
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+        
+        loadSavedVehicles();
+    } catch (e) {
+        console.error('Error saving docs:', e);
+        showAlert('Failed to save vehicle details', 'danger');
+    } finally {
+        const saveBtn = document.getElementById('save-vehicle-docs-btn');
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>Save All Changes';
+    }
+}
+
+function triggerNativeNotification(title, body) {
+    if (!('Notification' in window)) return;
+    
+    if (Notification.permission === 'granted') {
+        new Notification(title, {
+            body: body,
+            icon: 'icon.png'
+        });
+    } else if (Notification.permission !== 'denied') {
+        Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+                new Notification(title, {
+                    body: body,
+                    icon: 'icon.png'
+                });
+            }
+        });
+    }
+}
+
+function checkVehicleAlertsOnLoad() {
+    const alertsContainer = document.getElementById('vehicle-alerts-container');
+    if (!alertsContainer) return;
+    
+    alertsContainer.innerHTML = '';
+    const alertsList = [];
+    
+    savedVehicles.forEach(vehicle => {
+        // FASTag low balance alert
+        if (vehicle.fastagBalance !== undefined && vehicle.fastagBalance < 250) {
+            alertsList.push({
+                type: 'warning',
+                title: `Low FASTag Balance (${vehicle.name})`,
+                desc: `FASTag balance is ₹${vehicle.fastagBalance.toFixed(2)}. Please recharge soon.`,
+                icon: 'fas fa-ticket'
+            });
+        }
+        
+        // Expiry alerts
+        const docs = vehicle.documents || {};
+        const docLabels = {
+            rc: 'Registration Certificate (RC)',
+            dl: 'Driving License (DL)',
+            puc: 'Pollution Certificate (PUC)',
+            ins: 'Vehicle Insurance'
+        };
+        
+        Object.keys(docLabels).forEach(key => {
+            const doc = docs[key];
+            if (doc && doc.expiryDate) {
+                const expiryDate = new Date(doc.expiryDate);
+                expiryDate.setHours(0,0,0,0);
+                const today = new Date();
+                today.setHours(0,0,0,0);
+                
+                const diffTime = expiryDate - today;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                if (diffDays < 0) {
+                    alertsList.push({
+                        type: 'danger',
+                        title: `${docLabels[key]} Expired`,
+                        desc: `Document for vehicle ${vehicle.name} expired on ${doc.expiryDate}!`,
+                        icon: 'fas fa-exclamation-circle'
+                    });
+                } else if (diffDays <= 30) {
+                    alertsList.push({
+                        type: 'warning',
+                        title: `${docLabels[key]} Expiring Soon`,
+                        desc: `Document for vehicle ${vehicle.name} expires in ${diffDays} days (${doc.expiryDate}).`,
+                        icon: 'fas fa-clock'
+                    });
+                }
+            }
+        });
+    });
+    
+    if (alertsList.length === 0) return;
+    
+    alertsList.forEach(alert => {
+        const banner = document.createElement('div');
+        banner.className = `vehicle-alert-banner ${alert.type === 'warning' ? 'warning' : ''}`;
+        banner.innerHTML = `
+            <div class="d-flex align-items-center">
+                <i class="${alert.icon} fs-5 me-3"></i>
+                <div>
+                    <h6 class="mb-0 fw-bold">${alert.title}</h6>
+                    <small>${alert.desc}</small>
+                </div>
+            </div>
+            <button type="button" class="btn-close ms-3" onclick="this.parentElement.remove()" style="font-size: 0.8rem;"></button>
+        `;
+        alertsContainer.appendChild(banner);
+        
+        // Trigger a native notification
+        triggerNativeNotification(alert.title, alert.desc);
+    });
 }
 
 function loadVehicle(vehicle) {
