@@ -1840,8 +1840,16 @@ async function calculateLiveTolls() {
             throw new Error("Toll/RapidAPI Key is not configured. Please add your RapidAPI/Tollguru Key in the Dashboard Profile Settings to fetch live tolls.");
         }
         
-        // Call Tollguru API via RapidAPI
-        const response = await fetch('https://tollguru.p.rapidapi.com/v1/calc', {
+        // Geocode addresses to coordinates first to bypass third-party locator bugs
+        const startCoords = await geocodeLocation(startLoc);
+        const destCoords = await geocodeLocation(destLoc);
+        
+        if (!startCoords || !destCoords) {
+            throw new Error("Could not geocode the start or destination location. Please write a clearer city or address.");
+        }
+        
+        // Call Tollguru API v2 via RapidAPI
+        const response = await fetch('https://tollguru.p.rapidapi.com/v2/origin-destination-waypoints', {
             method: 'POST',
             headers: {
                 'x-rapidapi-host': 'tollguru.p.rapidapi.com',
@@ -1849,8 +1857,8 @@ async function calculateLiveTolls() {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                from: { address: startLoc },
-                to: { address: destLoc },
+                from: { lat: startCoords[1], lng: startCoords[0] },
+                to: { lat: destCoords[1], lng: destCoords[0] },
                 vehicle: { type: '2AxlesAuto' }
             })
         });
@@ -1866,8 +1874,23 @@ async function calculateLiveTolls() {
         }
         
         const route = data.routes[0];
-        const estToll = route.costs ? (route.costs.tag !== undefined ? route.costs.tag : route.costs.cash) : 0;
-        const distanceKm = route.summary ? (route.summary.distance ? (route.summary.distance.value / 1000) : 0) : 0;
+        
+        // Parse Tollguru v2 costs structure safely
+        const estToll = route.costs ? 
+            (route.costs.toll !== undefined ? route.costs.toll : 
+             (route.costs.tag !== undefined ? route.costs.tag : 
+              (route.costs.cash !== undefined ? route.costs.cash : 0))) 
+            : 0;
+            
+        // Parse summary distance (in meters or km)
+        let distanceKm = 0;
+        if (route.summary) {
+            if (route.summary.distance) {
+                // If it's an object with value, or plain number
+                const distVal = route.summary.distance.value !== undefined ? route.summary.distance.value : route.summary.distance;
+                distanceKm = distVal > 1000 ? (distVal / 1000) : distVal;
+            }
+        }
         
         // Update input fields automatically
         if (estToll > 0) {
