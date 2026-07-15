@@ -936,10 +936,31 @@ function updateDashboardActiveTripTracker() {
     
     // Initialize or resize Leaflet Map
     if (!dashboardTrackerMap) {
-        dashboardTrackerMap = L.map('dashboard-tracker-map').setView([20, 78], 5);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        const streetTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
-        }).addTo(dashboardTrackerMap);
+        });
+        
+        const satelliteTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, USDA, USGS, and the GIS User Community'
+        });
+        
+        const terrainTiles = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+            attribution: 'Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap (CC-BY-SA)'
+        });
+        
+        dashboardTrackerMap = L.map('dashboard-tracker-map', {
+            center: [20, 78],
+            zoom: 5,
+            layers: [streetTiles]
+        });
+        
+        const baseMaps = {
+            "Streets": streetTiles,
+            "Satellite": satelliteTiles,
+            "Terrain": terrainTiles
+        };
+        
+        L.control.layers(baseMaps).addTo(dashboardTrackerMap);
         
         // Add Live Location Button Control
         const LiveButtonControl = L.Control.extend({

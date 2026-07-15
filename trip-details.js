@@ -1774,10 +1774,31 @@ async function loadTripMap(trip) {
 
     // Initialize map if needed
     if (!tripMap) {
-        tripMap = L.map('trip-map').setView([0, 0], 2);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        const streetTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
-        }).addTo(tripMap);
+        });
+        
+        const satelliteTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, USDA, USGS, and the GIS User Community'
+        });
+        
+        const terrainTiles = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+            attribution: 'Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap (CC-BY-SA)'
+        });
+        
+        tripMap = L.map('trip-map', {
+            center: [0, 0],
+            zoom: 2,
+            layers: [streetTiles]
+        });
+        
+        const baseMaps = {
+            "Streets": streetTiles,
+            "Satellite": satelliteTiles,
+            "Terrain": terrainTiles
+        };
+        
+        L.control.layers(baseMaps).addTo(tripMap);
         
         // Add Live Location Button Control
         const LiveButtonControl = L.Control.extend({
