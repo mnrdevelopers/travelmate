@@ -1531,18 +1531,12 @@ html, body {
     margin-top: 1rem;
 }
 
-/* Hero Carousel Styles */
+/* Hero Carousel Styles — 16:9 aspect ratio */
 .hero-slide-img {
-    height: 200px;
+    width: 100%;
+    aspect-ratio: 16 / 9;
     background-size: cover;
     background-position: center;
-    width: 100%;
-}
-
-@media (min-width: 768px) {
-    .hero-slide-img {
-        height: 350px;
-    }
 }
 
 /* Dark Mode Styles */
