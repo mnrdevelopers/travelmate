@@ -134,6 +134,14 @@ function setupDashboardEventListeners() {
     // Profile operations
     setupProfileEventListeners();
     
+    // Slideshow quick-upload button wiring (Active Trip Hero Banner)
+    const addSlideshowPhotoBtn = document.getElementById('add-slideshow-photo-btn');
+    const slideshowQuickInput = document.getElementById('slideshow-quick-photo-input');
+    if (addSlideshowPhotoBtn && slideshowQuickInput) {
+        addSlideshowPhotoBtn.addEventListener('click', () => slideshowQuickInput.click());
+        slideshowQuickInput.addEventListener('change', handleQuickActiveTripPhotoUpload);
+    }
+    
     // Protect any other navigation links
     const protectedLinks = document.querySelectorAll('.nav-link[href="#"]');
     protectedLinks.forEach(link => {
@@ -1523,12 +1531,12 @@ function renderActiveTripHeroSlideshow(activeTrip) {
     const isCustomUpload = uploadedImages.length > 0;
     
     if (countBadge) {
-        countBadge.innerHTML = isCustomUpload 
-            ? `<i class="fas fa-camera text-success me-1"></i> ${uploadedImages.length} Custom Photo${uploadedImages.length > 1 ? 's' : ''}`
-            : `<i class="fas fa-images text-warning me-1"></i> Default Vibe (Upload your photos!)`;
-        countBadge.className = isCustomUpload 
-            ? 'badge bg-success bg-opacity-25 text-white border border-success border-opacity-50 px-2.5 py-1.5'
-            : 'badge bg-warning bg-opacity-25 text-warning border border-warning border-opacity-50 px-2.5 py-1.5';
+        countBadge.innerHTML = isCustomUpload
+            ? `<i class="fas fa-camera text-success me-1"></i> ${uploadedImages.length} Photo${uploadedImages.length > 1 ? 's' : ''} uploaded`
+            : `<i class="fas fa-images text-warning me-1"></i> No photos yet — add yours!`;
+        countBadge.className = isCustomUpload
+            ? 'badge bg-success bg-opacity-25 text-white border border-success border-opacity-50 px-2 py-1'
+            : 'badge bg-warning bg-opacity-25 text-warning border border-warning border-opacity-50 px-2 py-1';
     }
     
     if (wrapper) {
@@ -1548,6 +1556,35 @@ function renderActiveTripHeroSlideshow(activeTrip) {
         `).join('');
     }
     
+    // Render uploaded photo thumbnail strip (only when custom images exist)
+    let thumbStrip = document.getElementById('slideshow-thumb-strip');
+    if (isCustomUpload) {
+        if (!thumbStrip) {
+            thumbStrip = document.createElement('div');
+            thumbStrip.id = 'slideshow-thumb-strip';
+            thumbStrip.style.cssText = 'position:relative; z-index:4; background: rgba(0,0,0,0.55); backdrop-filter: blur(6px); padding: 8px 16px; display: flex; align-items: center; gap: 8px; overflow-x: auto; flex-wrap: nowrap;';
+            slideshowContainer.appendChild(thumbStrip);
+        }
+        thumbStrip.innerHTML = `
+            <span style="color:rgba(255,255,255,0.6); font-size:0.7rem; white-space:nowrap; flex-shrink:0;">
+                <i class="fas fa-images me-1"></i>${uploadedImages.length} uploaded:
+            </span>
+            ${uploadedImages.map((url, idx) => `
+                <div style="position:relative; flex-shrink:0; width:44px; height:44px; border-radius:6px; overflow:hidden; border:2px solid rgba(255,255,255,0.25); cursor:pointer;"
+                     onclick="setSlideshowIndex(${idx})" title="Photo ${idx+1}">
+                    <img src="${url}" style="width:100%;height:100%;object-fit:cover;" loading="lazy">
+                    <button type="button"
+                        style="position:absolute;top:1px;right:1px;width:16px;height:16px;background:rgba(200,0,0,0.85);color:#fff;border:none;border-radius:50%;font-size:0.55rem;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:5;"
+                        onclick="event.stopPropagation(); deleteActiveTripPhoto(${idx})"
+                        title="Remove this photo">✕</button>
+                </div>
+            `).join('')}
+        `;
+        thumbStrip.style.display = 'flex';
+    } else if (thumbStrip) {
+        thumbStrip.style.display = 'none';
+    }
+    
     if (slideshowInterval) clearInterval(slideshowInterval);
     currentSlideIndex = 0;
     
@@ -1562,6 +1599,39 @@ function renderActiveTripHeroSlideshow(activeTrip) {
 function setSlideshowIndex(index) {
     currentSlideIndex = index;
     updateSlideshowDOM();
+}
+
+async function deleteActiveTripPhoto(photoIndex) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const activeTrip = userTrips.find(trip => {
+        const start = new Date(trip.startDate);
+        const end = new Date(trip.endDate);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        return today >= start && today <= end;
+    });
+
+    if (!activeTrip || !activeTrip.images) return;
+    if (!confirm(`Remove photo ${photoIndex + 1} from your trip slideshow?`)) return;
+
+    activeTrip.images.splice(photoIndex, 1);
+
+    try {
+        await db.collection('trips').doc(activeTrip.id).update({
+            images: activeTrip.images,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        const idx = userTrips.findIndex(t => t.id === activeTrip.id);
+        if (idx !== -1) userTrips[idx].images = activeTrip.images;
+        window.userTrips = userTrips;
+        if (typeof showToast === 'function') showToast('Photo removed from slideshow.', 'info');
+        currentSlideIndex = 0;
+        renderActiveTripHeroSlideshow(activeTrip);
+    } catch (e) {
+        console.error('Error removing photo:', e);
+        if (typeof showToast === 'function') showToast('Failed to remove photo.', 'danger');
+    }
 }
 
 function updateSlideshowDOM() {
@@ -1676,8 +1746,10 @@ function removeTripImagePreview(idx, isEdit) {
 
 async function handleQuickActiveTripPhotoUpload(event) {
     const files = Array.from(event.target.files);
+    // Reset input so same file can be re-selected
+    event.target.value = '';
     if (files.length === 0) return;
-    
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const activeTrip = userTrips.find(trip => {
@@ -1687,37 +1759,97 @@ async function handleQuickActiveTripPhotoUpload(event) {
         end.setHours(23, 59, 59, 999);
         return today >= start && today <= end;
     });
-    
+
     if (!activeTrip) {
         if (typeof showToast === 'function') showToast('No active trip found to add photos to!', 'warning');
         return;
     }
-    
-    if (typeof showToast === 'function') showToast('Processing trip photos...', 'info');
+
     activeTrip.images = activeTrip.images || [];
-    
-    for (const file of files) {
-        if (!file.type.startsWith('image/')) continue;
+
+    const settings = typeof getImageKitSettings === 'function' ? getImageKitSettings() : null;
+    const useImageKit = settings && settings.urlEndpoint && settings.publicKey && settings.privateKey && typeof uploadToImageKit === 'function';
+
+    // Show upload progress overlay inside slideshow banner
+    const countBadge = document.getElementById('slideshow-image-count');
+    const addBtn = document.getElementById('add-slideshow-photo-btn');
+    if (addBtn) {
+        addBtn.disabled = true;
+        addBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Uploading...';
+    }
+
+    const validFiles = files.filter(f => f.type.startsWith('image/'));
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < validFiles.length; i++) {
+        const file = validFiles[i];
+        // Update badge with live progress
+        if (countBadge) {
+            countBadge.innerHTML = `<i class="fas fa-spinner fa-spin me-1"></i> Uploading ${i + 1} / ${validFiles.length}...`;
+            countBadge.className = 'badge bg-info bg-opacity-30 text-white border border-info border-opacity-50 px-2 py-1';
+        }
+
         try {
-            const dataUrl = await compressImageToDataUrl(file, 900, 0.75);
-            if (dataUrl) {
-                activeTrip.images.push(dataUrl);
+            let finalUrl = '';
+
+            if (useImageKit) {
+                const fileName = `trip_${activeTrip.id}_${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
+                const ikRes = await uploadToImageKit(file, fileName, settings);
+                if (ikRes && ikRes.url) {
+                    finalUrl = ikRes.url;
+                }
+            }
+
+            // Fallback: compressed data URL
+            if (!finalUrl) {
+                finalUrl = await compressImageToDataUrl(file, 900, 0.78);
+            }
+
+            if (finalUrl) {
+                activeTrip.images.push(finalUrl);
+                successCount++;
             }
         } catch (err) {
-            console.error('Error adding quick photo:', err);
+            console.error('Error uploading photo:', err);
+            failCount++;
         }
     }
-    
+
+    // Re-enable button
+    if (addBtn) {
+        addBtn.disabled = false;
+        addBtn.innerHTML = '<i class="fas fa-camera me-1"></i> Add Trip Photo';
+    }
+
+    if (successCount === 0) {
+        if (typeof showToast === 'function') showToast('Failed to process all photos. Please try again.', 'danger');
+        return;
+    }
+
+    // Save to Firestore
     try {
         await db.collection('trips').doc(activeTrip.id).update({
             images: activeTrip.images,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
-        if (typeof showToast === 'function') showToast('Trip photos added successfully!', 'success');
+
+        // Update the userTrips array in memory
+        const idx = userTrips.findIndex(t => t.id === activeTrip.id);
+        if (idx !== -1) userTrips[idx].images = activeTrip.images;
+        window.userTrips = userTrips;
+
+        const msg = failCount > 0
+            ? `${successCount} photo(s) uploaded! ${failCount} failed.`
+            : `${successCount} photo(s) added to your trip slideshow! 🎉`;
+        if (typeof showToast === 'function') showToast(msg, 'success');
+
+        // Re-render slideshow with newly uploaded photos
         renderActiveTripHeroSlideshow(activeTrip);
+
     } catch (e) {
-        console.error('Error saving updated photos:', e);
-        if (typeof showToast === 'function') showToast('Failed to save photos to Firestore', 'danger');
+        console.error('Error saving photos to Firestore:', e);
+        if (typeof showToast === 'function') showToast('Photos processed but failed to save. Please retry.', 'danger');
     }
 }
 
