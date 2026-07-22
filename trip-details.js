@@ -2,7 +2,7 @@
 let currentTrip = null;
 let expenseChart = null;
 let paymentChart = null;
-let customCategories = [];
+var customCategories = typeof customCategories !== 'undefined' ? customCategories : [];
 let currentFilters = {
     category: 'all',
     payment: 'all',
@@ -247,6 +247,28 @@ function setupTripDetailsEventListeners() {
             }
         });
     }
+
+    // Tickets tab event listeners
+    document.getElementById('btn-imagekit-settings')?.addEventListener('click', showImageKitSettingsModal);
+    document.getElementById('save-imagekit-settings-btn')?.addEventListener('click', saveImageKitSettings);
+    document.getElementById('btn-add-ticket')?.addEventListener('click', showAddTicketModal);
+    document.getElementById('save-ticket-btn')?.addEventListener('click', saveTicket);
+
+    const ticketsTab = document.querySelector('a[href="#tickets-tab"]');
+    if (ticketsTab) {
+        ticketsTab.addEventListener('shown.bs.tab', function (e) {
+            if (currentTrip) {
+                renderTicketsList(currentTrip);
+            }
+        });
+    }
+
+    // Periodically update departure alerts
+    setInterval(() => {
+        if (currentTrip) {
+            updateDepartureAlerts(currentTrip);
+        }
+    }, 60000);
 }
 
 function setupEnhancedCRUDEventListeners() {
@@ -326,12 +348,24 @@ function checkAuthState() {
     });
 }
 
-function loadUserData() {
+async function loadUserData() {
     const user = auth.currentUser;
-    document.getElementById('user-name').textContent = user.displayName || 'Traveler';
+    if (!user) return;
+    const nameEl = document.getElementById('user-name');
+    if (nameEl) nameEl.textContent = user.displayName || 'Traveler';
+    
+    let avatarUrl = localStorage.getItem('user_avatar_' + user.uid) || user.photoURL;
+    try {
+        const userDoc = await db.collection('users').doc(user.uid).get();
+        if (userDoc.exists && userDoc.data().photoURL) {
+            avatarUrl = userDoc.data().photoURL;
+            localStorage.setItem('user_avatar_' + user.uid, avatarUrl);
+        }
+    } catch (e) {}
+
     const userAvatar = document.getElementById('user-avatar');
     if (userAvatar) {
-        userAvatar.src = getSafeAvatarUrl(user.photoURL, user.displayName || 'Traveler');
+        userAvatar.src = getSafeAvatarUrl(avatarUrl, user.displayName || 'Traveler');
         setupAvatarFallback(userAvatar, user.displayName || 'Traveler');
     }
 }
@@ -374,7 +408,8 @@ async function loadTripDetails() {
             loadTripExpenses(currentTrip),
             loadTripItinerary(currentTrip),
             loadTripRoute(currentTrip),
-            loadTripWeather(currentTrip)
+            loadTripWeather(currentTrip),
+            loadTripTickets(currentTrip)
         ]);
         
         // Add leave trip button if user is not the creator
@@ -513,6 +548,29 @@ function loadTravelAnimation(trip) {
     
     if (!card || !bar || !vehicle || !statusText || !startText || !destText) return;
     
+    // Address-cleaning and name-truncating helper for timeline labels
+    const getShortPlaceName = (fullName) => {
+        if (!fullName) return '';
+        let part = fullName.split(',')[0].trim();
+        const words = part.split(/\s+/);
+        if (words.length > 2) {
+            if (/^(ward|plot|door|street|lane|flat|house|no|road|h\.no|hno)/i.test(words[0])) {
+                if (/^\d+$/i.test(words[1]) || /^[A-Za-z0-9#-]+$/i.test(words[1])) {
+                    part = words.slice(2).join(' ');
+                } else {
+                    part = words.slice(1).join(' ');
+                }
+            }
+        }
+        if (part.length > 15) {
+            return part.substring(0, 14) + '…';
+        }
+        return part;
+    };
+    
+    const totalDistance = parseFloat(trip.route?.distance) || parseFloat(trip.distance) || 0;
+    const segments = getRouteSegments(trip, totalDistance);
+    
     // Trigger background route calculation if stopsDistances is missing OR if AI key
     // is available but the route was not calculated with AI yet
     const hasAiKey = !!window._openrouterApiKey;
@@ -526,10 +584,20 @@ function loadTravelAnimation(trip) {
     }
     
     // Set Locations text
-    startText.textContent = trip.startLocation || 'Start';
-    destText.textContent = trip.destination || 'Destination';
+    const hasReturnStops = segments.some(s => s.role === 'stop' && s.type === 'after');
+    startText.textContent = getShortPlaceName(trip.startLocation) || 'Start';
+    startText.title = trip.startLocation || '';
+    if (hasReturnStops) {
+        destText.textContent = `${getShortPlaceName(trip.startLocation)} (Return)`;
+        destText.title = `${trip.startLocation} (Return)`;
+    } else {
+        destText.textContent = getShortPlaceName(trip.destination) || 'Destination';
+        destText.title = trip.destination || '';
+    }
     if (currentText) {
-        currentText.innerHTML = trip.currentLocationName ? `<i class="fas fa-location-dot me-1"></i>${trip.currentLocationName}` : '';
+        currentText.innerHTML = trip.currentLocationName 
+            ? `<i class="fas fa-location-dot me-1 text-success"></i><span title="${trip.currentLocationName}">${getShortPlaceName(trip.currentLocationName)}</span>` 
+            : '';
     }
     
     // Parse Dates
@@ -568,7 +636,6 @@ function loadTravelAnimation(trip) {
     vehicle.innerHTML = `<i class="fas ${iconClass}" style="font-size: 1.5rem; text-shadow: 0 2px 4px rgba(0,0,0,0.15);"></i>`;
     
     // Calculate progress
-    const totalDistance = parseFloat(trip.route?.distance) || parseFloat(trip.distance) || 0;
     let progressPercent = 0;
     let progressText = '';
     
@@ -642,30 +709,22 @@ function loadTravelAnimation(trip) {
     const stopsPinsContainer = document.getElementById('travel-animation-stops-pins');
     if (stopsPinsContainer) {
         stopsPinsContainer.innerHTML = '';
-        if (trip.stops && trip.stops.length > 0) {
-            const stopsCount = trip.stops.length;
-            trip.stops.forEach((stopName, index) => {
+        const segments = getRouteSegments(trip, totalDistance);
+        if (segments.length > 0) {
+            // We draw a pin for all segment endpoints except the very last one (which is the right end of the timeline)
+            for (let i = 0; i < segments.length - 1; i++) {
+                const seg = segments[i];
                 let pct = 0;
                 let legDistText = '';
                 let stopDistText = '';
                 
-                if (trip.route?.stopsDistances && trip.route.stopsDistances[index] !== undefined && totalDistance > 0) {
-                    const stopDist = trip.route.stopsDistances[index];
-                    pct = Math.min(95, Math.max(5, (stopDist / totalDistance) * 100));
-                    
-                    const prevDist = index === 0 ? 0 : trip.route.stopsDistances[index - 1];
-                    const legDist = stopDist - prevDist;
+                if (totalDistance > 0) {
+                    pct = Math.min(95, Math.max(5, (seg.to / totalDistance) * 100));
+                    const legDist = seg.to - seg.from;
                     legDistText = `+${legDist.toFixed(0)} km`;
-                    stopDistText = `${stopDist.toFixed(0)} km`;
+                    stopDistText = `${seg.to.toFixed(0)} km`;
                 } else {
-                    // Fallback: space evenly
-                    pct = ((index + 1) / (stopsCount + 1)) * 100;
-                    const stopDist = totalDistance * (pct / 100);
-                    const prevDist = index === 0 ? 0 : totalDistance * (((index) / (stopsCount + 1)) * 100 / 100);
-                    const legDist = stopDist - prevDist;
-                    if (totalDistance > 0) {
-                        legDistText = `+${legDist.toFixed(0)} km`;
-                    }
+                    pct = ((i + 1) / (segments.length)) * 100;
                 }
                 
                 const isCrossed = progressPercent >= pct;
@@ -676,26 +735,58 @@ function loadTravelAnimation(trip) {
                 pin.style.zIndex = '3';
                 pin.style.cursor = 'pointer';
                 
-                if (isCrossed) {
-                    pin.innerHTML = '<i class="fas fa-circle-check text-muted opacity-75" style="font-size: 0.85rem; background-color: #fff; border-radius: 50%;"></i>';
+                let pinIconHtml = '';
+                let labelColorClass = '';
+                
+                if (seg.role === 'destination') {
+                    pinIconHtml = isCrossed 
+                        ? '<i class="fas fa-flag text-muted opacity-75" style="font-size: 0.9rem; background-color: #fff; border-radius: 50%; padding: 2px;"></i>'
+                        : '<i class="fas fa-flag text-danger" style="font-size: 0.9rem; text-shadow: 0 1px 2px rgba(0,0,0,0.2);"></i>';
+                    labelColorClass = isCrossed ? 'text-muted opacity-75' : 'text-danger';
                 } else {
-                    pin.innerHTML = '<i class="fas fa-location-dot text-success" style="font-size: 0.85rem; text-shadow: 0 1px 2px rgba(0,0,0,0.2);"></i>';
+                    const isReturnStop = (seg.type === 'after');
+                    const activeColorClass = isReturnStop ? 'text-info' : 'text-success';
+                    
+                    if (isCrossed) {
+                        pinIconHtml = '<i class="fas fa-circle-check text-muted opacity-75" style="font-size: 0.85rem; background-color: #fff; border-radius: 50%;"></i>';
+                        labelColorClass = 'text-muted opacity-75';
+                    } else {
+                        const iconColor = isReturnStop ? 'text-info' : 'text-success';
+                        pinIconHtml = `<i class="fas fa-location-dot ${iconColor}" style="font-size: 0.85rem; text-shadow: 0 1px 2px rgba(0,0,0,0.2);"></i>`;
+                        labelColorClass = activeColorClass;
+                    }
                 }
                 
-                pin.title = `${stopName}${stopDistText ? ' (' + stopDistText + ')' : ''}`;
+                pin.innerHTML = pinIconHtml;
+                pin.title = `${seg.name}${stopDistText ? ' (' + stopDistText + ')' : ''}`;
+                
+                const cleanName = getShortPlaceName(seg.name);
+                const isOdd = (i % 2 === 1);
+                const topOffset = isOdd ? '0px' : '44px';
                 
                 const label = document.createElement('div');
-                label.className = `position-absolute text-center fw-semibold ${isCrossed ? 'text-muted opacity-75' : 'text-success'}`;
+                label.className = `position-absolute text-center fw-semibold ${labelColorClass}`;
                 label.style.fontSize = '0.65rem';
                 label.style.left = `${pct}%`;
                 label.style.transform = 'translateX(-50%)';
-                label.style.top = '22px';
-                label.style.whiteSpace = 'nowrap';
-                label.innerHTML = `<span>${stopName}</span>${legDistText ? `<br><span style="font-size: 0.55rem; color: #6c757d;">${legDistText}</span>` : ''}`;
+                label.style.top = topOffset;
+                label.style.maxWidth = '80px';
+                
+                if (isOdd) {
+                    label.innerHTML = `
+                        <span style="font-size: 0.52rem; color: #6c757d; display: block; line-height: 1.1;">${legDistText}</span>
+                        <span title="${seg.name}" style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.2;">${cleanName}</span>
+                    `;
+                } else {
+                    label.innerHTML = `
+                        <span title="${seg.name}" style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.2;">${cleanName}</span>
+                        <span style="font-size: 0.52rem; color: #6c757d; display: block; line-height: 1.1;">${legDistText}</span>
+                    `;
+                }
                 
                 stopsPinsContainer.appendChild(pin);
                 stopsPinsContainer.appendChild(label);
-            });
+            }
         }
     }
     
@@ -739,15 +830,17 @@ function loadTravelAnimation(trip) {
                         let currentKm = 0;
                         
                         // AI-enhanced: snap to closest route segment using AI stop distances
-                        const stopsDistances = trip.route?.stopsDistances;
-                        if (stopsDistances && stopsDistances.length > 0 && totalDistance > 0 && trip.route?.aiEnhanced) {
-                            // Find which segment the user is on by comparing distances to each stop geocode
-                            const allStopNames = [trip.startLocation, ...trip.stops, trip.destination];
-                            const allStopCoords = [startCoords];
-                            for (const sn of trip.stops) {
-                                try { allStopCoords.push(await geocodeLocation(sn)); } catch(e) { allStopCoords.push(null); }
+                        const segments = getRouteSegments(trip, totalDistance);
+                        if (segments.length > 0 && totalDistance > 0 && trip.route?.aiEnhanced) {
+                            const placeSequence = resolveRouteMetadata(trip.startLocation, trip.destination, trip.stops);
+                            const allStopCoords = [];
+                            for (const place of placeSequence) {
+                                try {
+                                    allStopCoords.push(await geocodeLocation(place.name));
+                                } catch (e) {
+                                    allStopCoords.push(null);
+                                }
                             }
-                            allStopCoords.push(destCoords);
                             
                             // Find closest segment start to current position
                             let bestSegment = 0;
@@ -759,9 +852,9 @@ function loadTravelAnimation(trip) {
                                 if (d < minSegDist) { minSegDist = d; bestSegment = si; }
                             }
                             
-                            // Cumulative km at the start of best segment
-                            const segStartKm = bestSegment === 0 ? 0 : stopsDistances[bestSegment - 1];
-                            const segEndKm = bestSegment < stopsDistances.length ? stopsDistances[bestSegment] : totalDistance;
+                            const bestSeg = segments[bestSegment] || { from: 0, to: totalDistance };
+                            const segStartKm = bestSeg.from;
+                            const segEndKm = bestSeg.to;
                             const segLen = segEndKm - segStartKm;
                             
                             const sc1 = allStopCoords[bestSegment];
@@ -1089,7 +1182,7 @@ async function loadTripMembers(trip) {
             
             memberDiv.innerHTML = `
                 <img src="${avatarSrc}" class="user-avatar me-3 flex-shrink-0" alt="${member.name}" 
-                     style="width: 50px; height: 50px; object-fit: cover; border: 2px solid ${member.isCreator ? '#2d6a4f' : member.isCurrentUser ? '#52b788' : '#dee2e6'};">
+                     style="width: 50px; height: 50px; object-fit: cover; border: 2px solid ${member.isCreator ? '#e65100' : member.isCurrentUser ? '#ff6f00' : '#dee2e6'};">
                 <div class="flex-grow-1">
                     <div class="d-flex align-items-center mb-1">
                         <strong class="mb-0 me-2" style="font-size: 1.1rem;">${member.name}</strong>
@@ -1313,7 +1406,8 @@ function getPaymentModeInfo(paymentMode) {
 
 async function getMemberName(memberId) {
     try {
-        if (memberId === auth.currentUser.uid) return 'You';
+        if (!memberId || typeof memberId !== 'string' || !memberId.trim()) return 'Traveler';
+        if (auth.currentUser && memberId === auth.currentUser.uid) return 'You';
         if (memberCache[memberId]) return memberCache[memberId];
 
         // Check manual members
@@ -1347,7 +1441,7 @@ async function getMemberName(memberId) {
         console.error('Error getting member name:', error);
         
         // Fallback for current user
-        if (memberId === auth.currentUser.uid) {
+        if (auth.currentUser && memberId === auth.currentUser.uid) {
             return 'You';
         }
         
@@ -1709,12 +1803,52 @@ function loadTripRoute(trip) {
                             <h6 class="mb-2 text-success fw-bold" style="font-size: 0.9rem;"><i class="fas fa-map-pin me-2 text-success"></i>Route Stops</h6>
                             <div class="d-flex flex-wrap align-items-center gap-2 small text-muted">
                                 <span class="fw-semibold text-dark">${trip.startLocation}</span>
-                                ${trip.stops.map(stop => `
-                                    <i class="fas fa-arrow-right-long text-success opacity-50 px-1"></i>
-                                    <span class="badge bg-success-subtle text-success border border-success-subtle py-1 px-2">${stop}</span>
-                                `).join('')}
-                                <i class="fas fa-arrow-right-long text-success opacity-50 px-1"></i>
-                                <span class="fw-semibold text-dark">${trip.destination}</span>
+                                ${(() => {
+                                    const outboundStops = [];
+                                    const returnStops = [];
+                                    if (trip.stops && Array.isArray(trip.stops)) {
+                                        trip.stops.forEach(stop => {
+                                            const name = typeof stop === 'object' ? stop.name : stop;
+                                            const type = typeof stop === 'object' ? stop.type : 'before';
+                                            if (name) {
+                                                if (type === 'after') {
+                                                    returnStops.push(name);
+                                                } else {
+                                                    outboundStops.push(name);
+                                                }
+                                            }
+                                        });
+                                    }
+                                    
+                                    let html = '';
+                                    outboundStops.forEach(name => {
+                                        html += `
+                                            <i class="fas fa-arrow-right-long text-success opacity-50 px-1"></i>
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle py-1 px-2">${name}</span>
+                                        `;
+                                    });
+                                    
+                                    html += `
+                                        <i class="fas fa-arrow-right-long text-success opacity-50 px-1"></i>
+                                        <span class="fw-semibold text-danger border border-danger-subtle rounded py-1 px-2 bg-danger-subtle" style="font-size:0.75rem;">${trip.destination}</span>
+                                    `;
+                                    
+                                    returnStops.forEach(name => {
+                                        html += `
+                                            <i class="fas fa-arrow-right-long text-info opacity-50 px-1"></i>
+                                            <span class="badge bg-info-subtle text-info border border-info-subtle py-1 px-2">${name}</span>
+                                        `;
+                                    });
+                                    
+                                    if (returnStops.length > 0) {
+                                        html += `
+                                            <i class="fas fa-arrow-right-long text-info opacity-50 px-1"></i>
+                                            <span class="fw-semibold text-dark border border-dark-subtle rounded py-1 px-2 bg-light" style="font-size:0.75rem;">${trip.startLocation} (Return)</span>
+                                        `;
+                                    }
+                                    
+                                    return html;
+                                })()}
                             </div>
                         </div>
                     </div>
@@ -1880,18 +2014,43 @@ async function loadTripMap(trip) {
     // 1. Start Location
     if (trip.startLocation) await addMarker(trip.startLocation, 'Start', '', true);
 
-    // 2. Stops (in order)
+    // 2. Stops (split into outbound and return)
+    const outboundStops = [];
+    const returnStops = [];
     if (trip.stops && Array.isArray(trip.stops)) {
-        for (let i = 0; i < trip.stops.length; i++) {
-            const stop = trip.stops[i];
-            if (stop) {
-                await addMarker(stop, `Stop #${i + 1}`, '', true);
+        trip.stops.forEach((stop, index) => {
+            const name = typeof stop === 'object' ? stop.name : stop;
+            const type = typeof stop === 'object' ? stop.type : 'before';
+            if (name && name.trim().length > 2) {
+                const sObj = { name: name.trim(), originalIndex: index, type };
+                if (type === 'after') {
+                    returnStops.push(sObj);
+                } else {
+                    outboundStops.push(sObj);
+                }
             }
-        }
+        });
+    }
+
+    // Render Outbound Stops
+    for (let i = 0; i < outboundStops.length; i++) {
+        const s = outboundStops[i];
+        await addMarker(s.name, `Stop #${s.originalIndex + 1}`, '', true);
     }
 
     // 3. Destination
     if (trip.destination) await addMarker(trip.destination, 'Destination', '', true);
+
+    // Render Return Stops
+    for (let i = 0; i < returnStops.length; i++) {
+        const s = returnStops[i];
+        await addMarker(s.name, `Return Stop #${s.originalIndex + 1}`, '', true);
+    }
+
+    // Return to Start
+    if (returnStops.length > 0 && trip.startLocation) {
+        await addMarker(trip.startLocation, 'Return Point', '', true);
+    }
 
     // 4. Itinerary Items (Sorted Chronologically) - add markers only (don't draw route through them)
     if (trip.itinerary && trip.itinerary.length > 0) {
@@ -1960,14 +2119,14 @@ async function loadTripMap(trip) {
         } else {
             // Road transport: solid dark green highway
             L.polyline(finalCoords, {
-                color: '#1b4332',
+                color: '#bf360c',
                 weight: 6,
                 opacity: 0.4,
                 lineJoin: 'round'
             }).addTo(tripMap);
             
             routePolyline = L.polyline(finalCoords, {
-                color: '#2d6a4f',
+                color: '#e65100',
                 weight: 4,
                 opacity: 0.9,
                 lineJoin: 'round'
@@ -2841,6 +3000,8 @@ function showProfileModal() {
     const user = auth.currentUser;
     if (!user) return;
     
+    const avatarUrl = localStorage.getItem('user_avatar_' + user.uid) || user.photoURL;
+    
     // Create profile modal HTML dynamically since it doesn't exist in trip-details.html
     const modalHtml = `
         <div class="modal fade" id="profileModal" tabindex="-1">
@@ -2853,10 +3014,16 @@ function showProfileModal() {
                     <div class="modal-body">
                         <form id="profile-form">
                             <div class="text-center mb-4">
-                                <img id="profile-avatar" class="user-avatar mb-3" style="width: 100px; height: 100px; border: 3px solid var(--primary-color);" src="${getSafeAvatarUrl(user.photoURL, user.displayName || 'User')}" alt="Profile">
+                                <img id="profile-avatar" class="user-avatar mb-3" style="width: 100px; height: 100px; border: 3px solid var(--primary-color); object-fit: cover;" src="${getSafeAvatarUrl(avatarUrl, user.displayName || 'User')}" alt="Profile">
+                                <div>
+                                    <input type="file" id="avatar-upload" class="d-none" accept="image/*">
+                                    <button type="button" class="btn btn-outline-primary btn-sm rounded-pill px-3" onclick="document.getElementById('avatar-upload').click()">
+                                        <i class="fas fa-camera me-1"></i>Upload Photo (ImageKit)
+                                    </button>
+                                </div>
                                 <div class="mt-2">
-                                    <label class="form-label d-block small text-muted">Select an Eco Avatar</label>
-                                    <div class="d-flex justify-content-center gap-2 mt-2" id="avatar-choices-container">
+                                    <label class="form-label d-block small text-muted">Or Select an Avatar</label>
+                                    <div class="d-flex justify-content-center gap-2 mt-1" id="avatar-choices-container">
                                         <!-- Choices populated below -->
                                     </div>
                                 </div>
@@ -2896,13 +3063,29 @@ function showProfileModal() {
     // Add modal to DOM
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     
+    const avatarUpload = document.getElementById('avatar-upload');
+    if (avatarUpload) {
+        avatarUpload.addEventListener('change', handleAvatarUpload);
+    }
+    
+    // Fetch latest Firestore profile picture to ensure it's up to date
+    const profileAvatar = document.getElementById('profile-avatar');
+    db.collection('users').doc(user.uid).get().then(doc => {
+        if (doc.exists && doc.data().photoURL) {
+            const firestoreUrl = doc.data().photoURL;
+            localStorage.setItem('user_avatar_' + user.uid, firestoreUrl);
+            if (profileAvatar) {
+                profileAvatar.src = getSafeAvatarUrl(firestoreUrl, user.displayName || 'User');
+            }
+        }
+    }).catch(() => {});
+    
     // Render default eco avatar selectors
     const container = document.getElementById('avatar-choices-container');
-    const profileAvatar = document.getElementById('profile-avatar');
     if (container && profileAvatar) {
         setupAvatarFallback(profileAvatar, user.displayName || 'User');
         container.innerHTML = ECO_AVATARS.map(avatar => {
-            const isSelected = (user.photoURL === avatar.value || (!user.photoURL && avatar.id === 'avatar-leaf'));
+            const isSelected = (avatarUrl === avatar.value || (!avatarUrl && avatar.id === 'avatar-leaf'));
             return `
                 <div class="avatar-option rounded-circle p-1 d-flex align-items-center justify-content-center" 
                      style="width: 42px; height: 42px; cursor: pointer; border: 2px solid ${isSelected ? 'var(--primary-color)' : 'transparent'}; background-color: rgba(45, 106, 79, 0.05);"
@@ -2951,12 +3134,14 @@ async function updateProfile() {
         const profileAvatar = document.getElementById('profile-avatar');
         const selectedAvatarSrc = profileAvatar ? profileAvatar.src : '';
         
-        await auth.currentUser.updateProfile({
-            displayName: name,
-            photoURL: selectedAvatarSrc
-        });
+        const authPayload = { displayName: name };
+        if (selectedAvatarSrc && selectedAvatarSrc.length <= 1800) {
+            authPayload.photoURL = selectedAvatarSrc;
+        }
         
-        // Update user document in Firestore
+        await auth.currentUser.updateProfile(authPayload);
+        
+        // Update user document in Firestore (no character limit)
         await db.collection('users').doc(auth.currentUser.uid).update({
             name: name,
             photoURL: selectedAvatarSrc,
@@ -2974,6 +3159,52 @@ async function updateProfile() {
     } catch (error) {
         console.error('Error updating profile:', error);
         showToast('Error updating profile', 'danger');
+    }
+}
+
+async function handleAvatarUpload(event) {
+    const file = event.target.files ? event.target.files[0] : null;
+    if (!file) return;
+    
+    if (!file.type.startsWith('image/')) {
+        if (typeof showToast === 'function') showToast('Please select a valid image file', 'warning');
+        return;
+    }
+    
+    const profileAvatar = document.getElementById('profile-avatar');
+    const settings = typeof getImageKitSettings === 'function' ? getImageKitSettings() : null;
+    let uploadedUrl = '';
+    
+    try {
+        if (typeof showToast === 'function') showToast('Uploading profile photo...', 'info');
+        
+        // 1. Try ImageKit Direct CDN Upload if active
+        if (settings && settings.urlEndpoint && settings.publicKey && settings.privateKey && typeof uploadToImageKit === 'function') {
+            const fileName = `profile_${auth.currentUser?.uid || 'user'}_${Date.now()}_${file.name}`;
+            const ikRes = await uploadToImageKit(file, fileName, settings);
+            if (ikRes && ikRes.url) {
+                uploadedUrl = ikRes.url;
+                if (typeof showToast === 'function') showToast('Profile photo uploaded via ImageKit CDN!', 'success');
+            }
+        }
+        
+        // 2. Fallback to client-side JPEG compression
+        if (!uploadedUrl) {
+            uploadedUrl = await compressImageToDataUrl(file, 400, 0.8);
+            if (typeof showToast === 'function') showToast('Photo updated! Click Save Changes to save your profile.', 'info');
+        }
+        
+        if (uploadedUrl && profileAvatar) {
+            profileAvatar.src = uploadedUrl;
+            // Clear default eco avatar selections
+            const container = document.getElementById('avatar-choices-container');
+            if (container) {
+                container.querySelectorAll('.avatar-option').forEach(opt => opt.style.borderColor = 'transparent');
+            }
+        }
+    } catch (err) {
+        console.error('Error uploading profile picture:', err);
+        if (typeof showToast === 'function') showToast('Failed to process profile image', 'danger');
     }
 }
 
@@ -3026,9 +3257,16 @@ async function updateTripFromDetails() {
     }
     
     // Extract stops
-    const stops = Array.from(document.querySelectorAll('#edit-trip-stops-container .trip-stop-input'))
-        .map(input => input.value.trim())
-        .filter(val => val.length > 0);
+    const stops = Array.from(document.querySelectorAll('#edit-trip-stops-container .stop-input-row'))
+        .map(row => {
+            const input = row.querySelector('.trip-stop-input');
+            const select = row.querySelector('.trip-stop-type-select');
+            return {
+                name: input ? input.value.trim() : '',
+                type: select ? select.value : 'before'
+            };
+        })
+        .filter(stop => stop.name.length > 0);
         
     try {
         const updateBtn = document.getElementById('update-trip-btn-trip-details');
@@ -4058,19 +4296,68 @@ async function loadTripWeather(trip) {
 function addStopField(container, value = '') {
     if (!container) return;
     
+    let stopName = '';
+    let stopType = 'before';
+    
+    if (value && typeof value === 'object') {
+        stopName = value.name || '';
+        stopType = value.type || 'before';
+    } else {
+        stopName = value || '';
+    }
+    
     const div = document.createElement('div');
-    div.className = 'd-flex align-items-center gap-2 stop-input-row animate-fade-in';
+    div.className = 'd-flex align-items-center gap-2 stop-input-row animate-fade-in mb-2';
     
     const span = document.createElement('span');
-    span.className = 'text-muted small';
-    span.innerHTML = '<i class="fas fa-map-pin text-success"></i>';
+    span.className = 'text-muted small stop-pin-icon';
+    
+    const updatePinIcon = (type) => {
+        if (type === 'after') {
+            span.innerHTML = '<i class="fas fa-undo text-info" title="On Return Stop"></i>';
+        } else {
+            span.innerHTML = '<i class="fas fa-map-pin text-success" title="On the Way Stop"></i>';
+        }
+    };
+    updatePinIcon(stopType);
     
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'form-control form-control-sm trip-stop-input';
     input.placeholder = 'Stop name/city';
-    input.value = value;
+    input.value = stopName;
     input.required = true;
+    
+    const select = document.createElement('select');
+    select.className = 'form-select form-select-sm trip-stop-type-select';
+    select.style.width = '125px';
+    select.innerHTML = `
+        <option value="before" ${stopType === 'before' ? 'selected' : ''}>On the Way</option>
+        <option value="after" ${stopType === 'after' ? 'selected' : ''}>On Return</option>
+    `;
+    
+    const triggerRecalc = () => {
+        if (container.id === 'trip-stops-container') {
+            if (typeof calculateDistance === 'function') {
+                const chk = document.getElementById('calculate-distance');
+                if (chk && chk.checked) calculateDistance();
+            }
+        } else if (container.id === 'edit-trip-stops-container') {
+            if (typeof calculateEditDistance === 'function') {
+                const chk = document.getElementById('edit-calculate-distance');
+                if (chk && chk.checked) calculateEditDistance();
+            }
+        }
+    };
+    
+    select.addEventListener('change', () => {
+        updatePinIcon(select.value);
+        triggerRecalc();
+    });
+    
+    input.addEventListener('change', () => {
+        triggerRecalc();
+    });
     
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -4078,10 +4365,12 @@ function addStopField(container, value = '') {
     btn.innerHTML = '<i class="fas fa-trash-can"></i>';
     btn.addEventListener('click', () => {
         div.remove();
+        triggerRecalc();
     });
     
     div.appendChild(span);
     div.appendChild(input);
+    div.appendChild(select);
     div.appendChild(btn);
     
     container.appendChild(div);
@@ -4091,3 +4380,1007 @@ window.addEventListener('tripRouteUpdated', () => {
     console.log('Trip route data refreshed. Updating trip details...');
     loadTripDetails();
 });
+
+// =========================================================================
+// TICKET MANAGEMENT SYSTEM & IMAGEKIT INTEGRATION
+// =========================================================================
+
+async function loadGlobalImageKitSettings() {
+    try {
+        let settings = null;
+        
+        // 1. Try reading from Firestore shared settings collection
+        try {
+            const doc = await db.collection('settings').doc('imagekit_keys').get();
+            if (doc.exists && doc.data()?.urlEndpoint) {
+                settings = doc.data();
+            }
+        } catch (e) {
+            console.warn('Could not read shared ImageKit settings doc:', e);
+        }
+        
+        // 2. Try reading from User profile if not found in shared doc
+        if (!settings && auth && auth.currentUser) {
+            try {
+                const userDoc = await db.collection('users').doc(auth.currentUser.uid).get();
+                if (userDoc.exists && userDoc.data()?.imageKitSettings?.urlEndpoint) {
+                    settings = userDoc.data().imageKitSettings;
+                }
+            } catch (e) {
+                console.warn('Could not read user profile ImageKit settings:', e);
+            }
+        }
+        
+        // 3. Fallback to localStorage
+        if (!settings) {
+            try {
+                const stored = localStorage.getItem('global_imagekit_settings') || localStorage.getItem('imagekit_settings');
+                if (stored) settings = JSON.parse(stored);
+            } catch (e) {}
+        }
+        
+        if (settings) {
+            window._globalImageKitSettings = settings;
+            try { localStorage.setItem('global_imagekit_settings', JSON.stringify(settings)); } catch (e) {}
+        }
+        
+        updateImageKitStatusBadge();
+        return settings;
+    } catch (e) {
+        console.error('Error loading global ImageKit settings:', e);
+        return null;
+    }
+}
+
+function getImageKitSettings() {
+    // 1. Check trip-specific override
+    if (typeof currentTrip !== 'undefined' && currentTrip && currentTrip.imageKitSettings && currentTrip.imageKitSettings.urlEndpoint) {
+        return currentTrip.imageKitSettings;
+    }
+    
+    // 2. Check global memory
+    if (window._globalImageKitSettings && window._globalImageKitSettings.urlEndpoint) {
+        return window._globalImageKitSettings;
+    }
+    
+    // 3. Check localStorage cache
+    try {
+        const stored = localStorage.getItem('global_imagekit_settings') || localStorage.getItem('imagekit_settings');
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            if (parsed && parsed.urlEndpoint) {
+                window._globalImageKitSettings = parsed;
+                return parsed;
+            }
+        }
+    } catch (e) {}
+    
+    return null;
+}
+
+function showImageKitSettingsModal() {
+    const settings = getImageKitSettings() || {};
+    document.getElementById('ik-url-endpoint').value = settings.urlEndpoint || '';
+    document.getElementById('ik-public-key').value = settings.publicKey || '';
+    document.getElementById('ik-private-key').value = settings.privateKey || '';
+    
+    const modal = new bootstrap.Modal(document.getElementById('imageKitSettingsModal'));
+    modal.show();
+}
+
+async function saveImageKitSettings() {
+    const urlEndpoint = document.getElementById('ik-url-endpoint').value.trim();
+    const publicKey = document.getElementById('ik-public-key').value.trim();
+    const privateKey = document.getElementById('ik-private-key').value.trim();
+    
+    if (!urlEndpoint || !publicKey || !privateKey) {
+        showToast('All settings fields are required', 'warning');
+        return;
+    }
+    
+    const settings = { urlEndpoint, publicKey, privateKey };
+    
+    const saveBtn = document.getElementById('save-imagekit-settings-btn');
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Saving Globally...';
+    
+    try {
+        // 1. Save globally to Firestore settings collection (app-wide)
+        try {
+            await db.collection('settings').doc('imagekit_keys').set(settings, { merge: true });
+        } catch (e) {
+            console.warn('Could not save to shared settings collection:', e);
+        }
+        
+        // 2. Save to User profile document in Firestore
+        if (auth && auth.currentUser) {
+            try {
+                await db.collection('users').doc(auth.currentUser.uid).set({
+                    imageKitSettings: settings
+                }, { merge: true });
+            } catch (e) {
+                console.warn('Could not save to user profile doc:', e);
+            }
+        }
+        
+        // 3. Save to current trip document if viewing a trip
+        if (typeof currentTrip !== 'undefined' && currentTrip && currentTrip.id) {
+            try {
+                await db.collection('trips').doc(currentTrip.id).update({
+                    imageKitSettings: settings,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                currentTrip.imageKitSettings = settings;
+                if (typeof setCurrentTrip === 'function') setCurrentTrip(currentTrip);
+            } catch (e) {
+                console.warn('Could not save to current trip doc:', e);
+            }
+        }
+        
+        // 4. Update memory & localStorage cache
+        window._globalImageKitSettings = settings;
+        try {
+            localStorage.setItem('global_imagekit_settings', JSON.stringify(settings));
+        } catch (e) {}
+        
+        const modal = bootstrap.Modal.getInstance(document.getElementById('imageKitSettingsModal'));
+        modal?.hide();
+        
+        updateImageKitStatusBadge();
+        showToast('ImageKit settings saved globally for all trips!', 'success');
+        
+        if (typeof loadTripDetails === 'function') {
+            loadTripDetails();
+        }
+    } catch (e) {
+        console.error('Error saving ImageKit settings:', e);
+        showToast('Error saving settings to Firestore', 'danger');
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = 'Save Settings';
+    }
+}
+
+function updateImageKitStatusBadge() {
+    const settings = getImageKitSettings();
+    const badge = document.getElementById('imagekit-config-warning');
+    if (badge) {
+        if (settings && settings.urlEndpoint && settings.publicKey && settings.privateKey) {
+            badge.classList.add('d-none');
+        } else {
+            badge.classList.remove('d-none');
+        }
+    }
+}
+
+async function generateImageKitSignature(token, expire, privateKey) {
+    const textEncoder = new TextEncoder();
+    const keyData = textEncoder.encode(privateKey);
+    const messageData = textEncoder.encode(token + expire);
+    
+    const cryptoKey = await crypto.subtle.importKey(
+        'raw', 
+        keyData, 
+        { name: 'HMAC', hash: { name: 'SHA-1' } }, 
+        false, 
+        ['sign']
+    );
+    
+    const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
+    
+    return Array.from(new Uint8Array(signatureBuffer))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+}
+
+async function uploadToImageKit(file, fileName, settings) {
+    const { publicKey, privateKey, urlEndpoint } = settings;
+    const uploadUrl = 'https://upload.imagekit.io/api/v1/files/upload';
+    
+    const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    const expire = Math.floor(Date.now() / 1000) + 1800; // 30 minutes expiration
+    
+    const signature = await generateImageKitSignature(token, expire, privateKey);
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('fileName', fileName);
+    formData.append('publicKey', publicKey);
+    formData.append('signature', signature);
+    formData.append('expire', expire.toString());
+    formData.append('token', token);
+    
+    const response = await fetch(uploadUrl, {
+        method: 'POST',
+        body: formData
+    });
+    
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'ImageKit upload request failed');
+    }
+    
+    const result = await response.json();
+    return result.url;
+}
+
+function loadTripTickets(trip) {
+    updateImageKitStatusBadge();
+    updateDepartureAlerts(trip);
+    renderJourneyStayBreakdown(trip);
+    if (document.getElementById('tickets-tab')?.classList.contains('active')) {
+        renderTicketsList(trip);
+    }
+}
+
+function showAddTicketModal() {
+    document.getElementById('add-ticket-form').reset();
+    document.getElementById('edit-ticket-id').value = '';
+    document.getElementById('edit-ticket-expense-index').value = '';
+    document.getElementById('ticketModalTitle').textContent = 'Add Ticket';
+    document.getElementById('ticket-image-info').textContent = 'Max size 5MB. Select a file to upload to ImageKit.';
+    
+    const modal = new bootstrap.Modal(document.getElementById('addTicketModal'));
+    modal.show();
+}
+
+async function showEditTicketModal(ticketId) {
+    if (!currentTrip || !currentTrip.tickets) return;
+    const ticket = currentTrip.tickets.find(t => t.id === ticketId);
+    if (!ticket) return;
+    
+    document.getElementById('edit-ticket-id').value = ticket.id;
+    document.getElementById('edit-ticket-expense-index').value = ticket.expenseIndex !== undefined ? ticket.expenseIndex : '';
+    document.getElementById('ticketModalTitle').textContent = 'Edit Ticket';
+    
+    document.getElementById('ticket-type').value = ticket.type;
+    document.getElementById('ticket-operator').value = ticket.operator;
+    document.getElementById('ticket-service-name').value = ticket.serviceName || '';
+    document.getElementById('ticket-service-no').value = ticket.serviceNo || '';
+    document.getElementById('ticket-no').value = ticket.ticketNo;
+    document.getElementById('ticket-seat').value = ticket.seatNo || '';
+    document.getElementById('ticket-dep-place').value = ticket.departurePlace;
+    document.getElementById('ticket-dep-code').value = ticket.depCode || '';
+    document.getElementById('ticket-dep-time').value = ticket.departureTime;
+    document.getElementById('ticket-arr-place').value = ticket.arrivalPlace;
+    document.getElementById('ticket-arr-code').value = ticket.arrCode || '';
+    document.getElementById('ticket-arr-time').value = ticket.arrivalTime || '';
+    document.getElementById('ticket-passenger-name').value = ticket.passengerName || '';
+    document.getElementById('ticket-booking-status').value = ticket.bookingStatus || '';
+    document.getElementById('ticket-cost').value = ticket.cost !== undefined ? ticket.cost : '';
+    document.getElementById('ticket-track-expense').checked = ticket.expenseIndex !== undefined;
+    document.getElementById('ticket-notes').value = ticket.notes || '';
+    
+    if (ticket.imageUrl) {
+        document.getElementById('ticket-image-info').innerHTML = `Current receipt: <a href="${ticket.imageUrl}" target="_blank" class="text-primary fw-semibold">View Receipt</a>. Select a new file to replace it.`;
+    } else {
+        document.getElementById('ticket-image-info').textContent = 'No receipt uploaded. Select a file to upload to ImageKit.';
+    }
+    
+    const modal = new bootstrap.Modal(document.getElementById('addTicketModal'));
+    modal.show();
+}
+
+async function saveTicket() {
+    const ticketId = document.getElementById('edit-ticket-id').value;
+    const expenseIndexStr = document.getElementById('edit-ticket-expense-index').value;
+    
+    const type = document.getElementById('ticket-type').value;
+    const operator = document.getElementById('ticket-operator').value.trim();
+    const serviceName = document.getElementById('ticket-service-name').value.trim();
+    const serviceNo = document.getElementById('ticket-service-no').value.trim();
+    const ticketNo = document.getElementById('ticket-no').value.trim();
+    const seatNo = document.getElementById('ticket-seat').value.trim();
+    const departurePlace = document.getElementById('ticket-dep-place').value.trim();
+    const depCode = document.getElementById('ticket-dep-code').value.trim().toUpperCase();
+    const departureTime = document.getElementById('ticket-dep-time').value;
+    const arrivalPlace = document.getElementById('ticket-arr-place').value.trim();
+    const arrCode = document.getElementById('ticket-arr-code').value.trim().toUpperCase();
+    const arrivalTime = document.getElementById('ticket-arr-time').value;
+    const passengerName = document.getElementById('ticket-passenger-name').value.trim();
+    const bookingStatus = document.getElementById('ticket-booking-status').value.trim();
+    const costVal = document.getElementById('ticket-cost').value;
+    const cost = costVal ? parseFloat(costVal) : 0;
+    const trackExpense = document.getElementById('ticket-track-expense').checked;
+    const notes = document.getElementById('ticket-notes').value.trim();
+    
+    const imageFileInput = document.getElementById('ticket-image');
+    
+    if (!operator || !ticketNo || !departurePlace || !departureTime || !arrivalPlace) {
+        showToast('Please fill in all required fields', 'warning');
+        return;
+    }
+    
+    const saveBtn = document.getElementById('save-ticket-btn');
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Saving...';
+    
+    try {
+        let imageUrl = '';
+        
+        let existingTicket = null;
+        if (ticketId && currentTrip.tickets) {
+            existingTicket = currentTrip.tickets.find(t => t.id === ticketId);
+            if (existingTicket) {
+                imageUrl = existingTicket.imageUrl || '';
+            }
+        }
+        
+        if (imageFileInput.files.length > 0) {
+            const settings = getImageKitSettings();
+            if (!settings || !settings.publicKey || !settings.privateKey || !settings.urlEndpoint) {
+                throw new Error('ImageKit is not configured. Please open ImageKit Settings to configure upload credentials first.');
+            }
+            
+            const file = imageFileInput.files[0];
+            const fileExt = file.name.split('.').pop();
+            const fileName = `ticket_${Date.now()}.${fileExt}`;
+            
+            saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Uploading image...';
+            imageUrl = await uploadToImageKit(file, fileName, settings);
+        }
+        
+        const ticketObj = {
+            id: ticketId || `tkt_${Date.now()}`,
+            type,
+            operator,
+            serviceName,
+            serviceNo,
+            ticketNo,
+            seatNo,
+            departurePlace,
+            depCode,
+            departureTime,
+            arrivalPlace,
+            arrCode,
+            arrivalTime,
+            passengerName,
+            bookingStatus,
+            cost,
+            imageUrl,
+            notes
+        };
+        
+        const tripDoc = await db.collection('trips').doc(currentTrip.id).get();
+        if (!tripDoc.exists) throw new Error('Trip does not exist');
+        
+        const tripData = tripDoc.data();
+        const tickets = tripData.tickets || [];
+        const expenses = tripData.expenses || [];
+        
+        let newExpenseIndex = existingTicket ? existingTicket.expenseIndex : undefined;
+        
+        if (trackExpense && cost > 0) {
+            const expenseObj = {
+                description: `[Ticket] ${type.toUpperCase()}: ${serviceNo ? serviceNo + ' - ' : ''}${serviceName || operator} (${depCode || departurePlace} → ${arrCode || arrivalPlace})`,
+                amount: cost,
+                category: 'Transport',
+                date: departureTime.split('T')[0],
+                paymentMode: 'Card',
+                addedBy: auth.currentUser.uid,
+                createdBy: auth.currentUser.uid,
+                isPersonal: false,
+                addedAt: new Date().toISOString()
+            };
+            
+            if (newExpenseIndex !== undefined && newExpenseIndex >= 0 && newExpenseIndex < expenses.length) {
+                expenses[newExpenseIndex] = expenseObj;
+            } else {
+                expenses.push(expenseObj);
+                newExpenseIndex = expenses.length - 1;
+            }
+        } else {
+            if (newExpenseIndex !== undefined && newExpenseIndex >= 0 && newExpenseIndex < expenses.length) {
+                expenses.splice(newExpenseIndex, 1);
+                tickets.forEach(t => {
+                    if (t.expenseIndex > newExpenseIndex) {
+                        t.expenseIndex--;
+                    }
+                });
+                newExpenseIndex = undefined;
+            }
+        }
+        
+        ticketObj.expenseIndex = newExpenseIndex;
+        
+        if (ticketId) {
+            const idx = tickets.findIndex(t => t.id === ticketId);
+            if (idx >= 0) {
+                tickets[idx] = ticketObj;
+            }
+        } else {
+            tickets.push(ticketObj);
+        }
+        
+        await db.collection('trips').doc(currentTrip.id).update({
+            tickets,
+            expenses,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        currentTrip.tickets = tickets;
+        currentTrip.expenses = expenses;
+        setCurrentTrip(currentTrip);
+        
+        const modal = bootstrap.Modal.getInstance(document.getElementById('addTicketModal'));
+        modal?.hide();
+        
+        showToast('Ticket saved successfully!', 'success');
+        loadTripDetails();
+        
+    } catch (e) {
+        console.error('Error saving ticket:', e);
+        showToast(e.message || 'Error saving ticket', 'danger');
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = 'Save Ticket';
+    }
+}
+
+async function deleteTicket(ticketId) {
+    if (!confirm('Are you sure you want to delete this ticket? This will also remove any linked ticket expenses.')) return;
+    
+    try {
+        const tripDoc = await db.collection('trips').doc(currentTrip.id).get();
+        if (!tripDoc.exists) throw new Error('Trip does not exist');
+        
+        const tripData = tripDoc.data();
+        const tickets = tripData.tickets || [];
+        const expenses = tripData.expenses || [];
+        
+        const idx = tickets.findIndex(t => t.id === ticketId);
+        if (idx === -1) return;
+        
+        const ticket = tickets[idx];
+        const newExpenseIndex = ticket.expenseIndex;
+        
+        if (newExpenseIndex !== undefined && newExpenseIndex >= 0 && newExpenseIndex < expenses.length) {
+            expenses.splice(newExpenseIndex, 1);
+            tickets.forEach(t => {
+                if (t.expenseIndex > newExpenseIndex) {
+                    t.expenseIndex--;
+                }
+            });
+        }
+        
+        tickets.splice(idx, 1);
+        
+        await db.collection('trips').doc(currentTrip.id).update({
+            tickets,
+            expenses,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        currentTrip.tickets = tickets;
+        currentTrip.expenses = expenses;
+        setCurrentTrip(currentTrip);
+        
+        showToast('Ticket deleted successfully!', 'success');
+        loadTripDetails();
+        
+    } catch (e) {
+        console.error('Error deleting ticket:', e);
+        showToast('Error deleting ticket', 'danger');
+    }
+}
+
+function renderTicketsList(trip) {
+    const container = document.getElementById('tickets-container');
+    const emptyState = document.getElementById('empty-tickets');
+    
+    if (!container || !emptyState) return;
+    
+    container.innerHTML = '';
+    
+    const tickets = trip.tickets || [];
+    if (tickets.length === 0) {
+        emptyState.classList.remove('d-none');
+        return;
+    }
+    
+    emptyState.classList.add('d-none');
+    
+    const sortedTickets = [...tickets].sort((a, b) => a.departureTime.localeCompare(b.departureTime));
+    
+    sortedTickets.forEach(ticket => {
+        const card = document.createElement('div');
+        card.className = 'col-md-6';
+        
+        let typeIcon = 'fa-plane';
+        let headerBgClass = 'bg-primary';
+        let headerTextClass = 'text-white';
+        
+        if (ticket.type === 'train') {
+            typeIcon = 'fa-train-subway';
+            headerBgClass = 'bg-success';
+        } else if (ticket.type === 'bus') {
+            typeIcon = 'fa-bus';
+            headerBgClass = 'bg-danger';
+        }
+        
+        const depD = new Date(ticket.departureTime);
+        const arrD = ticket.arrivalTime ? new Date(ticket.arrivalTime) : null;
+        
+        const depTime24 = depD.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+        const depDateFormatted = depD.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: '2-digit' });
+        
+        const arrTime24 = arrD ? arrD.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--';
+        const arrDateFormatted = arrD ? arrD.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: '2-digit' }) : '';
+        
+        const bookedOnDate = ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: '2-digit' }) : '--';
+        
+        let durationText = '';
+        if (arrD) {
+            const diffMs = arrD - depD;
+            if (diffMs > 0) {
+                const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+                const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                durationText = `${diffHrs}h ${diffMins}m`;
+            }
+        }
+        
+        const isExpensed = ticket.expenseIndex !== undefined;
+        
+        card.innerHTML = `
+            <div class="card h-100 border border-light shadow-sm rounded-3 overflow-hidden">
+                <!-- Top Colored Header Bar -->
+                <div class="${headerBgClass} ${headerTextClass} px-3 py-2 d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center">
+                        <i class="fas ${typeIcon} me-2" style="font-size: 0.9rem;"></i>
+                        <span class="fw-bold small text-uppercase" style="letter-spacing: 0.5px;">${ticket.type} Ticket</span>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-link text-white p-0 me-2 btn-xs" onclick="showEditTicketModal('${ticket.id}')" title="Edit Ticket">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button type="button" class="btn btn-link text-white p-0 btn-xs" onclick="deleteTicket('${ticket.id}')" title="Delete Ticket">
+                            <i class="fas fa-trash text-white-50"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="card-body pt-3 pb-3 px-3">
+                    <!-- Train/Service Info Header -->
+                    <div class="d-flex justify-content-between align-items-start border-bottom pb-2 mb-3">
+                        <div class="text-start">
+                            <span class="small text-muted d-block" style="font-size:0.6rem; text-transform:uppercase;">Service / Carrier</span>
+                            <div class="fw-bold text-dark" style="font-size:0.95rem;">${ticket.serviceNo || '---'}</div>
+                            <div class="text-secondary small fw-semibold">${ticket.serviceName || ticket.operator}</div>
+                        </div>
+                        <div class="text-end">
+                            <span class="small text-muted d-block" style="font-size:0.6rem; text-transform:uppercase;">PNR / Booking ID</span>
+                            <div class="d-flex align-items-center justify-content-end">
+                                <strong class="text-primary ticket-pnr-box" style="font-size:0.95rem;">${ticket.ticketNo}</strong>
+                                <button class="btn btn-link text-secondary p-0 ms-1" onclick="navigator.clipboard.writeText('${ticket.ticketNo}'); showToast('PNR Copied!', 'success');" style="font-size:0.8rem;" title="Copy PNR">
+                                    <i class="far fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Timings Row -->
+                    <div class="row align-items-center mb-3">
+                        <div class="col-4 text-start">
+                            <div class="h5 mb-0 fw-bold text-dark">${depTime24}</div>
+                            <div class="small text-muted" style="font-size: 0.7rem;">${depDateFormatted}</div>
+                            <div class="fw-bold text-dark mt-2 text-uppercase text-truncate" style="font-size: 0.8rem;" title="${ticket.departurePlace}">${ticket.departurePlace}</div>
+                            <div class="small text-secondary fw-bold" style="font-size: 0.7rem;">${ticket.depCode || '--'}</div>
+                        </div>
+                        <div class="col-4 text-center">
+                            <div class="text-muted small" style="font-size:0.65rem;">${durationText ? `${durationText}` : '—'}</div>
+                            <div class="my-1 d-flex align-items-center justify-content-center">
+                                <div class="flex-grow-1" style="height: 1px; background-color: #dee2e6;"></div>
+                                <i class="fas ${typeIcon} text-muted mx-2" style="font-size: 0.75rem;"></i>
+                                <div class="flex-grow-1" style="height: 1px; background-color: #dee2e6;"></div>
+                            </div>
+                            <span class="badge rounded-pill bg-light text-secondary border px-2 py-1" style="font-size:0.6rem; text-transform:uppercase;">${ticket.operator}</span>
+                        </div>
+                        <div class="col-4 text-end">
+                            <div class="h5 mb-0 fw-bold text-dark">${arrTime24}</div>
+                            <div class="small text-muted" style="font-size: 0.7rem;">${arrDateFormatted || '--'}</div>
+                            <div class="fw-bold text-dark mt-2 text-uppercase text-truncate" style="font-size: 0.8rem;" title="${ticket.arrivalPlace}">${ticket.arrivalPlace}</div>
+                            <div class="small text-secondary fw-bold" style="font-size: 0.7rem;">${ticket.arrCode || '--'}</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Coach / Seat info -->
+                    <div class="bg-light bg-opacity-75 p-2 rounded small mb-2 border d-flex justify-content-between align-items-center" style="font-size: 0.75rem;">
+                        <span>Seat/Berth: <strong class="text-dark">${ticket.seatNo || '--'}</strong></span>
+                        <span>Booked on: <strong class="text-dark">${bookedOnDate}</strong></span>
+                    </div>
+                    
+                    <!-- Passenger details & Booking status -->
+                    <div class="border-top pt-2 mt-2">
+                        <div class="row align-items-center" style="font-size: 0.75rem;">
+                            <div class="col-6 text-start">
+                                <span class="text-muted d-block" style="font-size:0.6rem; text-transform:uppercase;">Passenger</span>
+                                <strong class="text-dark text-truncate d-block">${ticket.passengerName || '--'}</strong>
+                            </div>
+                            <div class="col-6 text-end">
+                                <span class="text-muted d-block" style="font-size:0.6rem; text-transform:uppercase;">Booking Status</span>
+                                <strong class="text-success text-truncate d-block">${ticket.bookingStatus || '--'}</strong>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Actions Footer (Receipt and Cost) -->
+                    <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top">
+                        <div class="small">
+                            ${ticket.cost > 0 ? `
+                                <span class="fw-bold text-success" style="font-size:0.85rem;"><span class="rupee-symbol">₹</span>${ticket.cost.toFixed(2)}</span>
+                                ${isExpensed ? `<span class="badge bg-success-subtle text-success ms-1" style="font-size: 0.55rem;"><i class="fas fa-check me-1"></i>Expensed</span>` : ''}
+                            ` : '<span class="text-muted small">No cost tracked</span>'}
+                        </div>
+                        <div>
+                            ${ticket.imageUrl ? `
+                                <button type="button" class="btn btn-outline-primary btn-xs py-1 px-2 fw-semibold" style="font-size: 0.65rem;" onclick="viewTicketReceipt('${ticket.imageUrl}', '${ticket.operator}')">
+                                    <i class="fas fa-image me-1"></i>View Ticket
+                                </button>
+                            ` : '<span class="text-muted small"><i class="fas fa-image-slash me-1"></i>No Image</span>'}
+                        </div>
+                    </div>
+                    
+                    <!-- Notes section -->
+                    ${ticket.notes ? `
+                        <div class="mt-2 p-2 border-start border-3 border-secondary bg-light bg-opacity-50 rounded-end" style="font-size: 0.7rem;">
+                            <span class="text-secondary text-break">${ticket.notes}</span>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+        
+        container.appendChild(card);
+    });
+}
+
+function viewTicketReceipt(url, operator) {
+    const modalImg = document.getElementById('view-ticket-img-element');
+    const modalTitle = document.getElementById('viewTicketImageTitle');
+    
+    if (modalImg && modalTitle) {
+        modalImg.src = url;
+        modalTitle.textContent = `${operator} Ticket Receipt Preview`;
+        
+        const modal = new bootstrap.Modal(document.getElementById('viewTicketImageModal'));
+        modal.show();
+    }
+}
+
+function updateDepartureAlerts(trip) {
+    const alertContainer = document.getElementById('ticket-departure-alerts');
+    const overviewAlertContainer = document.getElementById('overview-ticket-departure-alerts');
+    
+    if (alertContainer) {
+        alertContainer.innerHTML = '';
+        alertContainer.classList.add('d-none');
+    }
+    if (overviewAlertContainer) {
+        overviewAlertContainer.innerHTML = '';
+        overviewAlertContainer.classList.add('d-none');
+    }
+    
+    const tickets = trip.tickets || [];
+    if (tickets.length === 0) return;
+    
+    const now = new Date();
+    const upcomingDepartures = [];
+    
+    tickets.forEach(ticket => {
+        const depTime = new Date(ticket.departureTime);
+        const diffMs = depTime - now;
+        const diffHours = diffMs / (1000 * 60 * 60);
+        
+        if (diffMs > 0 && diffHours <= 36) {
+            upcomingDepartures.push({
+                ticket,
+                depTime,
+                diffMs
+            });
+        }
+    });
+    
+    if (upcomingDepartures.length === 0) return;
+    
+    upcomingDepartures.sort((a, b) => a.diffMs - b.diffMs);
+    
+    if (alertContainer) {
+        alertContainer.classList.remove('d-none');
+    }
+    if (overviewAlertContainer) {
+        overviewAlertContainer.classList.remove('d-none');
+    }
+    
+    upcomingDepartures.forEach(item => {
+        const tkt = item.ticket;
+        const diffHrs = Math.floor(item.diffMs / (1000 * 60 * 60));
+        const diffMins = Math.floor((item.diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        
+        let typeIcon = 'fa-plane';
+        let alertClass = 'alert-danger';
+        
+        if (tkt.type === 'train') {
+            typeIcon = 'fa-train-subway';
+        } else if (tkt.type === 'bus') {
+            typeIcon = 'fa-bus';
+        }
+        
+        if (diffHrs >= 12) {
+            alertClass = 'alert-info';
+        } else if (diffHrs >= 4) {
+            alertClass = 'alert-warning';
+        }
+        
+        const countdownText = diffHrs > 0 
+            ? `${diffHrs}h ${diffMins}m`
+            : `${diffMins}m`;
+            
+        const alertHtml = `
+            <div class="alert ${alertClass} d-flex align-items-center justify-content-between p-3 border-0 shadow-sm animate-pulse-slow mb-2" role="alert">
+                <div class="d-flex align-items-center">
+                    <div class="me-3 fs-4"><i class="fas ${typeIcon}"></i></div>
+                    <div>
+                        <strong class="d-block text-capitalize" style="font-size:0.9rem;">Upcoming ${tkt.type} to ${tkt.arrivalPlace}</strong>
+                        <span class="small text-secondary" style="font-size:0.75rem;">Departure from <strong>${tkt.departurePlace}</strong> @ <strong>${new Date(tkt.departureTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</strong>. Seat: ${tkt.seatNo || '--'}</span>
+                    </div>
+                </div>
+                <div class="text-end">
+                    <span class="badge rounded-pill bg-dark py-1 px-3" style="font-size:0.7rem;">Departs in ${countdownText}</span>
+                </div>
+            </div>
+        `;
+        
+        if (alertContainer) {
+            alertContainer.insertAdjacentHTML('beforeend', alertHtml);
+        }
+        if (overviewAlertContainer) {
+            overviewAlertContainer.insertAdjacentHTML('beforeend', alertHtml);
+        }
+    });
+}
+
+// =========================================================================
+// JOURNEY & LOCATION STAY TIME TRACKING ENGINE
+// =========================================================================
+
+function calculateJourneyStayTimes(trip) {
+    const tickets = trip.tickets || [];
+    if (tickets.length === 0) return null;
+    
+    // Sort tickets chronologically by departureTime
+    const validTickets = tickets
+        .filter(t => t.departureTime)
+        .sort((a, b) => new Date(a.departureTime) - new Date(b.departureTime));
+        
+    if (validTickets.length === 0) return null;
+    
+    const transitLegs = [];
+    const stayLegs = [];
+    let totalTransitMs = 0;
+    let totalStayMs = 0;
+    
+    for (let i = 0; i < validTickets.length; i++) {
+        const currentTicket = validTickets[i];
+        const depTime = new Date(currentTicket.departureTime);
+        const arrTime = currentTicket.arrivalTime ? new Date(currentTicket.arrivalTime) : depTime;
+        
+        const transitMs = Math.max(0, arrTime - depTime);
+        totalTransitMs += transitMs;
+        
+        transitLegs.push({
+            ticket: currentTicket,
+            departureTime: depTime,
+            arrivalTime: arrTime,
+            durationMs: transitMs,
+            from: currentTicket.departurePlace,
+            depCode: currentTicket.depCode || '',
+            to: currentTicket.arrivalPlace,
+            arrCode: currentTicket.arrCode || '',
+            type: currentTicket.type,
+            operator: currentTicket.operator,
+            serviceNo: currentTicket.serviceNo || ''
+        });
+        
+        // Calculate layover/stay until next ticket departure
+        if (i < validTickets.length - 1) {
+            const nextTicket = validTickets[i + 1];
+            const nextDepTime = new Date(nextTicket.departureTime);
+            
+            const stayStart = arrTime;
+            const stayEnd = nextDepTime;
+            const stayMs = Math.max(0, stayEnd - stayStart);
+            
+            totalStayMs += stayMs;
+            
+            const locationName = currentTicket.arrivalPlace || nextTicket.departurePlace;
+            const locationCode = currentTicket.arrCode || nextTicket.depCode || '';
+            
+            stayLegs.push({
+                location: locationName,
+                code: locationCode,
+                stayStart,
+                stayEnd,
+                durationMs: stayMs,
+                arrivedVia: currentTicket,
+                departingVia: nextTicket
+            });
+        }
+    }
+    
+    const totalTripMs = totalTransitMs + totalStayMs;
+    const transitPercent = totalTripMs > 0 ? ((totalTransitMs / totalTripMs) * 100) : 0;
+    const stayPercent = totalTripMs > 0 ? ((totalStayMs / totalTripMs) * 100) : 0;
+    
+    return {
+        transitLegs,
+        stayLegs,
+        totalTransitMs,
+        totalStayMs,
+        totalTripMs,
+        transitPercent,
+        stayPercent,
+        ticketCount: validTickets.length
+    };
+}
+
+function formatDurationNice(ms) {
+    if (!ms || ms <= 0) return '0 Mins';
+    
+    const totalMinutes = Math.floor(ms / (1000 * 60));
+    const days = Math.floor(totalMinutes / (60 * 24));
+    const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+    const mins = totalMinutes % 60;
+    
+    const parts = [];
+    if (days > 0) parts.push(`${days} ${days === 1 ? 'Day' : 'Days'}`);
+    if (hours > 0) parts.push(`${hours} ${hours === 1 ? 'Hour' : 'Hours'}`);
+    if (mins > 0 || parts.length === 0) parts.push(`${mins} Mins`);
+    
+    return parts.join(', ');
+}
+
+function formatDurationShort(ms) {
+    if (!ms || ms <= 0) return '0m';
+    const totalMinutes = Math.floor(ms / (1000 * 60));
+    const days = Math.floor(totalMinutes / (60 * 24));
+    const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+    const mins = totalMinutes % 60;
+    
+    if (days > 0) return `${days}d ${hours}h ${mins}m`;
+    if (hours > 0) return `${hours}h ${mins}m`;
+    return `${mins}m`;
+}
+
+function renderJourneyStayBreakdown(trip) {
+    const card = document.getElementById('journey-stay-breakdown-card');
+    const overviewWidget = document.getElementById('overview-stay-breakdown-widget');
+    
+    if (!card && !overviewWidget) return;
+    
+    const analysis = calculateJourneyStayTimes(trip);
+    
+    if (!analysis || (analysis.stayLegs.length === 0 && analysis.transitLegs.length === 0)) {
+        if (card) { card.classList.add('d-none'); card.innerHTML = ''; }
+        if (overviewWidget) { overviewWidget.classList.add('d-none'); overviewWidget.innerHTML = ''; }
+        return;
+    }
+    
+    const formattedTransitTime = formatDurationNice(analysis.totalTransitMs);
+    const formattedStayTime = formatDurationNice(analysis.totalStayMs);
+    
+    const stayCardsHtml = analysis.stayLegs.map(leg => {
+        const startStr = leg.stayStart.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' }) + 
+            ' @ ' + leg.stayStart.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+        const endStr = leg.stayEnd.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' }) + 
+            ' @ ' + leg.stayEnd.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+        const durationStr = formatDurationNice(leg.durationMs);
+        const codeBadge = leg.code ? `<span class="badge bg-secondary ms-1">${leg.code}</span>` : '';
+        
+        return `
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 border-0 shadow-sm bg-light bg-opacity-75 rounded-3 position-relative overflow-hidden">
+                    <div class="position-absolute top-0 start-0 bottom-0 bg-success" style="width: 4px;"></div>
+                    <div class="card-body p-3">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <small class="text-uppercase text-muted fw-bold" style="font-size:0.6rem;">Exploring Destination</small>
+                                <h6 class="mb-0 fw-bold text-dark text-capitalize">${leg.location}${codeBadge}</h6>
+                            </div>
+                            <span class="badge bg-success-subtle text-success py-1 px-2 fw-bold" style="font-size:0.75rem;">
+                                <i class="fas fa-clock me-1"></i>${formatDurationShort(leg.durationMs)}
+                            </span>
+                        </div>
+                        
+                        <div class="p-2 bg-white rounded-2 border mb-2" style="font-size:0.75rem;">
+                            <div class="d-flex justify-content-between text-muted mb-1">
+                                <span><i class="fas fa-plane-arrival text-info me-1"></i>Arrival:</span>
+                                <strong class="text-dark">${startStr}</strong>
+                            </div>
+                            <div class="d-flex justify-content-between text-muted">
+                                <span><i class="fas fa-plane-departure text-warning me-1"></i>Next Departure:</span>
+                                <strong class="text-dark">${endStr}</strong>
+                            </div>
+                        </div>
+                        
+                        <div class="small text-success fw-semibold" style="font-size:0.72rem;">
+                            <i class="fas fa-compass me-1"></i><strong>${durationStr}</strong> available to explore ${leg.location}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    if (card) {
+        card.classList.remove('d-none');
+        card.innerHTML = `
+            <div class="card border-0 shadow-sm rounded-3 overflow-hidden">
+                <div class="card-header bg-white py-3 px-4 border-bottom-0 d-flex align-items-center justify-content-between">
+                    <div>
+                        <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-map-location-dot me-2 text-success"></i>Location Exploration & Transit Tracker</h5>
+                        <small class="text-muted">Calculated automatically from your booked tickets</small>
+                    </div>
+                    <span class="badge bg-dark rounded-pill px-3 py-2" style="font-size: 0.75rem;">
+                        ${analysis.stayLegs.length} ${analysis.stayLegs.length === 1 ? 'Location Stay' : 'Location Stays'}
+                    </span>
+                </div>
+                <div class="card-body px-4 pt-0 pb-3">
+                    <!-- Progress Bar Split -->
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between small fw-semibold mb-1" style="font-size: 0.75rem;">
+                            <span class="text-primary"><i class="fas fa-train me-1"></i>Transit Time: <strong>${formattedTransitTime}</strong> (${analysis.transitPercent.toFixed(0)}%)</span>
+                            <span class="text-success"><i class="fas fa-hotel me-1"></i>Stay & Exploring Time: <strong>${formattedStayTime}</strong> (${analysis.stayPercent.toFixed(0)}%)</span>
+                        </div>
+                        <div class="progress" style="height: 8px; border-radius: 4px;">
+                            <div class="progress-bar bg-primary" role="progressbar" style="width: ${analysis.transitPercent}%" title="Transit: ${formattedTransitTime}"></div>
+                            <div class="progress-bar bg-success" role="progressbar" style="width: ${analysis.stayPercent}%" title="Stay: ${formattedStayTime}"></div>
+                        </div>
+                    </div>
+                    
+                    ${analysis.stayLegs.length > 0 ? `
+                        <div class="row g-3">
+                            ${stayCardsHtml}
+                        </div>
+                    ` : `
+                        <div class="alert alert-info py-2 px-3 mb-0 small">
+                            <i class="fas fa-info-circle me-1"></i> Add multiple tickets to calculate stay & layover durations between destinations!
+                        </div>
+                    `}
+                </div>
+            </div>
+        `;
+    }
+    
+    if (overviewWidget) {
+        overviewWidget.classList.remove('d-none');
+        overviewWidget.innerHTML = `
+            <div class="card border-0 shadow-sm rounded-3 bg-white p-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="small fw-bold text-dark"><i class="fas fa-clock-rotate-left me-1 text-primary"></i>Travel Allocation (Transit vs Stay)</span>
+                    <span class="badge bg-success-subtle text-success">${analysis.stayLegs.length} Destinations Tracked</span>
+                </div>
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-6">
+                        <div class="p-2 border rounded-2 bg-light">
+                            <small class="text-muted d-block" style="font-size:0.65rem;">TOTAL EXPLORING & STAY TIME</small>
+                            <strong class="text-success" style="font-size:0.95rem;">${formattedStayTime}</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-2 border rounded-2 bg-light">
+                            <small class="text-muted d-block" style="font-size:0.65rem;">TOTAL TRANSIT TIME</small>
+                            <strong class="text-primary" style="font-size:0.95rem;">${formattedTransitTime}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+}
+
+// Expose functions globally for onclick calls
+window.showEditTicketModal = showEditTicketModal;
+window.deleteTicket = deleteTicket;
+window.viewTicketReceipt = viewTicketReceipt;
+window.loadTripTickets = loadTripTickets;
+window.renderJourneyStayBreakdown = renderJourneyStayBreakdown;

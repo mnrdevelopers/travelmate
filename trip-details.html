@@ -87,6 +87,11 @@
                     <i class="fas fa-map me-1"></i>Route
                 </a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="tab" href="#tickets-tab">
+                    <i class="fas fa-ticket-alt me-1"></i>Tickets
+                </a>
+            </li>
         </ul>
         
       <div class="tab-content" id="trip-tab-content">
@@ -98,6 +103,17 @@
              data-guide-hi="यात्रा अवलोकन में आपका स्वागत है! यहाँ आप बुनियादी जानकारी (तिथियाँ, मार्ग, परिवहन के साधन) देख सकते हैं, यात्रा सदस्यों को प्रबंधित कर सकते हैं, कुल यात्रा व्यय देख सकते हैं, और निपटान योजना देख सकते हैं कि किसे क्या देना है।"
              data-guide-te="ట్రిప్ ఓవర్‌వ్యూకి స్వాగతం! ఇక్కడ మీరు ప్రాథమిక సమాచారం (తేదీలు, మార్గం, రవాణా విధానం) చూడవచ్చు, ప్రయాణ సభ్యులను నిర్వహించవచ్చు, మొత్తం ప్రయాణ ఖర్చులను వీక్షించవచ్చు మరియు ఎవరు ఎవరికి ఎంత చెల్లించాలో సెటిల్‌మెంట్ ప్లాన్‌ను చూడవచ్చు.">
         </div>
+        
+        <!-- Travel Alerts / Countdowns on Overview Tab -->
+        <div id="overview-ticket-departure-alerts" class="mb-3 d-none">
+            <!-- Departure countdown banners will appear here -->
+        </div>
+        
+        <!-- Journey Stay & Location Exploration Widget on Overview Tab -->
+        <div id="overview-stay-breakdown-widget" class="mb-4 d-none">
+            <!-- Dynamic Stay vs Transit Breakdown for Overview loaded here -->
+        </div>
+        
         <!-- Live Travel Journey Progress Animation -->
         <div class="card mb-4 border-0 shadow-sm overflow-hidden" id="travel-animation-card" style="display: none;">
             <div class="card-body py-3 px-4 bg-white" style="border-radius: var(--border-radius-md);">
@@ -109,7 +125,7 @@
                 <div class="journey-tracker-wrapper">
                     <div class="journey-tracker-inner">
                         <!-- Dedicated relative container for the timeline bar and its absolute pins/dots/vehicle -->
-                        <div class="position-relative" style="height: 35px; margin-bottom: 20px;">
+                        <div class="position-relative" style="height: 65px; margin-top: 15px; margin-bottom: 15px;">
                             <!-- Progress track (absolutely centered inside the 35px container) -->
                             <div class="progress" style="height: 6px; background-color: rgba(45, 106, 79, 0.08); border-radius: 3px; position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); margin: 0;">
                                 <div class="progress-bar bg-success" id="travel-animation-bar" role="progressbar" style="width: 0%; transition: width 1s ease;"></div>
@@ -526,6 +542,59 @@
             </div>
         </div>
     </div>
+    
+    <!-- Tickets Tab -->
+    <div class="tab-pane fade" id="tickets-tab">
+        <div class="section-guide-card mb-4" 
+             data-guide-en="Welcome to Tickets section! Here you can store your travel tickets (flights, trains, buses) with dates and times so you never miss them. Upload ticket receipts using ImageKit, and track booking expenses in your trip balance."
+             data-guide-hi="टिकट अनुभाग में आपका स्वागत है! यहाँ आप अपनी यात्रा के टिकट (उड़ानें, ट्रेनें, बसें) तारीखों और समय के साथ संग्रहीत कर सकते हैं ताकि आप कभी भी उन्हें याद न करें। इमेजकिट का उपयोग करके टिकट रसीदें अपलोड करें, और अपने यात्रा बजट में बुकिंग खर्चों को ट्रैक करें।"
+             data-guide-te="టికెట్ల విభాగానికి స్వాగతం! ఇక్కడ మీరు మీ ప్రయాణ టికెట్లను (ఫ్లైట్స్, రైళ్లు, బస్సులు) తేదీలు మరియు సమయాలతో నిల్వ చేయవచ్చు, తద్వారా మీరు ఎప్పటికీ మిస్ అవ్వరు. ఇమేజ్‌కిట్ ఉపయోగించి టికెట్ రసీదులను అప్‌లోడ్ చేయండి, మరియు మీ ట్రిప్ బడ్జెట్‌లో బుకింగ్ ఖర్చులను ట్రాక్ చేయండి.">
+        </div>
+        
+        <!-- Travel Alerts / Countdowns -->
+        <div id="ticket-departure-alerts" class="mb-4 d-none">
+            <!-- Departure countdown banners will appear here -->
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="mb-0">Tickets & Bookings</h4>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="btn-imagekit-settings">
+                    <i class="fas fa-cog me-1"></i>ImageKit Settings
+                </button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-add-ticket">
+                    <i class="fas fa-plus me-1"></i>Add Ticket
+                </button>
+            </div>
+        </div>
+
+        <!-- ImageKit Config Alert if not set -->
+        <div id="imagekit-config-warning" class="alert alert-warning d-none py-2 px-3 mb-3">
+            <small><i class="fas fa-exclamation-triangle me-1"></i> ImageKit is not configured. Ticket uploads will be disabled. Click <strong>ImageKit Settings</strong> to configure.</small>
+        </div>
+
+        <!-- Journey & Location Stay Breakdown Container -->
+        <div id="journey-stay-breakdown-card" class="mb-4 d-none">
+            <!-- Dynamic Stay vs Transit Breakdown loaded here -->
+        </div>
+
+        <!-- Tickets List -->
+        <div id="tickets-container" class="row g-3">
+            <!-- Tickets cards will be loaded here -->
+        </div>
+
+        <!-- Empty State -->
+        <div id="empty-tickets" class="empty-state">
+            <div class="empty-icon mb-4">
+                <i class="fas fa-ticket-alt"></i>
+            </div>
+            <h4>No tickets stored yet</h4>
+            <p>Add your train, flight, or bus tickets to track departure times and expenses.</p>
+            <button class="btn btn-primary btn-sm mt-2" onclick="document.getElementById('btn-add-ticket').click()">
+                <i class="fas fa-plus me-1"></i>Add Your First Ticket
+            </button>
+        </div>
+    </div>
 </div> 
 
     <!-- Edit Trip Modal for Trip Details Page -->
@@ -610,6 +679,186 @@
                 <button type="button" class="btn btn-primary" id="update-trip-btn-trip-details">
                     <i class="fas fa-save me-1"></i>Update Trip
                 </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ImageKit Settings Modal -->
+<div class="modal fade" id="imageKitSettingsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-cog me-2"></i>ImageKit Settings</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info py-2 px-3 small mb-3">
+                    <i class="fas fa-globe me-1"></i> Settings saved here apply <strong>globally across all upcoming & current trips</strong> in TravelMate.
+                </div>
+                <form id="imagekit-settings-form">
+                    <div class="mb-3">
+                        <label for="ik-url-endpoint" class="form-label">URL Endpoint</label>
+                        <input type="url" class="form-control form-control-sm" id="ik-url-endpoint" placeholder="https://ik.imagekit.io/your_id/" required>
+                        <div class="form-text">Your ImageKit URL endpoint.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="ik-public-key" class="form-label">Public Key</label>
+                        <input type="text" class="form-control form-control-sm" id="ik-public-key" placeholder="public_..." required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="ik-private-key" class="form-label">Private Key</label>
+                        <input type="password" class="form-control form-control-sm" id="ik-private-key" placeholder="private_..." required>
+                        <div class="form-text text-muted"><i class="fas fa-shield-halved me-1"></i> Stored securely in Firestore for all your trips.</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary btn-sm" id="save-imagekit-settings-btn">Save Settings</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Ticket Modal -->
+<div class="modal fade" id="addTicketModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="ticketModalTitle">Add Ticket</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="add-ticket-form">
+                    <input type="hidden" id="edit-ticket-id">
+                    <input type="hidden" id="edit-ticket-expense-index">
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-2">
+                            <label for="ticket-type" class="form-label fw-semibold">Primary Transport Type</label>
+                            <select class="form-select form-select-sm" id="ticket-type" required>
+                                <option value="flight">Flight</option>
+                                <option value="train">Train</option>
+                                <option value="bus">Bus</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-2">
+                            <label for="ticket-operator" class="form-label fw-semibold">Operator / Provider (e.g., IRCTC, Indigo, Redbus)</label>
+                            <input type="text" class="form-control form-control-sm" id="ticket-operator" required placeholder="e.g. IRCTC">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-2">
+                            <label for="ticket-service-name" class="form-label fw-semibold">Train / Flight / Bus Name</label>
+                            <input type="text" class="form-control form-control-sm" id="ticket-service-name" placeholder="e.g. NSL NS SF EXP">
+                        </div>
+                        <div class="col-md-6 mb-2">
+                            <label for="ticket-service-no" class="form-label fw-semibold">Train / Flight / Bus Number</label>
+                            <input type="text" class="form-control form-control-sm" id="ticket-service-no" placeholder="e.g. 12788">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-2">
+                            <label for="ticket-no" class="form-label fw-semibold">PNR / Ticket / Booking Number</label>
+                            <input type="text" class="form-control form-control-sm" id="ticket-no" required placeholder="e.g. 4341714699">
+                        </div>
+                        <div class="col-md-6 mb-2">
+                            <label for="ticket-seat" class="form-label fw-semibold">Seat / Berth / Coach Number</label>
+                            <input type="text" class="form-control form-control-sm" id="ticket-seat" placeholder="e.g. Coach S3, Berth 4">
+                        </div>
+                    </div>
+
+                    <div class="row bg-light p-2 rounded mb-2 border mx-0">
+                        <div class="col-12 px-1"><small class="text-uppercase text-secondary fw-bold">Departure Details</small></div>
+                        <div class="col-md-4 mb-2 px-1">
+                            <label for="ticket-dep-place" class="form-label small mb-1">Station/Airport Name</label>
+                            <input type="text" class="form-control form-control-sm" id="ticket-dep-place" required placeholder="e.g. NIZAMABAD JN">
+                        </div>
+                        <div class="col-md-4 mb-2 px-1">
+                            <label for="ticket-dep-code" class="form-label small mb-1">Station Code (Optional)</label>
+                            <input type="text" class="form-control form-control-sm" id="ticket-dep-code" placeholder="e.g. NZB" style="text-transform: uppercase;">
+                        </div>
+                        <div class="col-md-4 mb-2 px-1">
+                            <label for="ticket-dep-time" class="form-label small mb-1">Departure Date & Time</label>
+                            <input type="datetime-local" class="form-control form-control-sm" id="ticket-dep-time" required>
+                        </div>
+                    </div>
+
+                    <div class="row bg-light p-2 rounded mb-2 border mx-0">
+                        <div class="col-12 px-1"><small class="text-uppercase text-secondary fw-bold">Arrival Details</small></div>
+                        <div class="col-md-4 mb-2 px-1">
+                            <label for="ticket-arr-place" class="form-label small mb-1">Station/Airport Name</label>
+                            <input type="text" class="form-control form-control-sm" id="ticket-arr-place" required placeholder="e.g. VIJAYAWADA JN">
+                        </div>
+                        <div class="col-md-4 mb-2 px-1">
+                            <label for="ticket-arr-code" class="form-label small mb-1">Station Code (Optional)</label>
+                            <input type="text" class="form-control form-control-sm" id="ticket-arr-code" placeholder="e.g. BZA" style="text-transform: uppercase;">
+                        </div>
+                        <div class="col-md-4 mb-2 px-1">
+                            <label for="ticket-arr-time" class="form-label small mb-1">Arrival Date & Time (Optional)</label>
+                            <input type="datetime-local" class="form-control form-control-sm" id="ticket-arr-time">
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-2">
+                            <label for="ticket-passenger-name" class="form-label fw-semibold">Passenger Name</label>
+                            <input type="text" class="form-control form-control-sm" id="ticket-passenger-name" placeholder="e.g. AUSULA MANITEJA">
+                        </div>
+                        <div class="col-md-6 mb-2">
+                            <label for="ticket-booking-status" class="form-label fw-semibold">Booking / Current Status</label>
+                            <input type="text" class="form-control form-control-sm" id="ticket-booking-status" placeholder="e.g. CNF/S3/4/LB">
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-2">
+                            <label for="ticket-cost" class="form-label fw-semibold">Ticket Cost (Amount in <span class="rupee-symbol">₹</span>)</label>
+                            <input type="number" class="form-control form-control-sm" id="ticket-cost" min="0" step="0.01" placeholder="e.g. 2500">
+                        </div>
+                        <div class="col-md-6 mb-2 d-flex align-items-center">
+                            <div class="form-check mt-3">
+                                <input class="form-check-input" type="checkbox" id="ticket-track-expense" checked>
+                                <label class="form-check-label" for="ticket-track-expense">
+                                    Track as Trip Expense
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="ticket-image" class="form-label">Ticket Receipt Image (PDF / Image upload to ImageKit)</label>
+                        <input type="file" class="form-control form-control-sm" id="ticket-image" accept="image/*,application/pdf">
+                        <div class="form-text" id="ticket-image-info">Max size 5MB. Select a new file to upload/replace.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="ticket-notes" class="form-label">Notes & Instructions</label>
+                        <textarea class="form-control form-control-sm" id="ticket-notes" rows="2" placeholder="Gate instructions, terminal details, luggage limits..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" id="save-ticket-btn">Save Ticket</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- View Ticket Image Modal -->
+<div class="modal fade" id="viewTicketImageModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header py-2 bg-dark text-white border-0">
+                <h6 class="modal-title" id="viewTicketImageTitle">Ticket Receipt Preview</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center p-0 bg-dark rounded-bottom overflow-hidden">
+                <img id="view-ticket-img-element" class="img-fluid" style="max-height: 80vh; object-fit: contain;" alt="Ticket Preview">
             </div>
         </div>
     </div>
@@ -774,12 +1023,61 @@
 
     <div id="toast-container" class="toast-container position-fixed top-0 end-0 p-3"></div>
     
+    <!-- AI Travel Assistant Chatbot Widget -->
+    <div class="ai-chat-widget" id="ai-chat-widget" style="display: none;">
+        <button class="ai-chat-btn" id="ai-chat-toggle" title="Ask TravelMate AI" style="padding: 0; overflow: hidden; position: relative;">
+            <img id="ai-chat-toggle-img" src="ai-logo.png" style="width: 100%; height: 100%; object-fit: cover;">
+            <i id="ai-chat-toggle-close-icon" class="fas fa-xmark d-none" style="font-size: 1.4rem; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white;"></i>
+        </button>
+        
+        <div class="ai-chat-container" id="ai-chat-container">
+            <div class="ai-chat-header">
+                <div class="ai-chat-header-title d-flex align-items-center flex-wrap" style="gap: 6px;">
+                    <div class="d-flex align-items-center" style="gap: 4px;">
+                        <img src="ai-logo.png" style="width: 22px; height: 22px; border-radius: 50%; object-fit: cover; margin-right: 4px; border: 1px solid rgba(255, 255, 255, 0.25);">
+                        <span>TravelMate AI Companion</span>
+                    </div>
+                    <span id="ai-chat-provider-badge" class="badge bg-secondary-subtle text-secondary" style="font-size: 0.65rem; padding: 0.25em 0.5em; border-radius: 4px; font-weight: normal;">Loading...</span>
+                </div>
+                <div class="d-flex align-items-center" style="gap: 10px;">
+                    <button class="btn btn-link text-white p-0 border-0 shadow-none" id="ai-chat-clear" title="Clear Chat History" style="font-size: 0.95rem; opacity: 0.85; transition: opacity 0.2s; background: none;">
+                        <i class="fas fa-trash-can"></i>
+                    </button>
+                    <button class="ai-chat-header-close" id="ai-chat-close" style="padding: 0; background: none; border: none;">
+                        <i class="fas fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="ai-chat-messages" id="ai-chat-messages">
+                <div class="ai-chat-message assistant">
+                    Hello! I am your AI Travel Assistant with full access to your booked tickets, travel dates, stay hours, and itinerary. Ask me anything about your trip!
+                </div>
+            </div>
+            
+            <div class="ai-chat-input-area">
+                <div class="ai-chat-suggestions">
+                    <span class="ai-chat-suggestion-chip" data-query="How much time do I have to explore my stops based on my tickets?">⏱️ Exploring Time</span>
+                    <span class="ai-chat-suggestion-chip" data-query="Suggest local sightseeing places near my stops">🗺️ Sightseeing Spots</span>
+                    <span class="ai-chat-suggestion-chip" data-query="Give me a budget breakdown for this trip">💰 Budget Summary</span>
+                </div>
+                <div class="ai-chat-input-row">
+                    <input type="text" class="ai-chat-input" id="ai-chat-input" placeholder="Type a message...">
+                    <button class="ai-chat-send" id="ai-chat-send">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js"></script>
     <script src="utils.js"></script>
+    <script src="dashboard.js"></script>
     <script src="trip-details.js"></script>
 </body>
 </html>

@@ -1,39 +1,38 @@
 let currentUser = null;
 let userTrips = [];
-let customCategories = [];
+var customCategories = typeof customCategories !== 'undefined' ? customCategories : [];
 let carExpenseChart = null;
 let fuelPriceChart = null;
 let dashboardTrackerMap = null;
 let activeTripTrackerTimeout = null;
 
 document.addEventListener('DOMContentLoaded', function () {
-    console.log('DOM loaded, initializing dashboard...');
+    // Only run dashboard UI setup if we are on dashboard.html
+    const isDashboardPage = !!document.getElementById('trips-container') || !!document.getElementById('public-dashboard');
     
-    if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission();
+    if (isDashboardPage) {
+        console.log('DOM loaded, initializing dashboard...');
+        
+        const publicDashboard = document.getElementById('public-dashboard');
+        if (publicDashboard) publicDashboard.classList.add('d-none');
+        
+        const privateDashboard = document.querySelector('.container.mt-4');
+        if (privateDashboard) privateDashboard.classList.add('d-none');
+
+        setupDashboardEventListeners();
+        setupProtectedNavigation();
+        checkAuthState();
+        setupTheme();
+        initializeApp();
+    } else {
+        // On non-dashboard pages (like trip-details.html), only setup Theme & AI Chatbot
+        setupTheme();
+        if (typeof loadOpenRouterKey === 'function') {
+            loadOpenRouterKey().then(() => {
+                if (typeof initAiChatbot === 'function') initAiChatbot();
+            });
+        }
     }
-    
-    // Initially hide both dashboards until auth state is determined
-    document.getElementById('public-dashboard').classList.add('d-none');
-    const privateDashboard = document.querySelector('.container.mt-4');
-    if (privateDashboard) {
-        privateDashboard.classList.add('d-none');
-    }
-
-    // Set up event listeners (with null checks)
-    setupDashboardEventListeners();
-
-    // Protect navigation items
-    setupProtectedNavigation();
-
-    // Check auth state (this will show the appropriate dashboard)
-    checkAuthState();
-
-    // Initialize Theme
-    setupTheme();
-
-    // Initialize app
-    initializeApp();
 });
 
     // Protect car calculations link
@@ -196,8 +195,9 @@ function showProfileModal() {
     document.getElementById('profile-email').value = user.email || '';
     
     const profileAvatar = document.getElementById('profile-avatar');
+    const avatarUrl = localStorage.getItem('user_avatar_' + user.uid) || user.photoURL;
     if (profileAvatar) {
-        profileAvatar.src = getSafeAvatarUrl(user.photoURL, user.displayName || 'User');
+        profileAvatar.src = getSafeAvatarUrl(avatarUrl, user.displayName || 'User');
         setupAvatarFallback(profileAvatar, user.displayName || 'User');
     }
     
@@ -205,6 +205,12 @@ function showProfileModal() {
     db.collection('users').doc(user.uid).get().then(doc => {
         if (doc.exists) {
             const data = doc.data();
+            if (data.photoURL) {
+                localStorage.setItem('user_avatar_' + user.uid, data.photoURL);
+                if (profileAvatar) {
+                    profileAvatar.src = getSafeAvatarUrl(data.photoURL, user.displayName || 'User');
+                }
+            }
             const keyField = document.getElementById('profile-openrouter-key');
             if (keyField && data.openrouterApiKey) {
                 keyField.value = data.openrouterApiKey;
@@ -213,21 +219,6 @@ function showProfileModal() {
             const groqKeyField = document.getElementById('profile-groq-key');
             if (groqKeyField && data.groqApiKey) {
                 groqKeyField.value = data.groqApiKey;
-            }
-
-            const fastagUrlField = document.getElementById('profile-fastag-api-url');
-            if (fastagUrlField && data.fastagApiUrl) {
-                fastagUrlField.value = data.fastagApiUrl;
-            }
-            
-            const fastagKeyField = document.getElementById('profile-fastag-api-key');
-            if (fastagKeyField && data.fastagApiKey) {
-                fastagKeyField.value = data.fastagApiKey;
-            }
-            
-            const tollKeyField = document.getElementById('profile-toll-api-key');
-            if (tollKeyField && data.tollApiKey) {
-                tollKeyField.value = data.tollApiKey;
             }
             
             const modelSelect = document.getElementById('profile-openrouter-model');
@@ -250,7 +241,7 @@ function showProfileModal() {
     const container = document.getElementById('avatar-choices-container');
     if (container) {
         container.innerHTML = ECO_AVATARS.map(avatar => {
-            const isSelected = (user.photoURL === avatar.value || (!user.photoURL && avatar.id === 'avatar-leaf'));
+            const isSelected = (avatarUrl === avatar.value || (!avatarUrl && avatar.id === 'avatar-leaf'));
             return `
                 <div class="avatar-option rounded-circle p-1 d-flex align-items-center justify-content-center" 
                      style="width: 42px; height: 42px; cursor: pointer; border: 2px solid ${isSelected ? 'var(--primary-color)' : 'transparent'}; background-color: rgba(45, 106, 79, 0.05);"
@@ -292,10 +283,15 @@ async function saveProfile() {
         const profileAvatar = document.getElementById('profile-avatar');
         const selectedAvatarSrc = profileAvatar ? profileAvatar.src : '';
         
-        await auth.currentUser.updateProfile({
-            displayName: name,
-            photoURL: selectedAvatarSrc
-        });
+        // Firebase Auth enforces max 2048 chars for photoURL attribute.
+        // Include in Auth profile update only if within limit (e.g. ImageKit CDN URL).
+        // The full URL is always persisted safely in Firestore user document.
+        const authPayload = { displayName: name };
+        if (selectedAvatarSrc && selectedAvatarSrc.length <= 1800) {
+            authPayload.photoURL = selectedAvatarSrc;
+        }
+        
+        await auth.currentUser.updateProfile(authPayload);
         
         // Save OpenRouter API key & settings if provided
         const orKeyInput = document.getElementById('profile-openrouter-key');
@@ -309,15 +305,6 @@ async function saveProfile() {
         if (groqApiKey) {
             window._groqApiKey = groqApiKey;
         }
-        
-        const fastagUrlInput = document.getElementById('profile-fastag-api-url');
-        const fastagApiUrl = fastagUrlInput ? fastagUrlInput.value.trim() : '';
-        
-        const fastagKeyInput = document.getElementById('profile-fastag-api-key');
-        const fastagApiKey = fastagKeyInput ? fastagKeyInput.value.trim() : '';
-        
-        const tollKeyInput = document.getElementById('profile-toll-api-key');
-        const tollApiKey = tollKeyInput ? tollKeyInput.value.trim() : '';
         
         const modelSelect = document.getElementById('profile-openrouter-model');
         const openrouterModel = modelSelect ? modelSelect.value : 'auto';
@@ -337,10 +324,11 @@ async function saveProfile() {
         };
         if (openrouterApiKey !== undefined) updatePayload.openrouterApiKey = openrouterApiKey;
         if (groqApiKey !== undefined) updatePayload.groqApiKey = groqApiKey;
-        if (fastagApiUrl !== undefined) updatePayload.fastagApiUrl = fastagApiUrl;
-        if (fastagApiKey !== undefined) updatePayload.fastagApiKey = fastagApiKey;
-        if (tollApiKey !== undefined) updatePayload.tollApiKey = tollApiKey;
-        await db.collection('users').doc(auth.currentUser.uid).update(updatePayload);
+        
+        await db.collection('users').doc(auth.currentUser.uid).set(updatePayload, { merge: true });
+        if (selectedAvatarSrc && auth.currentUser) {
+            localStorage.setItem('user_avatar_' + auth.currentUser.uid, selectedAvatarSrc);
+        }
         
         // Sync to shared global config so all users can use it as a fallback
         try {
@@ -421,12 +409,70 @@ async function loadCustomCategories() {
 }
 
 async function handleAvatarUpload(event) {
-    const file = event.target.files[0];
+    const file = event.target.files ? event.target.files[0] : null;
     if (!file) return;
     
-    // Note: Firebase Storage would be needed for full avatar upload functionality
-    // For now, we'll just show a message
-    showAlert('Avatar upload requires Firebase Storage setup. Display name updated successfully!', 'info');
+    if (!file.type.startsWith('image/')) {
+        if (typeof showAlert === 'function') showAlert('Please select a valid image file', 'warning');
+        return;
+    }
+    
+    const profileAvatar = document.getElementById('profile-avatar');
+    const settings = typeof getImageKitSettings === 'function' ? getImageKitSettings() : null;
+    let uploadedUrl = '';
+    
+    try {
+        if (typeof showToast === 'function') showToast('Uploading profile photo...', 'info');
+        else if (typeof showAlert === 'function') showAlert('Uploading profile photo...', 'info');
+        
+        // 1. Try ImageKit Direct CDN Upload if active
+        if (settings && settings.urlEndpoint && settings.publicKey && settings.privateKey && typeof uploadToImageKit === 'function') {
+            const fileName = `profile_${auth.currentUser?.uid || 'user'}_${Date.now()}_${file.name}`;
+            const ikRes = await uploadToImageKit(file, fileName, settings);
+            if (ikRes && ikRes.url) {
+                uploadedUrl = ikRes.url;
+                if (typeof showToast === 'function') showToast('Profile photo uploaded via ImageKit CDN!', 'success');
+                else if (typeof showAlert === 'function') showAlert('Profile photo uploaded via ImageKit CDN!', 'success');
+            }
+        }
+        
+        // 2. Fallback to client-side JPEG compression
+        if (!uploadedUrl) {
+            uploadedUrl = await compressImageToDataUrl(file, 400, 0.8);
+            if (typeof showToast === 'function') showToast('Photo processed! Click Save Changes to save your profile.', 'info');
+            else if (typeof showAlert === 'function') showAlert('Photo processed! Click Save Changes to save your profile.', 'info');
+        }
+        
+        if (uploadedUrl && profileAvatar) {
+            profileAvatar.src = uploadedUrl;
+            
+            // Persist immediately in localStorage & Firestore so it never disappears on hard refresh!
+            if (auth.currentUser) {
+                localStorage.setItem('user_avatar_' + auth.currentUser.uid, uploadedUrl);
+                try {
+                    await db.collection('users').doc(auth.currentUser.uid).set({
+                        photoURL: uploadedUrl,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                } catch (dbErr) {
+                    console.warn('Could not auto-save avatar to Firestore:', dbErr);
+                }
+            }
+            
+            // Clear default eco avatar selections
+            const container = document.getElementById('avatar-choices-container');
+            if (container) {
+                container.querySelectorAll('.avatar-option').forEach(opt => opt.style.borderColor = 'transparent');
+            }
+            
+            // Update navbar avatar live!
+            const navAvatar = document.getElementById('user-avatar');
+            if (navAvatar) navAvatar.src = uploadedUrl;
+        }
+    } catch (err) {
+        console.error('Error uploading profile picture:', err);
+        if (typeof showAlert === 'function') showAlert('Failed to process profile image', 'danger');
+    }
 }
 
 async function leaveAllTrips() {
@@ -469,10 +515,15 @@ async function leaveAllTrips() {
 
 function initializeApp() {
     const today = new Date().toISOString().split('T')[0];
-    document.getElementById('start-date').min = today;
-    document.getElementById('end-date').min = today;
-    document.getElementById('edit-start-date').min = today;
-    document.getElementById('edit-end-date').min = today;
+    const sDate = document.getElementById('start-date');
+    const eDate = document.getElementById('end-date');
+    const esDate = document.getElementById('edit-start-date');
+    const eeDate = document.getElementById('edit-end-date');
+    
+    if (sDate) sDate.min = today;
+    if (eDate) eDate.min = today;
+    if (esDate) esDate.min = today;
+    if (eeDate) eeDate.min = today;
 }
 
 function checkAuthState() {
@@ -502,9 +553,6 @@ function checkAuthState() {
                 ]);
                 showPrivateDashboard();
                 updateNavigationBasedOnAuth(true);
-                
-                // Scan saved vehicles for low FASTag balance and document expirations
-                checkDashboardVehicleAlerts();
                 
                 // Initialize AI chatbot (shown only for logged-in users)
                 initAIChatbot();
@@ -572,7 +620,7 @@ function hideLoadingOverlay() {
     }
 }
 
-function loadUserData() {
+async function loadUserData() {
     if (!currentUser) return;
     
     // Only update these elements if they exist (private dashboard)
@@ -583,8 +631,17 @@ function loadUserData() {
         userNameElement.textContent = currentUser.displayName || 'Traveler';
     }
     
+    // Retrieve avatar from Firebase Auth or Firestore user document
+    let avatarUrl = currentUser.photoURL;
+    try {
+        const userDoc = await db.collection('users').doc(currentUser.uid).get();
+        if (userDoc.exists && userDoc.data().photoURL) {
+            avatarUrl = userDoc.data().photoURL;
+        }
+    } catch (e) {}
+
     if (userAvatarElement) {
-        userAvatarElement.src = getSafeAvatarUrl(currentUser.photoURL, currentUser.displayName || 'Traveler');
+        userAvatarElement.src = getSafeAvatarUrl(avatarUrl, currentUser.displayName || 'Traveler');
         setupAvatarFallback(userAvatarElement, currentUser.displayName || 'Traveler');
     }
 }
@@ -738,7 +795,7 @@ function showLoadingState(show) {
     const tripsContainer = document.getElementById('trips-container');
     const emptyTrips = document.getElementById('empty-trips');
     
-    if (show) {
+    if (show && tripsContainer) {
         tripsContainer.innerHTML = `
             <div class="col-12 text-center py-5">
                 <div class="spinner-border text-primary" role="status">
@@ -747,12 +804,13 @@ function showLoadingState(show) {
                 <p class="mt-2 text-muted">Loading your trips...</p>
             </div>
         `;
-        emptyTrips.classList.add('d-none');
+        if (emptyTrips) emptyTrips.classList.add('d-none');
     }
 }
 
 function showError(message) {
     const tripsContainer = document.getElementById('trips-container');
+    if (!tripsContainer) return;
     tripsContainer.innerHTML = `
         <div class="col-12">
             <div class="alert alert-danger d-flex align-items-center" role="alert">
@@ -764,7 +822,7 @@ function showError(message) {
             </div>
             <div class="text-center mt-3">
                 <button class="btn btn-primary" onclick="loadUserTrips()">
-                    <i class="fas fa-redo me-2"></i>Try Again
+                    <i class="fas fa-sync-alt me-1"></i> Try Again
                 </button>
             </div>
         </div>
@@ -843,6 +901,9 @@ function displayTrips() {
      updateDashboardActiveTripTracker();
 }
 
+let slideshowInterval = null;
+let currentSlideIndex = 0;
+
 function updateDashboardActiveTripTracker() {
     const card = document.getElementById('dashboard-active-trip-tracker');
     const mapElement = document.getElementById('dashboard-tracker-map');
@@ -850,8 +911,6 @@ function updateDashboardActiveTripTracker() {
     const startText = document.getElementById('dashboard-tracker-start');
     const currentText = document.getElementById('dashboard-tracker-current');
     const destText = document.getElementById('dashboard-tracker-dest');
-    
-    if (!card || !mapElement || !statusText || !startText || !destText) return;
     
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -864,6 +923,11 @@ function updateDashboardActiveTripTracker() {
         end.setHours(23, 59, 59, 999);
         return today >= start && today <= end;
     });
+    
+    // Render Active Trip Hero Slideshow
+    renderActiveTripHeroSlideshow(activeTrip);
+    
+    if (!card || !mapElement || !statusText || !startText || !destText) return;
     
     if (!activeTrip) {
         card.style.display = 'none';
@@ -1086,16 +1150,41 @@ function updateDashboardActiveTripTracker() {
         const loadTrackerMapData = async () => {
             const startLatLng = await addTrackerMarker(activeTrip.startLocation, 'Start Point', 'fas fa-circle-play text-success', true);
             
+            const outboundStops = [];
+            const returnStops = [];
             if (activeTrip.stops && Array.isArray(activeTrip.stops)) {
-                for (let i = 0; i < activeTrip.stops.length; i++) {
-                    const stop = activeTrip.stops[i];
-                    if (stop) {
-                        await addTrackerMarker(stop, `Stop #${i + 1}`, 'fas fa-location-dot text-warning', true);
+                activeTrip.stops.forEach((stop, index) => {
+                    const name = typeof stop === 'object' ? stop.name : stop;
+                    const type = typeof stop === 'object' ? stop.type : 'before';
+                    if (name && name.trim().length > 2) {
+                        const sObj = { name: name.trim(), originalIndex: index, type };
+                        if (type === 'after') {
+                            returnStops.push(sObj);
+                        } else {
+                            outboundStops.push(sObj);
+                        }
                     }
-                }
+                });
+            }
+            
+            // Render Outbound Stops
+            for (let i = 0; i < outboundStops.length; i++) {
+                const s = outboundStops[i];
+                await addTrackerMarker(s.name, `Stop #${s.originalIndex + 1}`, 'fas fa-location-dot text-success', true);
             }
             
             const destLatLng = await addTrackerMarker(activeTrip.destination, 'Destination', 'fas fa-flag-checkered text-danger', true);
+            
+            // Render Return Stops
+            for (let i = 0; i < returnStops.length; i++) {
+                const s = returnStops[i];
+                await addTrackerMarker(s.name, `Return Stop #${s.originalIndex + 1}`, 'fas fa-location-dot text-info', true);
+            }
+            
+            // Return back to Start
+            if (returnStops.length > 0) {
+                await addTrackerMarker(activeTrip.startLocation, 'Return Point', 'fas fa-undo text-success', true);
+            }
             
             // Render Vehicle Marker
             let vehicleLatLng = null;
@@ -1104,7 +1193,7 @@ function updateDashboardActiveTripTracker() {
             } else if (startLatLng) {
                 // Draw vehicle marker at start location so it's always shown
                 const customIcon = L.divIcon({
-                    html: `<div class="d-flex align-items-center justify-content-center bg-white rounded-circle shadow-sm animate-pulse-slow" style="width: 32px; height: 32px; border: 2.5px solid #2d6a4f; z-index: 999;"><i class="${vehicleIcon}" style="font-size: 1.15rem;"></i></div>`,
+                    html: `<div class="d-flex align-items-center justify-content-center bg-white rounded-circle shadow-sm animate-pulse-slow" style="width: 32px; height: 32px; border: 2.5px solid #e65100; z-index: 999;"><i class="${vehicleIcon}" style="font-size: 1.15rem;"></i></div>`,
                     className: 'custom-tracker-vehicle',
                     iconSize: [32, 32],
                     iconAnchor: [16, 16]
@@ -1227,15 +1316,17 @@ function updateDashboardActiveTripTracker() {
                         let currentKm = 0;
                         
                         // AI-enhanced: snap to closest route segment using AI stop distances
-                        const stopsDistances = activeTrip.route?.stopsDistances;
-                        if (stopsDistances && stopsDistances.length > 0 && totalDistance > 0 && activeTrip.route?.aiEnhanced) {
-                            // Find which segment the user is on by comparing distances to each stop geocode
-                            const allStopNames = [activeTrip.startLocation, ...activeTrip.stops, activeTrip.destination];
-                            const allStopCoords = [startCoords];
-                            for (const sn of activeTrip.stops) {
-                                try { allStopCoords.push(await geocodeLocation(sn)); } catch(e) { allStopCoords.push(null); }
+                        const segments = getRouteSegments(activeTrip, totalDistance);
+                        if (segments.length > 0 && totalDistance > 0 && activeTrip.route?.aiEnhanced) {
+                            const placeSequence = resolveRouteMetadata(activeTrip.startLocation, activeTrip.destination, activeTrip.stops);
+                            const allStopCoords = [];
+                            for (const place of placeSequence) {
+                                try {
+                                    allStopCoords.push(await geocodeLocation(place.name));
+                                } catch (e) {
+                                    allStopCoords.push(null);
+                                }
                             }
-                            allStopCoords.push(destCoords);
                             
                             // Find closest segment start to current position
                             let bestSegment = 0;
@@ -1247,9 +1338,9 @@ function updateDashboardActiveTripTracker() {
                                 if (d < minSegDist) { minSegDist = d; bestSegment = si; }
                             }
                             
-                            // Cumulative km at the start of best segment
-                            const segStartKm = bestSegment === 0 ? 0 : stopsDistances[bestSegment - 1];
-                            const segEndKm = bestSegment < stopsDistances.length ? stopsDistances[bestSegment] : totalDistance;
+                            const bestSeg = segments[bestSegment] || { from: 0, to: totalDistance };
+                            const segStartKm = bestSeg.from;
+                            const segEndKm = bestSeg.to;
                             const segLen = segEndKm - segStartKm;
                             
                             const sc1 = allStopCoords[bestSegment];
@@ -1373,6 +1464,263 @@ function updateDashboardActiveTripTracker() {
     }, 50);
 }
 
+// =========================================================================
+// ACTIVE TRIP HERO SLIDESHOW & PHOTO UPLOAD ENGINE
+// =========================================================================
+
+function renderActiveTripHeroSlideshow(activeTrip) {
+    const slideshowContainer = document.getElementById('dashboard-active-trip-slideshow');
+    if (!slideshowContainer) return;
+    
+    if (!activeTrip) {
+        slideshowContainer.style.display = 'none';
+        if (slideshowInterval) clearInterval(slideshowInterval);
+        return;
+    }
+    
+    slideshowContainer.style.display = 'block';
+    
+    const wrapper = document.getElementById('active-trip-slideshow-wrapper');
+    const titleEl = document.getElementById('slideshow-trip-title');
+    const routeEl = document.getElementById('slideshow-trip-route');
+    const datesEl = document.getElementById('slideshow-trip-dates');
+    const progressEl = document.getElementById('slideshow-trip-progress');
+    const countBadge = document.getElementById('slideshow-image-count');
+    const navDots = document.getElementById('slideshow-nav-dots');
+    const openBtn = document.getElementById('slideshow-open-trip-btn');
+    
+    if (titleEl) titleEl.textContent = activeTrip.name || 'Active Adventure';
+    if (routeEl) {
+        const stopsCount = (activeTrip.stops || []).length;
+        const stopsText = stopsCount > 0 ? ` (${stopsCount} stops)` : '';
+        routeEl.innerHTML = `<i class="fas fa-location-dot me-1 text-danger"></i>${activeTrip.startLocation} → ${activeTrip.destination}${stopsText}`;
+    }
+    if (datesEl) {
+        const sD = new Date(activeTrip.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        const eD = new Date(activeTrip.endDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        datesEl.innerHTML = `<i class="far fa-calendar-alt me-1 text-warning"></i>${sD} - ${eD}`;
+    }
+    if (progressEl) {
+        const totalDist = parseFloat(activeTrip.route?.distance || activeTrip.distance) || 0;
+        const currentKm = activeTrip.currentKm || 0;
+        const pct = totalDist > 0 ? ((currentKm / totalDist) * 100).toFixed(0) : 0;
+        progressEl.textContent = totalDist > 0 ? `${currentKm} / ${totalDist.toFixed(0)} km (${pct}%)` : `Active Journey (${pct}% complete)`;
+    }
+    if (openBtn) {
+        openBtn.href = `trip-details.html?id=${activeTrip.id}`;
+    }
+    
+    const uploadedImages = (activeTrip.images && Array.isArray(activeTrip.images)) ? activeTrip.images.filter(img => typeof img === 'string' && img.trim().length > 0) : [];
+    
+    const fallbackVibeImages = [
+        'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1400&q=80',
+        'https://images.unsplash.com/photo-1476514525535-ce74f45817d1?auto=format&fit=crop&w=1400&q=80',
+        'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1400&q=80',
+        'https://images.unsplash.com/photo-1503220317375-aaad61436b1b?auto=format&fit=crop&w=1400&q=80'
+    ];
+    
+    const displayImages = uploadedImages.length > 0 ? uploadedImages : fallbackVibeImages;
+    const isCustomUpload = uploadedImages.length > 0;
+    
+    if (countBadge) {
+        countBadge.innerHTML = isCustomUpload 
+            ? `<i class="fas fa-camera text-success me-1"></i> ${uploadedImages.length} Custom Photo${uploadedImages.length > 1 ? 's' : ''}`
+            : `<i class="fas fa-images text-warning me-1"></i> Default Vibe (Upload your photos!)`;
+        countBadge.className = isCustomUpload 
+            ? 'badge bg-success bg-opacity-25 text-white border border-success border-opacity-50 px-2.5 py-1.5'
+            : 'badge bg-warning bg-opacity-25 text-warning border border-warning border-opacity-50 px-2.5 py-1.5';
+    }
+    
+    if (wrapper) {
+        wrapper.innerHTML = displayImages.map((img, idx) => `
+            <div class="slideshow-slide position-absolute top-0 start-0 w-100 h-100" 
+                 style="background: url('${img}') center/cover no-repeat; transition: opacity 1.2s ease-in-out; opacity: ${idx === 0 ? 1 : 0}; z-index: 1;"
+                 data-slide-index="${idx}">
+            </div>
+        `).join('');
+    }
+    
+    if (navDots) {
+        navDots.innerHTML = displayImages.map((_, idx) => `
+            <button type="button" class="btn p-0 rounded-circle border-0 ${idx === 0 ? 'bg-white' : 'bg-white opacity-50'}"
+                    style="width: ${idx === 0 ? '18px' : '8px'}; height: 8px; border-radius: 10px; transition: all 0.3s;"
+                    onclick="setSlideshowIndex(${idx})" title="Slide ${idx+1}"></button>
+        `).join('');
+    }
+    
+    if (slideshowInterval) clearInterval(slideshowInterval);
+    currentSlideIndex = 0;
+    
+    if (displayImages.length > 1) {
+        slideshowInterval = setInterval(() => {
+            currentSlideIndex = (currentSlideIndex + 1) % displayImages.length;
+            updateSlideshowDOM();
+        }, 4000);
+    }
+}
+
+function setSlideshowIndex(index) {
+    currentSlideIndex = index;
+    updateSlideshowDOM();
+}
+
+function updateSlideshowDOM() {
+    const slides = document.querySelectorAll('#active-trip-slideshow-wrapper .slideshow-slide');
+    const dots = document.querySelectorAll('#slideshow-nav-dots button');
+    
+    slides.forEach((slide, idx) => {
+        slide.style.opacity = (idx === currentSlideIndex) ? '1' : '0';
+    });
+    
+    dots.forEach((dot, idx) => {
+        if (idx === currentSlideIndex) {
+            dot.className = 'btn p-0 rounded-circle border-0 bg-white shadow-sm';
+            dot.style.width = '18px';
+            dot.style.borderRadius = '10px';
+        } else {
+            dot.className = 'btn p-0 rounded-circle border-0 bg-white opacity-50';
+            dot.style.width = '8px';
+        }
+    });
+}
+
+// Function to handle photo uploads from Create & Edit modals
+async function handleTripPhotoUpload(event, isEdit = false) {
+    const files = Array.from(event.target.files);
+    if (files.length === 0) return;
+    
+    const previewContainer = document.getElementById(isEdit ? 'edit-trip-image-previews' : 'trip-image-previews');
+    const targetArrayKey = isEdit ? '_pendingEditTripImages' : '_pendingTripImages';
+    window[targetArrayKey] = window[targetArrayKey] || [];
+    
+    const settings = typeof getImageKitSettings === 'function' ? getImageKitSettings() : null;
+    
+    for (const file of files) {
+        if (!file.type.startsWith('image/')) continue;
+        
+        try {
+            let finalUrl = '';
+            
+            // 1. Try ImageKit Upload if configured
+            if (settings && settings.urlEndpoint && settings.publicKey && settings.privateKey && typeof uploadToImageKit === 'function') {
+                if (typeof showToast === 'function') showToast('Uploading photo to ImageKit...', 'info');
+                const ikRes = await uploadToImageKit(file, `trip_cover_${Date.now()}_${file.name}`, settings);
+                if (ikRes && ikRes.url) {
+                    finalUrl = ikRes.url;
+                }
+            }
+            
+            // 2. Fallback to resized compressed Data URL
+            if (!finalUrl) {
+                finalUrl = await compressImageToDataUrl(file, 900, 0.75);
+            }
+            
+            if (finalUrl) {
+                window[targetArrayKey].push(finalUrl);
+                renderTripImagePreviews(previewContainer, window[targetArrayKey], isEdit);
+            }
+        } catch (e) {
+            console.error('Error processing trip photo upload:', e);
+            if (typeof showToast === 'function') showToast('Failed to process image file', 'warning');
+        }
+    }
+}
+
+function compressImageToDataUrl(file, maxWidth = 900, quality = 0.75) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                
+                if (width > maxWidth) {
+                    height = Math.round((height * maxWidth) / width);
+                    width = maxWidth;
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                resolve(canvas.toDataURL('image/jpeg', quality));
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+function renderTripImagePreviews(container, imagesArray, isEdit = false) {
+    if (!container) return;
+    container.innerHTML = imagesArray.map((url, idx) => `
+        <div class="position-relative rounded overflow-hidden shadow-sm border" style="width: 70px; height: 70px;">
+            <img src="${url}" style="width: 100%; height: 100%; object-fit: cover;">
+            <button type="button" class="btn btn-danger btn-xs position-absolute top-0 end-0 p-0 rounded-circle d-flex align-items-center justify-content-center"
+                    style="width: 18px; height: 18px; font-size: 0.6rem; margin: 2px;"
+                    onclick="removeTripImagePreview(${idx}, ${isEdit})" title="Remove photo">&times;</button>
+        </div>
+    `).join('');
+}
+
+function removeTripImagePreview(idx, isEdit) {
+    const key = isEdit ? '_pendingEditTripImages' : '_pendingTripImages';
+    if (window[key]) {
+        window[key].splice(idx, 1);
+        const container = document.getElementById(isEdit ? 'edit-trip-image-previews' : 'trip-image-previews');
+        renderTripImagePreviews(container, window[key], isEdit);
+    }
+}
+
+async function handleQuickActiveTripPhotoUpload(event) {
+    const files = Array.from(event.target.files);
+    if (files.length === 0) return;
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const activeTrip = userTrips.find(trip => {
+        const start = new Date(trip.startDate);
+        const end = new Date(trip.endDate);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        return today >= start && today <= end;
+    });
+    
+    if (!activeTrip) {
+        if (typeof showToast === 'function') showToast('No active trip found to add photos to!', 'warning');
+        return;
+    }
+    
+    if (typeof showToast === 'function') showToast('Processing trip photos...', 'info');
+    activeTrip.images = activeTrip.images || [];
+    
+    for (const file of files) {
+        if (!file.type.startsWith('image/')) continue;
+        try {
+            const dataUrl = await compressImageToDataUrl(file, 900, 0.75);
+            if (dataUrl) {
+                activeTrip.images.push(dataUrl);
+            }
+        } catch (err) {
+            console.error('Error adding quick photo:', err);
+        }
+    }
+    
+    try {
+        await db.collection('trips').doc(activeTrip.id).update({
+            images: activeTrip.images,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        if (typeof showToast === 'function') showToast('Trip photos added successfully!', 'success');
+        renderActiveTripHeroSlideshow(activeTrip);
+    } catch (e) {
+        console.error('Error saving updated photos:', e);
+        if (typeof showToast === 'function') showToast('Failed to save photos to Firestore', 'danger');
+    }
+}
+
 function createTripCard(trip) {
     const col = document.createElement('div');
     col.className = 'col-md-6 col-lg-4 mb-4';
@@ -1453,7 +1801,7 @@ function createTripCard(trip) {
                 </p>
                 ${trip.stops && trip.stops.length > 0 ? `
                 <p class="card-text small text-muted mb-2">
-                    <i class="fas fa-map-pin me-2 text-success"></i>Stops: ${trip.stops.join(', ')}
+                    <i class="fas fa-map-pin me-2 text-success"></i>Stops: ${trip.stops.map(s => typeof s === 'object' ? s.name : s).join(', ')}
                 </p>
                 ` : ''}
                 
@@ -1545,8 +1893,13 @@ function showCreateTripModal() {
         return;
     }
     
-    // Original create trip modal code...
-    document.getElementById('create-trip-form').reset();
+    window._pendingTripImages = [];
+    const previewContainer = document.getElementById('trip-image-previews');
+    if (previewContainer) previewContainer.innerHTML = '';
+    const imgInput = document.getElementById('trip-image-input');
+    if (imgInput) imgInput.value = '';
+    
+    document.getElementById('add-trip-form').reset();
     document.getElementById('transport-mode').value = 'car';
     document.getElementById('distance-calc-container').classList.remove('d-none');
     document.getElementById('distance-results').classList.add('d-none');
@@ -1568,6 +1921,12 @@ function showCreateTripModal() {
 }
 
 function showEditTripModal(trip) {
+    window._pendingEditTripImages = (trip.images && Array.isArray(trip.images)) ? [...trip.images] : [];
+    const editPreviewContainer = document.getElementById('edit-trip-image-previews');
+    if (editPreviewContainer) renderTripImagePreviews(editPreviewContainer, window._pendingEditTripImages, true);
+    const editImgInput = document.getElementById('edit-trip-image-input');
+    if (editImgInput) editImgInput.value = '';
+
     document.getElementById('edit-trip-id').value = trip.id;
     document.getElementById('edit-trip-name').value = trip.name;
     document.getElementById('edit-transport-mode').value = trip.transportMode || 'car';
@@ -1639,9 +1998,16 @@ async function calculateDistance() {
     }
     
     // Extract stops
-    const stops = Array.from(document.querySelectorAll('#trip-stops-container .trip-stop-input'))
-        .map(input => input.value.trim())
-        .filter(val => val.length > 0);
+    const stops = Array.from(document.querySelectorAll('#trip-stops-container .stop-input-row'))
+        .map(row => {
+            const input = row.querySelector('.trip-stop-input');
+            const select = row.querySelector('.trip-stop-type-select');
+            return {
+                name: input ? input.value.trim() : '',
+                type: select ? select.value : 'before'
+            };
+        })
+        .filter(stop => stop.name.length > 0);
     
     try {
         document.getElementById('distance-details').innerHTML = `
@@ -1678,9 +2044,16 @@ async function calculateEditDistance() {
     }
     
     // Extract stops
-    const stops = Array.from(document.querySelectorAll('#edit-trip-stops-container .trip-stop-input'))
-        .map(input => input.value.trim())
-        .filter(val => val.length > 0);
+    const stops = Array.from(document.querySelectorAll('#edit-trip-stops-container .stop-input-row'))
+        .map(row => {
+            const input = row.querySelector('.trip-stop-input');
+            const select = row.querySelector('.trip-stop-type-select');
+            return {
+                name: input ? input.value.trim() : '',
+                type: select ? select.value : 'before'
+            };
+        })
+        .filter(stop => stop.name.length > 0);
     
     try {
         document.getElementById('edit-distance-details').innerHTML = `
@@ -1751,9 +2124,16 @@ async function saveTrip() {
     }
     
     // Extract stops
-    const stops = Array.from(document.querySelectorAll('#trip-stops-container .trip-stop-input'))
-        .map(input => input.value.trim())
-        .filter(val => val.length > 0);
+    const stops = Array.from(document.querySelectorAll('#trip-stops-container .stop-input-row'))
+        .map(row => {
+            const input = row.querySelector('.trip-stop-input');
+            const select = row.querySelector('.trip-stop-type-select');
+            return {
+                name: input ? input.value.trim() : '',
+                type: select ? select.value : 'before'
+            };
+        })
+        .filter(stop => stop.name.length > 0);
     
     const code = generateTripCode();
     
@@ -1764,6 +2144,7 @@ async function saveTrip() {
         startLocation: startLocation.trim(),
         destination: destination.trim(),
         stops: stops,
+        images: window._pendingTripImages || [],
         startDate,
         endDate,
         budget,
@@ -1856,9 +2237,16 @@ async function updateTrip() {
     }
     
     // Extract stops
-    const stops = Array.from(document.querySelectorAll('#edit-trip-stops-container .trip-stop-input'))
-        .map(input => input.value.trim())
-        .filter(val => val.length > 0);
+    const stops = Array.from(document.querySelectorAll('#edit-trip-stops-container .stop-input-row'))
+        .map(row => {
+            const input = row.querySelector('.trip-stop-input');
+            const select = row.querySelector('.trip-stop-type-select');
+            return {
+                name: input ? input.value.trim() : '',
+                type: select ? select.value : 'before'
+            };
+        })
+        .filter(stop => stop.name.length > 0);
     
     try {
         document.getElementById('update-trip-btn').disabled = true;
@@ -1870,6 +2258,7 @@ async function updateTrip() {
             startLocation: startLocation.trim(),
             destination: destination.trim(),
             stops: stops,
+            images: window._pendingEditTripImages || [],
             startDate,
             endDate,
             budget,
@@ -2130,7 +2519,8 @@ function validateDates(startDate, endDate) {
 // Enhanced getMemberName function
 async function getMemberName(memberId) {
     try {
-        if (memberId === auth.currentUser.uid) return 'You';
+        if (!memberId || typeof memberId !== 'string' || !memberId.trim()) return 'Traveler';
+        if (auth.currentUser && memberId === auth.currentUser.uid) return 'You';
         
         const userDoc = await db.collection('users').doc(memberId).get();
         if (userDoc.exists) {
@@ -2151,11 +2541,12 @@ function showPublicDashboard() {
     hideLoadingOverlay();
     
     // Show public dashboard
-    document.getElementById('public-dashboard').classList.remove('d-none');
+    const pubDash = document.getElementById('public-dashboard');
+    if (pubDash) pubDash.classList.remove('d-none');
     
     // Hide private dashboard
     const privateDashboard = document.querySelector('.container.mt-4');
-    if (privateDashboard) {
+    if (privateDashboard && window.location.pathname.includes('dashboard.html')) {
         privateDashboard.classList.add('d-none');
     }
     
@@ -2260,8 +2651,9 @@ function updateNavigationBasedOnAuth(isLoggedIn) {
     
     if (isLoggedIn && currentUser) {
         // User is logged in
+        const avatarUrl = localStorage.getItem('user_avatar_' + currentUser.uid) || currentUser.photoURL;
         navAuthSection.innerHTML = `
-            <img id="user-avatar" class="user-avatar me-2" src="${getSafeAvatarUrl(currentUser.photoURL, currentUser.displayName || 'User')}" alt="User Avatar">
+            <img id="user-avatar" class="user-avatar me-2" src="${getSafeAvatarUrl(avatarUrl, currentUser.displayName || 'User')}" alt="User Avatar">
             <span class="me-3" id="user-name">${currentUser.displayName || 'User'}</span>
             <button class="btn btn-outline-primary btn-sm" id="logout-btn">
                 <i class="fas fa-sign-out-alt me-1"></i>Logout
@@ -2391,19 +2783,64 @@ function getToastIcon(type) {
 function addStopField(container, value = '') {
     if (!container) return;
     
+    let stopName = '';
+    let stopType = 'before';
+    
+    if (value && typeof value === 'object') {
+        stopName = value.name || '';
+        stopType = value.type || 'before';
+    } else {
+        stopName = value || '';
+    }
+    
     const div = document.createElement('div');
-    div.className = 'd-flex align-items-center gap-2 stop-input-row animate-fade-in';
+    div.className = 'd-flex align-items-center gap-2 stop-input-row animate-fade-in mb-2';
     
     const span = document.createElement('span');
-    span.className = 'text-muted small';
-    span.innerHTML = '<i class="fas fa-map-pin text-success"></i>';
+    span.className = 'text-muted small stop-pin-icon';
+    
+    const updatePinIcon = (type) => {
+        if (type === 'after') {
+            span.innerHTML = '<i class="fas fa-undo text-info" title="On Return Stop"></i>';
+        } else {
+            span.innerHTML = '<i class="fas fa-map-pin text-success" title="On the Way Stop"></i>';
+        }
+    };
+    updatePinIcon(stopType);
     
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'form-control form-control-sm trip-stop-input';
     input.placeholder = 'Stop name/city';
-    input.value = value;
+    input.value = stopName;
     input.required = true;
+    
+    const select = document.createElement('select');
+    select.className = 'form-select form-select-sm trip-stop-type-select';
+    select.style.width = '125px';
+    select.innerHTML = `
+        <option value="before" ${stopType === 'before' ? 'selected' : ''}>On the Way</option>
+        <option value="after" ${stopType === 'after' ? 'selected' : ''}>On Return</option>
+    `;
+    
+    const triggerRecalc = () => {
+        if (container.id === 'trip-stops-container') {
+            const chk = document.getElementById('calculate-distance');
+            if (chk && chk.checked) calculateDistance();
+        } else if (container.id === 'edit-trip-stops-container') {
+            const chk = document.getElementById('edit-calculate-distance');
+            if (chk && chk.checked) calculateEditDistance();
+        }
+    };
+    
+    select.addEventListener('change', () => {
+        updatePinIcon(select.value);
+        triggerRecalc();
+    });
+    
+    input.addEventListener('change', () => {
+        triggerRecalc();
+    });
     
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -2411,10 +2848,12 @@ function addStopField(container, value = '') {
     btn.innerHTML = '<i class="fas fa-trash-can"></i>';
     btn.addEventListener('click', () => {
         div.remove();
+        triggerRecalc();
     });
     
     div.appendChild(span);
     div.appendChild(input);
+    div.appendChild(select);
     div.appendChild(btn);
     
     container.appendChild(div);
@@ -2472,68 +2911,130 @@ async function loadOpenRouterKey() {
 }
 
 function buildTripContext() {
-    // Use the module-level userTrips array (window.userTrips is synced after load)
+    // 1. Determine target trip (check currentTrip first if on trip-details page, else userTrips/activeTrip)
     const trips = typeof userTrips !== 'undefined' && userTrips.length > 0 ? userTrips : (window.userTrips || []);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    // Helper: parse Firestore Timestamp or date string to Date object
     function parseDate(val) {
         if (!val) return null;
-        if (val.toDate) return val.toDate();       // Firestore Timestamp
-        if (val.seconds) return new Date(val.seconds * 1000); // Firestore Timestamp object
-        return new Date(val);                       // ISO string or Date
+        if (val.toDate) return val.toDate();
+        if (val.seconds) return new Date(val.seconds * 1000);
+        return new Date(val);
     }
     
-    const activeTrip = trips.find(trip => {
-        const start = parseDate(trip.startDate);
-        const end = parseDate(trip.endDate);
-        if (!start || !end) return false;
-        start.setHours(0, 0, 0, 0);
-        end.setHours(23, 59, 59, 999);
-        return today >= start && today <= end;
-    });
-    
-    if (!activeTrip) {
-        const upcoming = trips.filter(t => {
-            const s = parseDate(t.startDate);
-            return s && s > today;
+    let targetTrip = null;
+    if (typeof currentTrip !== 'undefined' && currentTrip) {
+        targetTrip = currentTrip;
+    } else {
+        targetTrip = trips.find(t => {
+            const start = parseDate(t.startDate);
+            const end = parseDate(t.endDate);
+            if (!start || !end) return false;
+            start.setHours(0, 0, 0, 0);
+            end.setHours(23, 59, 59, 999);
+            return today >= start && today <= end;
         });
-        if (upcoming.length > 0) {
-            const next = upcoming.sort((a,b) => parseDate(a.startDate) - parseDate(b.startDate))[0];
-            const sd = parseDate(next.startDate);
-            return `User has an upcoming trip named "${next.name}" from ${next.startLocation} to ${next.destination}` +
-                   (next.stops && next.stops.length > 0 ? ` with stops at: ${next.stops.join(', ')}` : '') +
-                   `. Transport: ${next.transportMode || 'car'}. Budget: ₹${next.budget || 'not set'}.` +
-                   ` Distance: ${next.route?.distance || next.distance || 'unknown'}.` +
-                   (sd ? ` Starting on: ${sd.toLocaleDateString()}.` : '');
+        if (!targetTrip && trips.length > 0) {
+            targetTrip = trips[0];
         }
-        return `User has no active trip today (${today.toLocaleDateString()}). They have ${trips.length} trip(s) in total.`;
     }
     
-    const totalKm = parseFloat(activeTrip.route?.distance || activeTrip.distance) || 0;
-    const currentKm = activeTrip.currentKm || 0;
-    const pct = totalKm > 0 ? ((currentKm / totalKm) * 100).toFixed(1) : 0;
-    const stopsInfo = activeTrip.stops && activeTrip.stops.length > 0
-        ? `Stops: ${activeTrip.stops.join(' → ')}.`
-        : 'No intermediate stops.';
-    const stopsDistInfo = activeTrip.route?.stopsDistances
-        ? `Cumulative km to each stop from start: ${activeTrip.route.stopsDistances.join(', ')}.`
-        : '';
-    const startD = parseDate(activeTrip.startDate);
-    const endD = parseDate(activeTrip.endDate);
+    if (!targetTrip) {
+        return `User currently has no trips created in TravelMate.`;
+    }
     
-    return `ACTIVE TRIP CONTEXT:
-- Name: ${activeTrip.name}
-- Route: ${activeTrip.startLocation} → ${activeTrip.destination}
-- ${stopsInfo}
-- ${stopsDistInfo}
-- Transport: ${activeTrip.transportMode || 'car'}
-- Total distance: ${totalKm} km${activeTrip.route?.aiEnhanced ? ' (AI-verified)' : ''}
-- Progress: ${currentKm} km traveled (${pct}% complete)
-- Budget: ₹${activeTrip.budget || 0}
-- Dates: ${startD ? startD.toLocaleDateString() : activeTrip.startDate} to ${endD ? endD.toLocaleDateString() : activeTrip.endDate}
-- Current location: ${activeTrip.currentLocationName || 'not yet tracked'}`;
+    const totalKm = parseFloat(targetTrip.route?.distance || targetTrip.distance) || 0;
+    const currentKm = targetTrip.currentKm || 0;
+    const pct = totalKm > 0 ? ((currentKm / totalKm) * 100).toFixed(1) : 0;
+    const stopsNames = (targetTrip.stops || []).map(st => typeof st === 'object' ? `${st.name} (${st.type === 'after' ? 'Return Leg' : 'Outbound Leg'})` : st);
+    const stopsInfo = stopsNames.length > 0 ? stopsNames.join(' → ') : 'Direct journey without stops';
+    
+    // Process Tickets and Pre-calculate Stay & Layover Breakdown
+    let ticketsSection = 'No tickets booked yet.';
+    let staySection = 'No stay breakdown calculated yet.';
+    
+    const tickets = targetTrip.tickets || [];
+    if (tickets.length > 0) {
+        const sortedTickets = [...tickets]
+            .filter(t => t.departureTime)
+            .sort((a, b) => new Date(a.departureTime) - new Date(b.departureTime));
+            
+        ticketsSection = sortedTickets.map((t, idx) => {
+            const depStr = `${t.departurePlace}${t.depCode ? ' (' + t.depCode + ')' : ''} at ${t.departureTime.replace('T', ' ')}`;
+            const arrStr = t.arrivalTime ? `${t.arrivalPlace}${t.arrCode ? ' (' + t.arrCode + ')' : ''} at ${t.arrivalTime.replace('T', ' ')}` : t.arrivalPlace;
+            return `  ${idx + 1}. [${t.type.toUpperCase()}] ${t.serviceNo || ''} ${t.serviceName || t.operator || ''} | PNR: ${t.ticketNo} | Departs: ${depStr} | Arrives: ${arrStr} | Seat: ${t.seatNo || 'N/A'} | Status: ${t.bookingStatus || 'CNF'} | Cost: ₹${t.cost || 0}`;
+        }).join('\n');
+        
+        // Layover and Exploring Stay calculations
+        const stayLegs = [];
+        let totalTransitMs = 0;
+        let totalStayMs = 0;
+        
+        for (let i = 0; i < sortedTickets.length; i++) {
+            const currentT = sortedTickets[i];
+            const depT = new Date(currentT.departureTime);
+            const arrT = currentT.arrivalTime ? new Date(currentT.arrivalTime) : depT;
+            totalTransitMs += Math.max(0, arrT - depT);
+            
+            if (i < sortedTickets.length - 1) {
+                const nextT = sortedTickets[i + 1];
+                const nextDepT = new Date(nextT.departureTime);
+                const stayMs = Math.max(0, nextDepT - arrT);
+                totalStayMs += stayMs;
+                
+                const totalMins = Math.floor(stayMs / (1000 * 60));
+                const days = Math.floor(totalMins / (60 * 24));
+                const hours = Math.floor((totalMins % (60 * 24)) / 60);
+                const mins = totalMins % 60;
+                
+                let durationText = '';
+                if (days > 0) durationText += `${days} Day${days > 1 ? 's' : ''}, `;
+                if (hours > 0) durationText += `${hours} Hour${hours > 1 ? 's' : ''}, `;
+                durationText += `${mins} Mins`;
+                
+                const loc = currentT.arrivalPlace || nextT.departurePlace;
+                const code = currentT.arrCode || nextT.depCode || '';
+                
+                stayLegs.push(`  * ${loc}${code ? ' (' + code + ')' : ''}: EXACT EXPLORING TIME = ${durationText} (${(stayMs / 3600000).toFixed(1)} hrs total). Arrives ${currentT.arrivalTime ? currentT.arrivalTime.replace('T', ' ') : 'N/A'} via ${currentT.serviceNo || currentT.operator} -> Next Departure ${nextT.departureTime.replace('T', ' ')} via ${nextT.serviceNo || nextT.operator}.`);
+            }
+        }
+        
+        if (stayLegs.length > 0) {
+            const totalMs = totalTransitMs + totalStayMs;
+            const stayPct = totalMs > 0 ? ((totalStayMs / totalMs) * 100).toFixed(0) : 0;
+            const transitPct = totalMs > 0 ? ((totalTransitMs / totalMs) * 100).toFixed(0) : 0;
+            staySection = `Overall Split: ${stayPct}% Exploring Stay (${(totalStayMs/3600000).toFixed(1)} hrs) vs ${transitPct}% Transit (${(totalTransitMs/3600000).toFixed(1)} hrs).\n` + stayLegs.join('\n');
+        } else {
+            staySection = `Only 1 ticket found or missing arrival timestamps to calculate layover gap.`;
+        }
+    }
+    
+    // Process Expenses Context
+    const expenses = targetTrip.expenses || [];
+    let expenseSum = 0;
+    expenses.forEach(e => expenseSum += (parseFloat(e.amount) || 0));
+    const budget = parseFloat(targetTrip.budget) || 0;
+    const balance = budget - expenseSum;
+    
+    const startD = parseDate(targetTrip.startDate);
+    const endD = parseDate(targetTrip.endDate);
+    
+    return `TARGET TRIP DATA & LIVE APP CONTEXT:
+- Trip Name: "${targetTrip.name}"
+- Primary Route: ${targetTrip.startLocation} → ${targetTrip.destination}
+- Sequential Itinerary Stops: ${stopsInfo}
+- Transport Mode: ${targetTrip.transportMode || 'car'}
+- Total Distance: ${totalKm} km (${currentKm} km completed, ${pct}% progress)
+- Dates: ${startD ? startD.toLocaleDateString() : targetTrip.startDate} to ${endD ? endD.toLocaleDateString() : targetTrip.endDate}
+- Current GPS/Location: ${targetTrip.currentLocationName || 'Not tracked'}
+- Budget: ₹${budget} | Total Expenses Logged: ₹${expenseSum} | Remaining Balance: ₹${balance}
+
+[BOOKED TICKETS DETAILS]:
+${ticketsSection}
+
+[CALCULATED EXPLORATION & STAY TIME BREAKDOWN BY LOCATION]:
+${staySection}`;
 }
 
 const GROQ_MODELS = [
@@ -2543,16 +3044,15 @@ const GROQ_MODELS = [
 ];
 
 function buildSystemPrompt(tripContext) {
-    return `You are TravelMate AI, the user's dedicated personal travel assistant.
-Your goal is to help the user manage their trips, optimize routes, calculate distances/mileage, explain budget breakdowns, plan itineraries, and suggest local sightseeing spots.
+    return `You are TravelMate AI, the user's dedicated personal travel assistant with FULL COMMAND and realtime context of their TravelMate application.
 
 ${tripContext}
 
-IMPORTANT GUIDELINES:
-1. ALWAYS understand the user's intent, even if they use simple, informal, or conversational language. Be highly helpful, polite, and welcoming.
-2. If the user asks a question, explain the answer in detail and in a very clear, step-by-step manner. Do not restrict yourself to extremely short answers; prioritize completeness, clarity, and precision so the user fully understands.
-3. If they ask you to do tasks (like adding stops, recording expenses, or finding sightseeing spots nearby), confirm what you are doing clearly, perform the action, and explain how the update is reflected in their dashboard.
-4. You are trained to act as the official TravelMate App Guide. You must be able to guide users on how to use every section of the app (My Trips list, Active Trip Tracker, Fuel & Mileage Calculator, Daily Itinerary, Expenses Logs, and Bills Splitting/Settlement summaries) in English, Hindi (हिन्दी), and Telugu (తెలుగు). If the user asks how to use a feature or section, explain it clearly in their chosen language.
+CRITICAL RESPONSE GUIDELINES:
+1. FULL COMMAND OVER APP DATA: You have direct access to the user's live trip context above (including their booked tickets, train/flight numbers, station codes, arrival/departure timestamps, pre-calculated exploration stay hours, expenses, and itinerary).
+2. DIRECT, PRECISE & ACCURATE ANSWERS: When the user asks about how much time they have to explore a place (e.g., "how much time do I have to explore Vijayawada based on tickets"), DO NOT give generic formulas, manual calculation steps, or general math guides! ALWAYS quote their exact arrival time, next departure time, train/flight numbers, and the EXACT calculated stay duration (e.g., "You have exactly 36 Hours and 35 Minutes to explore Vijayawada from July 27 at 05:25 to July 28 at 18:00")!
+3. HIGHLY HELPFUL & ACTIONABLE: After providing the exact stay duration, give personalized sightseeing suggestions tailored to fit inside that exact available exploring time.
+4. MULTILINGUAL & WELCOMING: Answer fluently in English, Hindi (हिन्दी), or Telugu (తెలుగు) based on user preference. Be warm, polite, and encouraging.
 
 If the user asks you to perform an action on their trip, you can trigger specific functions in the application by appending a command at the VERY END of your reply.
 Available commands:
@@ -2896,9 +3396,9 @@ function openAISuggestedPlacesTab(lat, lng) {
             <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
             <style>
                 :root {
-                    --primary-color: #2d6a4f;
-                    --secondary-color: #40916c;
-                    --bg-gradient: linear-gradient(135deg, #1b4332 0%, #2d6a4f 100%);
+                    --primary-color: #e65100;
+                    --secondary-color: #ff6f00;
+                    --bg-gradient: linear-gradient(135deg, #bf360c 0%, #e65100 100%);
                 }
                 body {
                     background-color: #f4f7f6;
@@ -3466,101 +3966,6 @@ function initAIChatbot() {
             }
         }
     });
-}
-
-async function checkDashboardVehicleAlerts() {
-    if (!currentUser) return;
-    try {
-        const userDoc = await db.collection('users').doc(currentUser.uid).get();
-        if (userDoc.exists && userDoc.data().vehicles) {
-            const savedVehicles = userDoc.data().vehicles;
-            const alertsContainer = document.getElementById('vehicle-alerts-container');
-            if (!alertsContainer) return;
-            
-            alertsContainer.innerHTML = '';
-            const alertsList = [];
-            
-            savedVehicles.forEach(vehicle => {
-                // FASTag low balance alert
-                let balance = vehicle.fastagBalance;
-                if ((balance === undefined || balance === null) && vehicle.fastagId) {
-                    balance = getStableMockBalance(vehicle.fastagId);
-                    vehicle.fastagBalance = balance;
-                }
-                if (balance !== undefined && balance !== null && balance < 250) {
-                    alertsList.push({
-                        type: 'warning',
-                        title: `Low FASTag Balance (${vehicle.name})`,
-                        desc: `FASTag balance is ₹${balance.toFixed(2)}. Please recharge soon.`,
-                        icon: 'fas fa-ticket'
-                    });
-                }
-                
-                // Expiry alerts
-                const docs = vehicle.documents || {};
-                const docLabels = {
-                    rc: 'Registration Certificate (RC)',
-                    dl: 'Driving License (DL)',
-                    puc: 'Pollution Certificate (PUC)',
-                    ins: 'Vehicle Insurance'
-                };
-                
-                Object.keys(docLabels).forEach(key => {
-                    const doc = docs[key];
-                    if (doc && doc.expiryDate) {
-                        const expiryDate = new Date(doc.expiryDate);
-                        expiryDate.setHours(0,0,0,0);
-                        const today = new Date();
-                        today.setHours(0,0,0,0);
-                        
-                        const diffTime = expiryDate - today;
-                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                        
-                        if (diffDays < 0) {
-                            alertsList.push({
-                                type: 'danger',
-                                title: `${docLabels[key]} Expired`,
-                                desc: `Document for vehicle ${vehicle.name} expired on ${doc.expiryDate}!`,
-                                icon: 'fas fa-exclamation-circle'
-                            });
-                        } else if (diffDays <= 30) {
-                            alertsList.push({
-                                type: 'warning',
-                                title: `${docLabels[key]} Expiring Soon`,
-                                desc: `Document for vehicle ${vehicle.name} expires in ${diffDays} days (${doc.expiryDate}).`,
-                                icon: 'fas fa-clock'
-                            });
-                        }
-                    }
-                });
-            });
-            
-            if (alertsList.length === 0) return;
-            
-            alertsList.forEach(alert => {
-                const banner = document.createElement('div');
-                banner.className = `vehicle-alert-banner ${alert.type === 'warning' ? 'warning' : ''}`;
-                banner.innerHTML = `
-                    <div class="d-flex align-items-center">
-                        <i class="${alert.icon} fs-5 me-3"></i>
-                        <div>
-                            <h6 class="mb-0 fw-bold">${alert.title}</h6>
-                            <small>${alert.desc}</small>
-                        </div>
-                    </div>
-                    <button type="button" class="btn-close ms-3" onclick="this.parentElement.remove()" style="font-size: 0.8rem;"></button>
-                `;
-                alertsContainer.appendChild(banner);
-                
-                // Trigger native push notification
-                if (Notification.permission === 'granted') {
-                    new Notification(alert.title, { body: alert.desc, icon: 'icon.png' });
-                }
-            });
-        }
-    } catch (e) {
-        console.warn('Could not load vehicle alerts:', e);
-    }
 }
 
 // Initialize chatbot when auth state confirms the user is logged in

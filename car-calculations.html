@@ -53,10 +53,6 @@
              data-guide-hi="कार और ईंधन कैलकुलेटर में आपका स्वागत है! यहाँ आप माइलेज, ईंधन की कीमतों और दूरी के आधार पर कुल यात्रा लागत की गणना कर सकते हैं। आप बचत देखने के लिए आंतरिक दहन इंजन (ICE) के खिलाफ इलेक्ट्रिक वाहनों (EV) की तुलना कर सकते हैं, और वास्तविक ओडोमीटर रीडिंग का ट्रैक रख सकते हैं।"
              data-guide-te="కార్ & ఇంధన కాలిక్యులేటర్‌కు స్వాగతం! ఇక్కడ మీరు వాహనం మైలేజ్, ఇంధన ధర మరియు ప్రయాణ దూరం ఆధారంగా మొత్తం ప్రయాణ ఖర్చును లెక్కించవచ్చు. పొదుపును చూడటానికి మీరు విద్యుత్ వాహనాలను (EV) సాధారణ ఇంధన వాహనాలతో (ICE) సరిపోల్చవచ్చు.">
         </div>
-        
-        <!-- Vehicle Alerts Container -->
-        <div id="vehicle-alerts-container" class="vehicle-alerts-container"></div>
-
         <div class="row">
             <div class="col-lg-8">
                 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -128,23 +124,6 @@
                         <h5 class="mb-0"><i class="fas fa-route me-2"></i>Trip Information</h5>
                     </div>
                     <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="calc-start-location" class="form-label">Start Location</label>
-                                <input type="text" class="form-control" id="calc-start-location" placeholder="e.g. Mumbai">
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="calc-dest-location" class="form-label">Destination Location</label>
-                                <input type="text" class="form-control" id="calc-dest-location" placeholder="e.g. Pune">
-                            </div>
-                        </div>
-                        <div class="row mb-3">
-                            <div class="col-md-12">
-                                <button class="btn btn-outline-success w-100" type="button" id="fetch-toll-btn">
-                                    <i class="fas fa-search-location me-1"></i>Calculate Route Tolls & Distance via FASTag
-                                </button>
-                            </div>
-                        </div>
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="trip-distance" class="form-label">Trip Distance (km)</label>
@@ -328,18 +307,6 @@
                     </div>
                 </div>
 
-                <!-- FASTag Toll & Route Calculator Card -->
-                <div class="card mb-4 border-primary shadow-sm" id="toll-calculator-card" style="display: none;">
-                    <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0"><i class="fas fa-ticket me-2"></i>FASTag Toll & Route Estimator</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="toll-calculator-content">
-                            <!-- Dynamic toll calculation details -->
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Comparative Analysis Card -->
                 <div class="card mb-4 border-primary shadow-sm" id="comparison-card" style="display: none;">
                     <div class="card-header bg-primary text-white">
@@ -433,184 +400,7 @@
         </div>
     </div>
 
-        <!-- Vehicle Details & Document Vault Modal -->
-    <div class="modal fade" id="vehicleManagerModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title"><i class="fas fa-folder-open text-primary me-2"></i>Vehicle Details & Documents</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-0">
-                    <!-- Tab Navigation -->
-                    <ul class="nav nav-tabs px-3 pt-2 bg-light" id="vehicle-manager-tabs">
-                        <li class="nav-item">
-                            <a class="nav-link active" id="vehicle-info-tab" data-bs-toggle="tab" href="#vehicle-general-tab">
-                                <i class="fas fa-info-circle me-1 text-primary"></i>General & FASTag
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" id="vehicle-docs-tab" data-bs-toggle="tab" href="#vehicle-documents-tab">
-                                <i class="fas fa-file-contract me-1 text-success"></i>Document Vault
-                            </a>
-                        </li>
-                    </ul>
-                    
-                    <div class="tab-content p-4">
-                        <!-- General Info & FASTag Tab -->
-                        <div class="tab-pane fade show active" id="vehicle-general-tab">
-                            <input type="hidden" id="manage-vehicle-index">
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label fw-bold">Vehicle Name/Model</label>
-                                    <input type="text" class="form-control" id="manage-vehicle-name" readonly>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label fw-bold">License Plate / Vehicle Number</label>
-                                    <input type="text" class="form-control" id="manage-plate-number" placeholder="e.g. MH-12-AB-1234">
-                                </div>
-                            </div>
-                            
-                            <hr class="my-4">
-                            
-                            <!-- FASTag section -->
-                            <div class="card border-primary bg-primary bg-opacity-5">
-                                <div class="card-body">
-                                    <h5 class="card-title text-primary fw-bold d-flex align-items-center mb-3">
-                                        <i class="fas fa-ticket me-2"></i>FASTag Wallet Tracker
-                                    </h5>
-                                    <div class="row align-items-center">
-                                        <div class="col-md-6 mb-3 mb-md-0">
-                                            <label class="form-label fw-semibold">FASTag ID / Tag Number</label>
-                                            <input type="text" class="form-control" id="manage-fastag-id" placeholder="e.g. FT-9876543210">
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="p-3 bg-white border rounded d-flex justify-content-between align-items-center">
-                                                <div>
-                                                    <small class="text-muted d-block">Available FASTag Balance</small>
-                                                    <span class="fs-4 fw-bold text-dark" id="manage-fastag-balance">₹0.00</span>
-                                                </div>
-                                                <button class="btn btn-outline-primary btn-sm" id="refresh-fastag-btn">
-                                                    <i class="fas fa-sync-alt me-1"></i>Refresh
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="alert alert-danger mt-3 mb-0 py-2 px-3 align-items-center" id="fastag-low-balance-alert" style="display: none;">
-                                        <i class="fas fa-exclamation-triangle me-2 animate-pulse-slow"></i>
-                                        <span><strong>Low Balance Warning!</strong> Please top up your FASTag account to avoid toll delay.</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Document Vault Tab -->
-                        <div class="tab-pane fade" id="vehicle-documents-tab">
-                            <div class="row">
-                                <!-- RC -->
-                                <div class="col-md-6 mb-4">
-                                    <div class="p-3 border rounded bg-light bg-opacity-50">
-                                        <div class="d-flex justify-content-between align-items-center mb-2">
-                                            <h6 class="fw-bold mb-0 text-success"><i class="fas fa-id-card me-2"></i>Registration Certificate (RC)</h6>
-                                            <span class="badge bg-secondary" id="rc-status-badge">N/A</span>
-                                        </div>
-                                        <div class="mb-2">
-                                            <label class="small text-muted mb-1">Doc Number</label>
-                                            <input type="text" class="form-control form-control-sm" id="doc-rc-number" placeholder="RC Number">
-                                        </div>
-                                        <div class="mb-2">
-                                            <label class="small text-muted mb-1">Expiry Date</label>
-                                            <input type="date" class="form-control form-control-sm" id="doc-rc-expiry">
-                                        </div>
-                                        <div>
-                                            <label class="small text-muted mb-1">File Attachment (Simulated)</label>
-                                            <input type="file" class="form-control form-control-sm" id="doc-rc-file">
-                                            <small class="text-muted d-block mt-1" id="doc-rc-file-name"></small>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- License -->
-                                <div class="col-md-6 mb-4">
-                                    <div class="p-3 border rounded bg-light bg-opacity-50">
-                                        <div class="d-flex justify-content-between align-items-center mb-2">
-                                            <h6 class="fw-bold mb-0 text-success"><i class="fas fa-id-badge me-2"></i>Driving License (DL)</h6>
-                                            <span class="badge bg-secondary" id="dl-status-badge">N/A</span>
-                                        </div>
-                                        <div class="mb-2">
-                                            <label class="small text-muted mb-1">Doc Number</label>
-                                            <input type="text" class="form-control form-control-sm" id="doc-dl-number" placeholder="DL Number">
-                                        </div>
-                                        <div class="mb-2">
-                                            <label class="small text-muted mb-1">Expiry Date</label>
-                                            <input type="date" class="form-control form-control-sm" id="doc-dl-expiry">
-                                        </div>
-                                        <div>
-                                            <label class="small text-muted mb-1">File Attachment (Simulated)</label>
-                                            <input type="file" class="form-control form-control-sm" id="doc-dl-file">
-                                            <small class="text-muted d-block mt-1" id="doc-dl-file-name"></small>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- PUC -->
-                                <div class="col-md-6 mb-4 mb-md-0">
-                                    <div class="p-3 border rounded bg-light bg-opacity-50">
-                                        <div class="d-flex justify-content-between align-items-center mb-2">
-                                            <h6 class="fw-bold mb-0 text-success"><i class="fas fa-leaf me-2"></i>Pollution Certificate (PUC)</h6>
-                                            <span class="badge bg-secondary" id="puc-status-badge">N/A</span>
-                                        </div>
-                                        <div class="mb-2">
-                                            <label class="small text-muted mb-1">Doc Number</label>
-                                            <input type="text" class="form-control form-control-sm" id="doc-puc-number" placeholder="PUC Number">
-                                        </div>
-                                        <div class="mb-2">
-                                            <label class="small text-muted mb-1">Expiry Date</label>
-                                            <input type="date" class="form-control form-control-sm" id="doc-puc-expiry">
-                                        </div>
-                                        <div>
-                                            <label class="small text-muted mb-1">File Attachment (Simulated)</label>
-                                            <input type="file" class="form-control form-control-sm" id="doc-puc-file">
-                                            <small class="text-muted d-block mt-1" id="doc-puc-file-name"></small>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Insurance -->
-                                <div class="col-md-6">
-                                    <div class="p-3 border rounded bg-light bg-opacity-50">
-                                        <div class="d-flex justify-content-between align-items-center mb-2">
-                                            <h6 class="fw-bold mb-0 text-success"><i class="fas fa-shield-halved me-2"></i>Vehicle Insurance Policy</h6>
-                                            <span class="badge bg-secondary" id="ins-status-badge">N/A</span>
-                                        </div>
-                                        <div class="mb-2">
-                                            <label class="small text-muted mb-1">Policy Number</label>
-                                            <input type="text" class="form-control form-control-sm" id="doc-ins-number" placeholder="Policy Number">
-                                        </div>
-                                        <div class="mb-2">
-                                            <label class="small text-muted mb-1">Expiry Date</label>
-                                            <input type="date" class="form-control form-control-sm" id="doc-ins-expiry">
-                                        </div>
-                                        <div>
-                                            <label class="small text-muted mb-1">File Attachment (Simulated)</label>
-                                            <input type="file" class="form-control form-control-sm" id="doc-ins-file">
-                                            <small class="text-muted d-block mt-1" id="doc-ins-file-name"></small>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" id="save-vehicle-docs-btn"><i class="fas fa-save me-1"></i>Save All Changes</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Footer -->
+        <!-- Footer -->
     <footer class="footer mt-5 py-4">
         <div class="container">
             <div class="row">

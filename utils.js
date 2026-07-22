@@ -8,6 +8,35 @@ function formatDate(dateString) {
     return new Date(dateString).toLocaleDateString(undefined, options);
 }
 
+function compressImageToDataUrl(file, maxWidth = 900, quality = 0.75) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                
+                if (width > maxWidth) {
+                    height = Math.round((height * maxWidth) / width);
+                    width = maxWidth;
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                resolve(canvas.toDataURL('image/jpeg', quality));
+            };
+            img.onerror = () => resolve('');
+            img.src = e.target.result;
+        };
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(file);
+    });
+}
+
 function formatDuration(seconds) {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -249,24 +278,21 @@ async function calculateRealDistance(startLocation, destination, stops = []) {
     try {
         console.log('Calculating route with stops:', startLocation, '→', stops, '→', destination);
         
-        // Geocode start, stops, and destination
-        const startCoords = await geocodeLocation(startLocation);
-        const destCoords = await geocodeLocation(destination);
+        const placeSequence = resolveRouteMetadata(startLocation, destination, stops);
         
-        const coordsList = [startCoords];
-        
-        for (const stop of stops) {
-            if (stop && stop.trim().length > 2) {
-                try {
-                    const stopCoords = await geocodeLocation(stop);
-                    coordsList.push(stopCoords);
-                } catch (e) {
-                    console.warn(`Could not geocode waypoint: ${stop}`, e);
-                }
+        // Geocode all places in order
+        const coordsList = [];
+        for (const place of placeSequence) {
+            try {
+                const coords = await geocodeLocation(place.name);
+                coordsList.push(coords);
+            } catch (e) {
+                console.warn(`Could not geocode place: ${place.name}`, e);
+                // Fallback to previous coords or placeholder to avoid breaking the sequence
+                const last = coordsList.length > 0 ? coordsList[coordsList.length - 1] : [78.37, 17.45];
+                coordsList.push([last[0] + 0.05, last[1] + 0.05]);
             }
         }
-        
-        coordsList.push(destCoords);
         
         console.log('Coordinates list for route:', coordsList);
         
@@ -294,45 +320,42 @@ async function calculateRealDistance(startLocation, destination, stops = []) {
             const distance = (route.summary.distance / 1000).toFixed(1);
             const duration = formatDuration(route.summary.duration);
             
-            // Calculate stops segment distances
-            let startCoords = [78.37, 17.45];
-            let destCoords = [78.48, 17.38];
-            try { startCoords = await geocodeLocation(startLocation); } catch(e){}
-            try { destCoords = await geocodeLocation(destination); } catch(e){}
-            
-            const stopsDistances = [];
-            let accumDistance = 0;
-            let prevLat = startCoords[1];
-            let prevLon = startCoords[0];
-            
-            for (const stop of stops) {
-                try {
-                    const stopCoords = await geocodeLocation(stop);
-                    const d = calculateHaversineDistance(prevLat, prevLon, stopCoords[1], stopCoords[0]);
-                    accumDistance += d;
-                    stopsDistances.push(parseFloat(accumDistance.toFixed(1)));
-                    prevLat = stopCoords[1];
-                    prevLon = stopCoords[0];
-                } catch (e) {
-                    accumDistance += 100;
-                    stopsDistances.push(parseFloat(accumDistance.toFixed(1)));
-                }
+            // Calculate stops segment distances using Haversine to interpolate/scale
+            const legDistances = [];
+            for (let i = 0; i < coordsList.length - 1; i++) {
+                const legDist = calculateHaversineDistance(
+                    coordsList[i][1], coordsList[i][0],
+                    coordsList[i+1][1], coordsList[i+1][0]
+                );
+                legDistances.push(legDist);
             }
             
-            const finalLeg = calculateHaversineDistance(prevLat, prevLon, destCoords[1], destCoords[0]);
-            accumDistance += finalLeg;
-            const pathTotalHaversine = accumDistance || 1;
-            
+            const pathTotalHaversine = legDistances.reduce((a, b) => a + b, 0) || 1;
             const realTotalKm = parseFloat(distance) || 0;
-            const scaledStopsDistances = stopsDistances.map(d => {
-                const ratio = d / pathTotalHaversine;
-                return parseFloat((realTotalKm * ratio).toFixed(1));
-            });
+            
+            const scaledStopsDistances = new Array(stops.length).fill(0);
+            let destinationKm = realTotalKm;
+            
+            let currentHaversineAccum = 0;
+            for (let i = 0; i < legDistances.length; i++) {
+                currentHaversineAccum += legDistances[i];
+                const destPlace = placeSequence[i + 1];
+                
+                if (destPlace.role === 'destination') {
+                    const ratio = currentHaversineAccum / pathTotalHaversine;
+                    destinationKm = parseFloat((realTotalKm * ratio).toFixed(1));
+                } else if (destPlace.role === 'stop') {
+                    const ratio = currentHaversineAccum / pathTotalHaversine;
+                    const scaledKm = parseFloat((realTotalKm * ratio).toFixed(1));
+                    scaledStopsDistances[destPlace.originalIndex] = scaledKm;
+                }
+            }
             
             return {
                 distance: `${distance} km`,
                 duration: duration,
-                stopsDistances: scaledStopsDistances
+                stopsDistances: scaledStopsDistances,
+                destinationKm: destinationKm
             };
         } else {
             throw new Error('No route found');
@@ -346,24 +369,19 @@ async function calculateRealDistance(startLocation, destination, stops = []) {
 }
 
 async function calculateSimulatedMultiStopRoute(start, destination, stops = []) {
-    const allPlaces = [start, ...stops, destination];
+    const placeSequence = resolveRouteMetadata(start, destination, stops);
+    const allPlaces = placeSequence.map(p => p.name);
     
-    let startCoords = [78.37, 17.45];
-    let destCoords = [78.48, 17.38];
-    try { startCoords = await geocodeLocation(start); } catch(e){}
-    try { destCoords = await geocodeLocation(destination); } catch(e){}
-    
-    const coordsList = [startCoords];
-    for (const stop of stops) {
+    const coordsList = [];
+    for (const place of placeSequence) {
         try {
-            const c = await geocodeLocation(stop);
-            coordsList.push(c);
+            const coords = await geocodeLocation(place.name);
+            coordsList.push(coords);
         } catch(e) {
-            const last = coordsList[coordsList.length - 1];
-            coordsList.push([last[0] + 0.5, last[1] + 0.5]);
+            const last = coordsList.length > 0 ? coordsList[coordsList.length - 1] : [78.37, 17.45];
+            coordsList.push([last[0] + 0.05, last[1] + 0.05]);
         }
     }
-    coordsList.push(destCoords);
     
     // Try AI distances first
     let aiLegDistances = null;
@@ -374,7 +392,7 @@ async function calculateSimulatedMultiStopRoute(start, destination, stops = []) 
     const legDistances = [];  // km per leg
     for (let i = 0; i < coordsList.length - 1; i++) {
         let legKm;
-        if (aiLegDistances) {
+        if (aiLegDistances && aiLegDistances[i] !== undefined) {
             legKm = aiLegDistances[i];
         } else {
             legKm = calculateHaversineDistance(
@@ -388,12 +406,18 @@ async function calculateSimulatedMultiStopRoute(start, destination, stops = []) 
     
     const totalDistance = legDistances.reduce((a, b) => a + b, 0);
     
-    // Build cumulative stops distances (not including the final destination leg)
-    const simulatedStopsDistances = [];
+    // Build cumulative stops distances
+    const simulatedStopsDistances = new Array(stops.length).fill(0);
+    let destinationKm = totalDistance;
     let accum = 0;
-    for (let i = 0; i < stops.length; i++) {
+    for (let i = 0; i < legDistances.length; i++) {
         accum += legDistances[i];
-        simulatedStopsDistances.push(parseFloat(accum.toFixed(1)));
+        const destPlace = placeSequence[i + 1];
+        if (destPlace.role === 'destination') {
+            destinationKm = parseFloat(accum.toFixed(1));
+        } else if (destPlace.role === 'stop') {
+            simulatedStopsDistances[destPlace.originalIndex] = parseFloat(accum.toFixed(1));
+        }
     }
     
     const totalMinutes = Math.round((totalDistance / 70) * 60);
@@ -406,7 +430,8 @@ async function calculateSimulatedMultiStopRoute(start, destination, stops = []) 
         duration: duration,
         simulated: !aiLegDistances,
         aiEnhanced: !!aiLegDistances,
-        stopsDistances: simulatedStopsDistances
+        stopsDistances: simulatedStopsDistances,
+        destinationKm: destinationKm
     };
 }
 
@@ -967,7 +992,9 @@ function getNextStopStatus(trip, currentKm, totalDistance) {
     if (currentKm === undefined || currentKm === null) {
         currentKm = 0;
     }
-    if (!trip.stops || trip.stops.length === 0) {
+    
+    const segments = getRouteSegments(trip, totalDistance);
+    if (segments.length === 0) {
         if (totalDistance > 0) {
             const remaining = totalDistance - currentKm;
             if (remaining <= 0) return 'Arrived at Destination!';
@@ -976,32 +1003,20 @@ function getNextStopStatus(trip, currentKm, totalDistance) {
         return '';
     }
     
-    // Determine next stop
-    if (trip.route?.stopsDistances && trip.route.stopsDistances.length === trip.stops.length) {
-        for (let i = 0; i < trip.stops.length; i++) {
-            const stopDist = trip.route.stopsDistances[i];
-            if (currentKm < stopDist) {
-                const remaining = stopDist - currentKm;
-                return `Next: ${trip.stops[i]} in ${remaining.toFixed(0)} km`;
-            }
-        }
-    } else {
-        // Fallback if stopsDistances is missing (space evenly)
-        const stopsCount = trip.stops.length;
-        for (let i = 0; i < stopsCount; i++) {
-            const pct = ((i + 1) / (stopsCount + 1)) * 100;
-            const stopDist = totalDistance * (pct / 100);
-            if (currentKm < stopDist) {
-                const remaining = stopDist - currentKm;
-                return `Next: ${trip.stops[i]} in ${remaining.toFixed(0)} km`;
+    for (const seg of segments) {
+        if (currentKm < seg.to) {
+            const remaining = seg.to - currentKm;
+            if (seg.role === 'destination') {
+                return `Next: ${seg.name} (Destination) in ${remaining.toFixed(0)} km`;
+            } else if (seg.role === 'start') {
+                return `Next: ${seg.name} (Return Home) in ${remaining.toFixed(0)} km`;
+            } else {
+                return `Next: ${seg.name} in ${remaining.toFixed(0)} km`;
             }
         }
     }
     
-    // If all stops are crossed
-    const remainingToDest = totalDistance - currentKm;
-    if (remainingToDest <= 0) return 'Arrived at Destination!';
-    return `Next: Destination in ${remainingToDest.toFixed(0)} km`;
+    return 'Arrived!';
 }
 
 async function calculateAndSaveStopsDistances(trip) {
@@ -1009,7 +1024,8 @@ async function calculateAndSaveStopsDistances(trip) {
     try {
         console.log('Calculating stopsDistances for trip:', trip.id);
         
-        const allPlaces = [trip.startLocation, ...trip.stops, trip.destination];
+        const placeSequence = resolveRouteMetadata(trip.startLocation, trip.destination, trip.stops);
+        const allPlaces = placeSequence.map(p => p.name);
         
         // 1. Try AI distances first (most accurate)
         let aiLegDistances = null;
@@ -1024,11 +1040,17 @@ async function calculateAndSaveStopsDistances(trip) {
         if (aiLegDistances) {
             // Build route data directly from AI leg distances
             const totalDistance = aiLegDistances.reduce((a, b) => a + b, 0);
-            const stopsDistances = [];
+            const stopsDistances = new Array(trip.stops.length).fill(0);
+            let destinationKm = totalDistance;
             let accum = 0;
-            for (let i = 0; i < trip.stops.length; i++) {
+            for (let i = 0; i < aiLegDistances.length; i++) {
                 accum += aiLegDistances[i];
-                stopsDistances.push(parseFloat(accum.toFixed(1)));
+                const destPlace = placeSequence[i + 1];
+                if (destPlace.role === 'destination') {
+                    destinationKm = parseFloat(accum.toFixed(1));
+                } else if (destPlace.role === 'stop') {
+                    stopsDistances[destPlace.originalIndex] = parseFloat(accum.toFixed(1));
+                }
             }
             const totalMinutes = Math.round((totalDistance / 70) * 60);
             const h = Math.floor(totalMinutes / 60);
@@ -1037,6 +1059,7 @@ async function calculateAndSaveStopsDistances(trip) {
                 distance: `${totalDistance.toFixed(1)} km`,
                 duration: h > 0 ? `${h} hours ${m} mins` : `${m} mins`,
                 stopsDistances,
+                destinationKm,
                 aiEnhanced: true,
                 simulated: false
             };
@@ -1061,10 +1084,20 @@ async function calculateAndSaveStopsDistances(trip) {
             return parseFloat((targetDistance * ratio).toFixed(1));
         });
         
+        // Scale destinationKm if not AI enhanced
+        let scaledDestinationKm = routeData.destinationKm;
+        if (!isAiEnhanced && routeData.destinationKm !== undefined) {
+            const ratio = routeData.destinationKm / calculatedTotal;
+            scaledDestinationKm = parseFloat((targetDistance * ratio).toFixed(1));
+        } else if (scaledDestinationKm === undefined) {
+            scaledDestinationKm = targetDistance;
+        }
+        
         const routeObj = {
             distance: targetDistance > 0 ? `${targetDistance.toFixed(1)} km` : routeData.distance,
             duration: routeData.duration,
             stopsDistances: scaledStopsDistances,
+            destinationKm: scaledDestinationKm,
             simulated: !!routeData.simulated && !isAiEnhanced,
             aiEnhanced: isAiEnhanced,
             calculatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -1255,19 +1288,18 @@ function decodePolyline(str, precision) {
 
 async function fetchRouteGeometryCoords(startLocation, destination, stops = []) {
     try {
-        const startCoords = await geocodeLocation(startLocation);
-        const destCoords = await geocodeLocation(destination);
-        const coordsList = [startCoords];
-        
-        for (const stop of stops) {
-            if (stop && stop.trim().length > 2) {
-                try {
-                    const stopCoords = await geocodeLocation(stop);
-                    coordsList.push(stopCoords);
-                } catch (e) {}
+        const placeSequence = resolveRouteMetadata(startLocation, destination, stops);
+        const coordsList = [];
+        for (const place of placeSequence) {
+            try {
+                const coords = await geocodeLocation(place.name);
+                coordsList.push(coords);
+            } catch (e) {
+                console.warn(`Could not geocode place for routing geometry: ${place.name}`, e);
+                const last = coordsList.length > 0 ? coordsList[coordsList.length - 1] : [78.37, 17.45];
+                coordsList.push([last[0] + 0.05, last[1] + 0.05]);
             }
         }
-        coordsList.push(destCoords);
         
         const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
             method: 'POST',
@@ -1293,14 +1325,95 @@ async function fetchRouteGeometryCoords(startLocation, destination, stops = []) 
     return null;
 }
 
-function getStableMockBalance(tagId) {
-    if (!tagId) return 0;
-    let hash = 0;
-    for (let i = 0; i < tagId.length; i++) {
-        hash = tagId.charCodeAt(i) + ((hash << 5) - hash);
+function resolveRouteMetadata(start, destination, stops = []) {
+    const outboundStops = [];
+    const returnStops = [];
+    
+    stops.forEach((stop, index) => {
+        if (!stop) return;
+        const name = typeof stop === 'object' ? (stop.name || '') : stop;
+        const type = typeof stop === 'object' ? (stop.type || 'before') : 'before';
+        
+        if (name.trim().length > 2) {
+            const stopObj = { name: name.trim(), originalIndex: index, type };
+            if (type === 'after') {
+                returnStops.push(stopObj);
+            } else {
+                outboundStops.push(stopObj);
+            }
+        }
+    });
+    
+    const placeSequence = [];
+    placeSequence.push({ name: start, role: 'start' });
+    
+    outboundStops.forEach(s => {
+        placeSequence.push({ name: s.name, role: 'stop', originalIndex: s.originalIndex, type: 'before' });
+    });
+    
+    placeSequence.push({ name: destination, role: 'destination' });
+    
+    if (returnStops.length > 0) {
+        returnStops.forEach(s => {
+            placeSequence.push({ name: s.name, role: 'stop', originalIndex: s.originalIndex, type: 'after' });
+        });
+        placeSequence.push({ name: start, role: 'return-start' });
     }
-    // Generate a balance between 50 and 1500
-    const balance = 50 + (Math.abs(hash) % 1450);
-    return Math.round(balance * 100) / 100;
+    
+    return placeSequence;
 }
+
+function getRouteSegments(trip, totalDistance) {
+    if (!trip) return [];
+    const stopsDistances = trip.route?.stopsDistances || [];
+    const destinationKm = trip.route?.destinationKm || totalDistance;
+    
+    const outboundStops = [];
+    const returnStops = [];
+    if (trip.stops && Array.isArray(trip.stops)) {
+        trip.stops.forEach((stop, index) => {
+            const name = typeof stop === 'object' ? stop.name : stop;
+            const type = typeof stop === 'object' ? stop.type : 'before';
+            if (name && name.trim().length > 2) {
+                const stopObj = { 
+                    name: name.trim(), 
+                    originalIndex: index, 
+                    type, 
+                    km: stopsDistances[index] || 0 
+                };
+                if (type === 'after') {
+                    returnStops.push(stopObj);
+                } else {
+                    outboundStops.push(stopObj);
+                }
+            }
+        });
+    }
+    
+    outboundStops.sort((a, b) => a.km - b.km);
+    returnStops.sort((a, b) => a.km - b.km);
+    
+    const segments = [];
+    let lastKm = 0;
+    
+    outboundStops.forEach(s => {
+        segments.push({ from: lastKm, to: s.km, name: s.name, role: 'stop', type: 'before' });
+        lastKm = s.km;
+    });
+    
+    segments.push({ from: lastKm, to: destinationKm, name: trip.destination, role: 'destination' });
+    lastKm = destinationKm;
+    
+    returnStops.forEach(s => {
+        segments.push({ from: lastKm, to: s.km, name: s.name, role: 'stop', type: 'after' });
+        lastKm = s.km;
+    });
+    
+    if (returnStops.length > 0) {
+        segments.push({ from: lastKm, to: totalDistance, name: trip.startLocation, role: 'start' });
+    }
+    
+    return segments;
+}
+
 

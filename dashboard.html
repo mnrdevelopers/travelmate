@@ -262,8 +262,8 @@
                     <div class="text-center mb-4">
                         <img id="profile-avatar" class="user-avatar mb-3" style="width: 100px; height: 100px;" src="" alt="Profile">
                         <input type="file" id="avatar-upload" class="d-none" accept="image/*">
-                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="document.getElementById('avatar-upload').click()">
-                            <i class="fas fa-camera me-1"></i>Change Photo
+                        <button type="button" class="btn btn-outline-primary btn-sm rounded-pill px-3" onclick="document.getElementById('avatar-upload').click()">
+                            <i class="fas fa-camera me-1"></i>Upload Photo (ImageKit)
                         </button>
                     </div>
                     <div class="mb-3">
@@ -311,24 +311,6 @@
                             Used as an instant fallback when OpenRouter rate limits are exceeded.
                         </small>
                     </div>
-                    <hr class="my-3">
-                    <h6 class="fw-bold text-primary mb-3"><i class="fas fa-ticket me-2"></i>Live FASTag Integration Settings</h6>
-                    <div class="mb-3">
-                        <label for="profile-fastag-api-url" class="form-label">FASTag API Endpoint URL</label>
-                        <input type="text" class="form-control" id="profile-fastag-api-url" placeholder="https://api.surepass.io/api/v1/fastag/balance">
-                        <small class="text-muted">Enter your third-party provider balance inquiry endpoint (Setu, Surepass, RapidAPI, etc.)</small>
-                    </div>
-                    <div class="mb-3">
-                        <label for="profile-fastag-api-key" class="form-label">FASTag API Authorization Key/Token</label>
-                        <input type="password" class="form-control" id="profile-fastag-api-key" placeholder="Bearer or API Key token">
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label fw-bold text-success"><i class="fas fa-route me-1"></i>RapidAPI Toll Calculator</label>
-                        <input type="password" class="form-control" id="profile-toll-api-key" placeholder="x-rapidapi-key for Tollguru">
-                        <small class="text-muted">Get a key at <a href="https://rapidapi.com/tollguru/api/tollguru" target="_blank">rapidapi.com/tollguru</a> to fetch live route tolls.</small>
-                    </div>
-                    
                     <div class="mb-3">
                         <label class="form-label">Password</label>
                         <button type="button" class="btn btn-outline-secondary w-100" id="change-password-btn">
@@ -353,8 +335,6 @@
 
 <!-- Dashboard Content -->
 <div class="container mt-4">
-    <!-- Vehicle Alerts Container -->
-    <div id="vehicle-alerts-container" class="vehicle-alerts-container"></div>
     <!-- Hero Section with Slideshow -->
     <div id="dashboardHeroCarousel" class="carousel slide mb-4 shadow-sm overflow-hidden" data-bs-ride="carousel" style="border-radius: var(--border-radius-md);">
         <div class="carousel-indicators">
@@ -447,6 +427,62 @@
          data-guide-te="నా ప్రయాణాల విభాగానికి స్వాగతం! ఇక్కడ మీరు మీ ప్రయాణాలను వీక్షించవచ్చు, సవరించవచ్చు లేదా తొలగించవచ్చు. మార్గం, బడ్జెట్ మరియు స్టాప్‌లను ప్లాన్ చేయడానికి 'New Trip' ఉపయోగించండి. స్నేహితులతో ప్లానింగ్ పంచుకోవడానికి కోడ్‌తో 'Join Trip'ని ఉపయోగించండి. ప్రయాణంపై క్లిక్ చేయడం ద్వారా దాని వివరాలు, రూట్ మ్యాప్స్, యాక్టివిటీస్ మరియు బడ్జెట్ విభజనలు ఓపెన్ అవుతాయి.">
     </div>
     
+    <!-- Active Trip Hero Slideshow Banner -->
+    <div class="card mb-4 border-0 shadow-lg overflow-hidden position-relative rounded-4" id="dashboard-active-trip-slideshow" style="display: none; min-height: 280px; background: #0f172a; color: white;">
+        <!-- Background Slideshow Images Container -->
+        <div id="active-trip-slideshow-wrapper" class="position-absolute top-0 start-0 w-100 h-100" style="z-index: 1;">
+            <!-- Slides injected dynamically -->
+        </div>
+        
+        <!-- Gradient Dark Backdrop Overlay -->
+        <div class="position-absolute top-0 start-0 w-100 h-100" style="z-index: 2; background: linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(15,23,42,0.88) 100%);"></div>
+        
+        <!-- Content Overlay -->
+        <div class="card-body p-4 position-relative d-flex flex-column justify-content-between h-100" style="z-index: 3; min-height: 280px;">
+            <!-- Top Badges & Actions -->
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <span class="badge bg-success bg-gradient px-3 py-2 rounded-pill shadow-sm" style="font-size: 0.8rem; font-weight: 600;">
+                    <i class="fas fa-play me-1 animate-pulse-slow"></i> ACTIVE JOURNEY VIBES
+                </span>
+                <div class="d-flex align-items-center gap-2">
+                    <span id="slideshow-image-count" class="badge bg-white bg-opacity-20 text-white px-2.5 py-1.5" style="font-size: 0.75rem; backdrop-filter: blur(8px);">
+                        <i class="fas fa-images me-1"></i> 0 Photos
+                    </span>
+                    <button type="button" class="btn btn-sm btn-light bg-opacity-20 text-white border-0 rounded-pill px-3 py-1" id="add-slideshow-photo-btn" style="font-size: 0.75rem; backdrop-filter: blur(8px);">
+                        <i class="fas fa-camera me-1"></i> Add Trip Photo
+                    </button>
+                    <input type="file" id="slideshow-quick-photo-input" accept="image/*" multiple style="display: none;">
+                </div>
+            </div>
+            
+            <!-- Middle & Bottom Content -->
+            <div class="mt-4">
+                <h2 class="fw-bold mb-1 text-white text-shadow-sm" id="slideshow-trip-title" style="font-size: 1.8rem;">Trip Name</h2>
+                <div class="d-flex align-items-center flex-wrap gap-2 text-white-50 small mb-3">
+                    <span class="text-white fw-semibold" id="slideshow-trip-route"><i class="fas fa-location-dot me-1 text-danger"></i> Route</span>
+                    <span>•</span>
+                    <span id="slideshow-trip-dates"><i class="far fa-calendar-alt me-1 text-warning"></i> Dates</span>
+                </div>
+                
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 pt-2 border-top border-white border-opacity-10">
+                    <div>
+                        <small class="text-white-50 d-block text-uppercase fw-semibold" style="font-size:0.65rem; letter-spacing: 0.5px;">Progress</small>
+                        <span class="fw-bold text-success fs-6" id="slideshow-trip-progress">0 km / 0 km</span>
+                    </div>
+                    
+                    <div class="d-flex align-items-center gap-3">
+                        <!-- Navigation Dots -->
+                        <div class="d-flex align-items-center gap-1.5" id="slideshow-nav-dots"></div>
+                        
+                        <a id="slideshow-open-trip-btn" href="#" class="btn btn-success btn-sm px-4 rounded-pill shadow-sm fw-semibold">
+                            Open Details <i class="fas fa-arrow-right ms-1"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Dashboard Live Travel Tracker -->
     <div class="card mb-4 border-0 shadow-sm overflow-hidden" id="dashboard-active-trip-tracker" style="display: none;">
         <div class="card-body py-3 px-4 bg-white" style="border-radius: var(--border-radius-md);">
@@ -470,7 +506,6 @@
         </div>
     </div>
     
-   <!-- In dashboard.html, update the statistics cards section -->
 <div class="row g-2 g-md-4 mb-4">
     <div class="col-3 col-md-3">
         <div class="card bg-primary text-white h-100 border-0 shadow-sm stat-card">
@@ -528,7 +563,7 @@
 
     <!-- Eco Impact & Carbon Dashboard -->
     <div class="card mb-4 border-0 shadow-sm overflow-hidden" id="dashboard-eco-card" style="display: none;">
-        <div class="card-body p-4" style="background: linear-gradient(135deg, #1b4332 0%, #2d6a4f 100%); color: white; border-radius: var(--border-radius-md);">
+        <div class="card-body p-4" style="background: linear-gradient(135deg, #bf360c 0%, #e65100 100%); color: white; border-radius: var(--border-radius-md);">
             <div class="row align-items-center">
                 <div class="col-md-7">
                     <h4 class="fw-bold mb-2">
@@ -714,6 +749,15 @@
                         <div class="mb-3">
                             <label for="edit-trip-budget" class="form-label">Total Budget (<span class="rupee-symbol">₹</span>)</label>
                             <input type="number" class="form-control" id="edit-trip-budget" min="0" step="0.01" required>
+                        </div>
+                        <!-- Edit Trip Photos Upload Section -->
+                        <div class="mb-3 border p-3 rounded bg-light bg-opacity-50">
+                            <label for="edit-trip-image-input" class="form-label fw-semibold text-primary mb-1">
+                                <i class="fas fa-camera me-1"></i>Trip Photos / Cover Images (for Slideshow Vibe)
+                            </label>
+                            <input type="file" class="form-control form-control-sm" id="edit-trip-image-input" accept="image/*" multiple>
+                            <div class="form-text small">Upload additional photos or manage images for your active trip slideshow.</div>
+                            <div id="edit-trip-image-previews" class="d-flex flex-wrap gap-2 mt-2"></div>
                         </div>
                         <div class="form-check mb-3">
                             <input class="form-check-input" type="checkbox" id="edit-calculate-distance">
