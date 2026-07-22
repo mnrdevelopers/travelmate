@@ -1477,122 +1477,117 @@ function updateDashboardActiveTripTracker() {
 // =========================================================================
 
 function renderActiveTripHeroSlideshow(activeTrip) {
-    const slideshowContainer = document.getElementById('dashboard-active-trip-slideshow');
-    if (!slideshowContainer) return;
-    
-    if (!activeTrip) {
-        slideshowContainer.style.display = 'none';
-        if (slideshowInterval) clearInterval(slideshowInterval);
-        return;
-    }
-    
-    slideshowContainer.style.display = 'block';
-    
-    const wrapper = document.getElementById('active-trip-slideshow-wrapper');
-    const titleEl = document.getElementById('slideshow-trip-title');
-    const routeEl = document.getElementById('slideshow-trip-route');
-    const datesEl = document.getElementById('slideshow-trip-dates');
-    const progressEl = document.getElementById('slideshow-trip-progress');
-    const countBadge = document.getElementById('slideshow-image-count');
-    const navDots = document.getElementById('slideshow-nav-dots');
-    const openBtn = document.getElementById('slideshow-open-trip-btn');
-    
-    if (titleEl) titleEl.textContent = activeTrip.name || 'Active Adventure';
-    if (routeEl) {
-        const stopsCount = (activeTrip.stops || []).length;
-        const stopsText = stopsCount > 0 ? ` (${stopsCount} stops)` : '';
-        routeEl.innerHTML = `<i class="fas fa-location-dot me-1 text-danger"></i>${activeTrip.startLocation} → ${activeTrip.destination}${stopsText}`;
-    }
-    if (datesEl) {
-        const sD = new Date(activeTrip.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-        const eD = new Date(activeTrip.endDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-        datesEl.innerHTML = `<i class="far fa-calendar-alt me-1 text-warning"></i>${sD} - ${eD}`;
-    }
-    if (progressEl) {
-        const totalDist = parseFloat(activeTrip.route?.distance || activeTrip.distance) || 0;
-        const currentKm = activeTrip.currentKm || 0;
-        const pct = totalDist > 0 ? ((currentKm / totalDist) * 100).toFixed(0) : 0;
-        progressEl.textContent = totalDist > 0 ? `${currentKm} / ${totalDist.toFixed(0)} km (${pct}%)` : `Active Journey (${pct}% complete)`;
-    }
-    if (openBtn) {
-        openBtn.href = `trip-details.html?id=${activeTrip.id}`;
-    }
-    
-    const uploadedImages = (activeTrip.images && Array.isArray(activeTrip.images)) ? activeTrip.images.filter(img => typeof img === 'string' && img.trim().length > 0) : [];
-    
-    const fallbackVibeImages = [
-        'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1400&q=80',
-        'https://images.unsplash.com/photo-1476514525535-ce74f45817d1?auto=format&fit=crop&w=1400&q=80',
-        'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1400&q=80',
-        'https://images.unsplash.com/photo-1503220317375-aaad61436b1b?auto=format&fit=crop&w=1400&q=80'
+    const carouselInner  = document.getElementById('hero-carousel-inner');
+    const carouselIndicators = document.getElementById('hero-carousel-indicators');
+    const uploadOverlay  = document.getElementById('hero-upload-overlay');
+
+    // --- Default slides (shown when no active trip) ---
+    const defaultSlides = [
+        { img: 'https://images.unsplash.com/photo-1548013146-72479768bada?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80', title: 'Spiritual Journeys', sub: 'Find peace in devotional trips' },
+        { img: 'https://images.unsplash.com/photo-1501555088652-021faa106b9b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80', title: 'Adventure Awaits', sub: 'Challenge yourself with thrilling experiences' },
+        { img: 'https://images.unsplash.com/photo-1516426122078-c23e76319801?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80', title: 'Wild Safari', sub: 'Explore nature and wildlife' },
+        { img: 'https://images.unsplash.com/photo-1566737236500-c8ac43014a67?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80', title: 'Party in Goa & Bangkok', sub: 'Experience the best nightlife' },
+        { img: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80', title: 'Local Road Trips', sub: 'Discover hidden gems nearby' }
     ];
-    
-    const displayImages = uploadedImages.length > 0 ? uploadedImages : fallbackVibeImages;
-    const isCustomUpload = uploadedImages.length > 0;
-    
-    if (countBadge) {
-        countBadge.innerHTML = isCustomUpload
-            ? `<i class="fas fa-camera text-success me-1"></i> ${uploadedImages.length} Photo${uploadedImages.length > 1 ? 's' : ''} uploaded`
-            : `<i class="fas fa-images text-warning me-1"></i> No photos yet — add yours!`;
-        countBadge.className = isCustomUpload
-            ? 'badge bg-success bg-opacity-25 text-white border border-success border-opacity-50 px-2 py-1'
-            : 'badge bg-warning bg-opacity-25 text-warning border border-warning border-opacity-50 px-2 py-1';
-    }
-    
-    if (wrapper) {
-        wrapper.innerHTML = displayImages.map((img, idx) => `
-            <div class="slideshow-slide position-absolute top-0 start-0 w-100 h-100" 
-                 style="background: url('${img}') center/cover no-repeat; transition: opacity 1.2s ease-in-out; opacity: ${idx === 0 ? 1 : 0}; z-index: 1;"
-                 data-slide-index="${idx}">
-            </div>
-        `).join('');
-    }
-    
-    if (navDots) {
-        navDots.innerHTML = displayImages.map((_, idx) => `
-            <button type="button" class="btn p-0 rounded-circle border-0 ${idx === 0 ? 'bg-white' : 'bg-white opacity-50'}"
-                    style="width: ${idx === 0 ? '18px' : '8px'}; height: 8px; border-radius: 10px; transition: all 0.3s;"
-                    onclick="setSlideshowIndex(${idx})" title="Slide ${idx+1}"></button>
-        `).join('');
-    }
-    
-    // Render uploaded photo thumbnail strip inside the dedicated section
-    const manageSection = document.getElementById('slideshow-manage-photos-section');
-    const thumbStrip = document.getElementById('slideshow-thumb-strip');
-    if (manageSection && thumbStrip) {
-        if (isCustomUpload) {
-            thumbStrip.innerHTML = uploadedImages.map((url, idx) => `
-                <div style="position:relative; flex-shrink:0; width:48px; height:48px; border-radius:6px; overflow:hidden; border:2px solid rgba(255,255,255,0.3); cursor:pointer;"
-                     onclick="setSlideshowIndex(${idx})" title="Photo ${idx+1}">
-                    <img src="${url}" style="width:100%;height:100%;object-fit:cover;" loading="lazy">
-                    <button type="button"
-                        style="position:absolute;top:1px;right:1px;width:16px;height:16px;background:rgba(200,0,0,0.9);color:#fff;border:none;border-radius:50%;font-size:0.55rem;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:5;padding:0;"
-                        onclick="event.stopPropagation(); deleteActiveTripPhoto(${idx})"
-                        title="Remove this photo">✕</button>
+
+    if (!activeTrip) {
+        // Restore default slides
+        if (carouselInner) {
+            carouselInner.innerHTML = defaultSlides.map((s, i) => `
+                <div class="carousel-item ${i === 0 ? 'active' : ''}" data-bs-interval="4000">
+                    <div class="hero-slide-img" style="background-image: url('${s.img}');"></div>
+                    <div class="hero-overlay p-4 d-flex align-items-end">
+                        <div class="text-white text-shadow">
+                            <h3 class="fw-bold mb-1">${s.title}</h3>
+                            <p class="mb-0 d-none d-md-block">${s.sub}</p>
+                        </div>
+                    </div>
                 </div>
             `).join('');
-            manageSection.style.display = 'block';
-        } else {
-            thumbStrip.innerHTML = '';
-            manageSection.style.display = 'none';
         }
+        if (carouselIndicators) {
+            carouselIndicators.innerHTML = defaultSlides.map((_, i) => `
+                <button type="button" data-bs-target="#dashboardHeroCarousel" data-bs-slide-to="${i}" ${i === 0 ? 'class="active"' : ''}></button>
+            `).join('');
+        }
+        if (uploadOverlay) uploadOverlay.style.display = 'none';
+        return;
     }
-    
-    if (slideshowInterval) clearInterval(slideshowInterval);
-    currentSlideIndex = 0;
-    
-    if (displayImages.length > 1) {
-        slideshowInterval = setInterval(() => {
-            currentSlideIndex = (currentSlideIndex + 1) % displayImages.length;
-            updateSlideshowDOM();
-        }, 4000);
+
+    // --- Active trip: use uploaded images or show a "no photos" prompt slide ---
+    const uploadedImages = (activeTrip.images && Array.isArray(activeTrip.images))
+        ? activeTrip.images.filter(img => typeof img === 'string' && img.trim().length > 0)
+        : [];
+
+    const tripName = activeTrip.name || 'Your Active Trip';
+    const sDate = new Date(activeTrip.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const eDate = new Date(activeTrip.endDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+    let slidesHtml = '';
+    let indicatorsHtml = '';
+
+    if (uploadedImages.length > 0) {
+        // Show uploaded images in carousel — each photo is a slide
+        slidesHtml = uploadedImages.map((url, i) => `
+            <div class="carousel-item ${i === 0 ? 'active' : ''}" data-bs-interval="4000">
+                <div class="hero-slide-img" style="background-image: url('${url}');"></div>
+                <div class="hero-overlay p-4 d-flex align-items-end">
+                    <div class="text-white text-shadow">
+                        <h3 class="fw-bold mb-1">🚀 ${tripName}</h3>
+                        <p class="mb-0 d-none d-md-block">
+                            <i class="fas fa-location-dot me-1 text-warning"></i>${activeTrip.startLocation} → ${activeTrip.destination}
+                            &nbsp;·&nbsp;
+                            <i class="far fa-calendar-alt me-1"></i>${sDate} – ${eDate}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+        indicatorsHtml = uploadedImages.map((_, i) => `
+            <button type="button" data-bs-target="#dashboardHeroCarousel" data-bs-slide-to="${i}" ${i === 0 ? 'class="active"' : ''}></button>
+        `).join('');
+    } else {
+        // No images uploaded yet — show one prompt slide with a nice overlay
+        slidesHtml = defaultSlides.map((s, i) => `
+            <div class="carousel-item ${i === 0 ? 'active' : ''}" data-bs-interval="4000">
+                <div class="hero-slide-img" style="background-image: url('${s.img}');"></div>
+                <div class="hero-overlay p-4 d-flex align-items-end">
+                    <div class="text-white text-shadow">
+                        <h3 class="fw-bold mb-1">🚀 ${tripName}</h3>
+                        <p class="mb-0 d-none d-md-block">
+                            <i class="fas fa-location-dot me-1 text-warning"></i>${activeTrip.startLocation} → ${activeTrip.destination}
+                            &nbsp;·&nbsp;
+                            <i class="far fa-calendar-alt me-1"></i>${sDate} – ${eDate}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+        indicatorsHtml = defaultSlides.map((_, i) => `
+            <button type="button" data-bs-target="#dashboardHeroCarousel" data-bs-slide-to="${i}" ${i === 0 ? 'class="active"' : ''}></button>
+        `).join('');
+    }
+
+    if (carouselInner) carouselInner.innerHTML = slidesHtml;
+    if (carouselIndicators) carouselIndicators.innerHTML = indicatorsHtml;
+
+    // Show/update the upload overlay button on top of the carousel
+    if (uploadOverlay) {
+        uploadOverlay.style.display = 'block';
+        const btn = document.getElementById('add-slideshow-photo-btn');
+        const statusSpan = document.getElementById('hero-upload-status');
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-camera me-1"></i> Add Trip Photos';
+            btn.disabled = false;
+        }
+        if (statusSpan) {
+            const count = uploadedImages.length;
+            statusSpan.style.display = count > 0 ? 'inline-block' : 'none';
+            statusSpan.textContent = count > 0 ? `${count} photo${count > 1 ? 's' : ''} in slideshow` : '';
+        }
     }
 }
 
-function setSlideshowIndex(index) {
-    currentSlideIndex = index;
-    updateSlideshowDOM();
-}
 
 async function deleteActiveTripPhoto(photoIndex) {
     const today = new Date();
@@ -1627,25 +1622,10 @@ async function deleteActiveTripPhoto(photoIndex) {
     }
 }
 
-function updateSlideshowDOM() {
-    const slides = document.querySelectorAll('#active-trip-slideshow-wrapper .slideshow-slide');
-    const dots = document.querySelectorAll('#slideshow-nav-dots button');
-    
-    slides.forEach((slide, idx) => {
-        slide.style.opacity = (idx === currentSlideIndex) ? '1' : '0';
-    });
-    
-    dots.forEach((dot, idx) => {
-        if (idx === currentSlideIndex) {
-            dot.className = 'btn p-0 rounded-circle border-0 bg-white shadow-sm';
-            dot.style.width = '18px';
-            dot.style.borderRadius = '10px';
-        } else {
-            dot.className = 'btn p-0 rounded-circle border-0 bg-white opacity-50';
-            dot.style.width = '8px';
-        }
-    });
-}
+// updateSlideshowDOM is no longer needed — Bootstrap carousel handles slide transitions
+// It's kept as a no-op stub to avoid breaking any lingering calls
+function updateSlideshowDOM() {}
+
 
 // Function to handle photo uploads from Create & Edit modals
 async function handleTripPhotoUpload(event, isEdit = false) {
@@ -1763,9 +1743,9 @@ async function handleQuickActiveTripPhotoUpload(event) {
     const settings = typeof getImageKitSettings === 'function' ? getImageKitSettings() : null;
     const useImageKit = settings && settings.urlEndpoint && settings.publicKey && settings.privateKey && typeof uploadToImageKit === 'function';
 
-    // Show upload progress overlay inside slideshow banner
-    const countBadge = document.getElementById('slideshow-image-count');
+    // Show upload progress in the button
     const addBtn = document.getElementById('add-slideshow-photo-btn');
+    const statusSpan = document.getElementById('hero-upload-status');
     if (addBtn) {
         addBtn.disabled = true;
         addBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Uploading...';
@@ -1777,10 +1757,10 @@ async function handleQuickActiveTripPhotoUpload(event) {
 
     for (let i = 0; i < validFiles.length; i++) {
         const file = validFiles[i];
-        // Update badge with live progress
-        if (countBadge) {
-            countBadge.innerHTML = `<i class="fas fa-spinner fa-spin me-1"></i> Uploading ${i + 1} / ${validFiles.length}...`;
-            countBadge.className = 'badge bg-info bg-opacity-30 text-white border border-info border-opacity-50 px-2 py-1';
+        // Update status span with live progress
+        if (statusSpan) {
+            statusSpan.style.display = 'inline-block';
+            statusSpan.textContent = `Uploading ${i + 1} / ${validFiles.length}...`;
         }
 
         try {
@@ -1809,10 +1789,9 @@ async function handleQuickActiveTripPhotoUpload(event) {
         }
     }
 
-    // Re-enable button
     if (addBtn) {
         addBtn.disabled = false;
-        addBtn.innerHTML = '<i class="fas fa-camera me-1"></i> Add Trip Photo';
+        addBtn.innerHTML = '<i class="fas fa-camera me-1"></i> Add Trip Photos';
     }
 
     if (successCount === 0) {

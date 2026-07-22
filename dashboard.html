@@ -335,17 +335,16 @@
 
 <!-- Dashboard Content -->
 <div class="container mt-4">
-    <!-- Hero Section with Slideshow -->
-    <div id="dashboardHeroCarousel" class="carousel slide mb-4 shadow-sm overflow-hidden" data-bs-ride="carousel" style="border-radius: var(--border-radius-md);">
-        <div class="carousel-indicators">
+    <!-- Hero Section with Slideshow -->    <div id="dashboardHeroCarousel" class="carousel slide mb-4 shadow-sm overflow-hidden" data-bs-ride="carousel" style="border-radius: var(--border-radius-md); position: relative;">
+        <div class="carousel-indicators" id="hero-carousel-indicators">
             <button type="button" data-bs-target="#dashboardHeroCarousel" data-bs-slide-to="0" class="active"></button>
             <button type="button" data-bs-target="#dashboardHeroCarousel" data-bs-slide-to="1"></button>
             <button type="button" data-bs-target="#dashboardHeroCarousel" data-bs-slide-to="2"></button>
             <button type="button" data-bs-target="#dashboardHeroCarousel" data-bs-slide-to="3"></button>
             <button type="button" data-bs-target="#dashboardHeroCarousel" data-bs-slide-to="4"></button>
         </div>
-        <div class="carousel-inner">
-            <!-- Devotional -->
+        <div class="carousel-inner" id="hero-carousel-inner">
+            <!-- Slides injected dynamically by JS (trip photos or default) -->
             <div class="carousel-item active" data-bs-interval="4000">
                 <div class="hero-slide-img" style="background-image: url('https://images.unsplash.com/photo-1548013146-72479768bada?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80');"></div>
                 <div class="hero-overlay p-4 d-flex align-items-end">
@@ -355,7 +354,6 @@
                     </div>
                 </div>
             </div>
-            <!-- Adventure -->
             <div class="carousel-item" data-bs-interval="4000">
                 <div class="hero-slide-img" style="background-image: url('https://images.unsplash.com/photo-1501555088652-021faa106b9b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80');"></div>
                 <div class="hero-overlay p-4 d-flex align-items-end">
@@ -365,7 +363,6 @@
                     </div>
                 </div>
             </div>
-            <!-- Safari -->
             <div class="carousel-item" data-bs-interval="4000">
                 <div class="hero-slide-img" style="background-image: url('https://images.unsplash.com/photo-1516426122078-c23e76319801?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80');"></div>
                 <div class="hero-overlay p-4 d-flex align-items-end">
@@ -375,17 +372,15 @@
                     </div>
                 </div>
             </div>
-            <!-- Party -->
             <div class="carousel-item" data-bs-interval="4000">
                 <div class="hero-slide-img" style="background-image: url('https://images.unsplash.com/photo-1566737236500-c8ac43014a67?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80');"></div>
                 <div class="hero-overlay p-4 d-flex align-items-end">
                     <div class="text-white text-shadow">
-                        <h3 class="fw-bold mb-1">Party in Goa & Bangkok</h3>
+                        <h3 class="fw-bold mb-1">Party in Goa &amp; Bangkok</h3>
                         <p class="mb-0 d-none d-md-block">Experience the best nightlife</p>
                     </div>
                 </div>
             </div>
-            <!-- Local Trips -->
             <div class="carousel-item" data-bs-interval="4000">
                 <div class="hero-slide-img" style="background-image: url('https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80');"></div>
                 <div class="hero-overlay p-4 d-flex align-items-end">
@@ -395,6 +390,16 @@
                     </div>
                 </div>
             </div>
+        </div>
+        <!-- Active trip photo upload button (shown only when active trip exists) -->
+        <div id="hero-upload-overlay" style="display:none; position:absolute; top:10px; right:12px; z-index:20;">
+            <button type="button" id="add-slideshow-photo-btn"
+                style="background:rgba(0,0,0,0.5); backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,0.3); color:#fff; border-radius:20px; padding:5px 14px; font-size:0.78rem; cursor:pointer;">
+                <i class="fas fa-camera me-1"></i> Add Trip Photos
+            </button>
+            <input type="file" id="slideshow-quick-photo-input" accept="image/*" multiple style="display:none;">
+            <!-- Upload status badge -->
+            <span id="hero-upload-status" style="display:none; margin-left:6px; background:rgba(0,0,0,0.55); color:#fff; border-radius:12px; padding:4px 10px; font-size:0.72rem;"></span>
         </div>
         <button class="carousel-control-prev" type="button" data-bs-target="#dashboardHeroCarousel" data-bs-slide="prev">
             <span class="carousel-control-prev-icon" aria-hidden="true"></span>
@@ -427,68 +432,6 @@
          data-guide-te="నా ప్రయాణాల విభాగానికి స్వాగతం! ఇక్కడ మీరు మీ ప్రయాణాలను వీక్షించవచ్చు, సవరించవచ్చు లేదా తొలగించవచ్చు. మార్గం, బడ్జెట్ మరియు స్టాప్‌లను ప్లాన్ చేయడానికి 'New Trip' ఉపయోగించండి. స్నేహితులతో ప్లానింగ్ పంచుకోవడానికి కోడ్‌తో 'Join Trip'ని ఉపయోగించండి. ప్రయాణంపై క్లిక్ చేయడం ద్వారా దాని వివరాలు, రూట్ మ్యాప్స్, యాక్టివిటీస్ మరియు బడ్జెట్ విభజనలు ఓపెన్ అవుతాయి.">
     </div>
     
-    <!-- Active Trip Hero Slideshow Banner -->
-    <div class="card mb-4 border-0 shadow-lg position-relative rounded-4" id="dashboard-active-trip-slideshow" style="display: none; min-height: 280px; background: #0f172a; color: white; overflow: hidden;">
-        <!-- Background Slideshow Images Container -->
-        <div id="active-trip-slideshow-wrapper" class="position-absolute top-0 start-0 w-100 h-100" style="z-index: 1;">
-            <!-- Slides injected dynamically -->
-        </div>
-        
-        <!-- Gradient Dark Backdrop Overlay -->
-        <div class="position-absolute top-0 start-0 w-100 h-100" style="z-index: 2; background: linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(15,23,42,0.88) 100%);"></div>
-        
-        <!-- Content Overlay -->
-        <div class="card-body p-4 position-relative d-flex flex-column justify-content-between h-100" style="z-index: 3; min-height: 280px;">
-            <!-- Top Badges & Actions -->
-            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <span class="badge bg-success bg-gradient px-3 py-2 rounded-pill shadow-sm" style="font-size: 0.8rem; font-weight: 600;">
-                    <i class="fas fa-play me-1 animate-pulse-slow"></i> ACTIVE JOURNEY VIBES
-                </span>
-                <div class="d-flex align-items-center gap-2">
-                    <span id="slideshow-image-count" class="badge bg-white bg-opacity-20 text-white px-2.5 py-1.5" style="font-size: 0.75rem; backdrop-filter: blur(8px);">
-                        <i class="fas fa-images me-1"></i> 0 Photos
-                    </span>
-                    <button type="button" class="btn btn-sm btn-light bg-opacity-20 text-white border-0 rounded-pill px-3 py-1" id="add-slideshow-photo-btn" style="font-size: 0.75rem; backdrop-filter: blur(8px);">
-                        <i class="fas fa-camera me-1"></i> Add Trip Photo
-                    </button>
-                    <input type="file" id="slideshow-quick-photo-input" accept="image/*" multiple style="display: none;">
-                </div>
-            </div>
-            
-            <!-- Middle & Bottom Content -->
-            <div class="mt-4">
-                <h2 class="fw-bold mb-1 text-white text-shadow-sm" id="slideshow-trip-title" style="font-size: 1.8rem;">Trip Name</h2>
-                <div class="d-flex align-items-center flex-wrap gap-2 text-white-50 small mb-3">
-                    <span class="text-white fw-semibold" id="slideshow-trip-route"><i class="fas fa-location-dot me-1 text-danger"></i> Route</span>
-                    <span>•</span>
-                    <span id="slideshow-trip-dates"><i class="far fa-calendar-alt me-1 text-warning"></i> Dates</span>
-                </div>
-                
-                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 pt-2 border-top border-white border-opacity-10">
-                    <div>
-                        <small class="text-white-50 d-block text-uppercase fw-semibold" style="font-size:0.65rem; letter-spacing: 0.5px;">Progress</small>
-                        <span class="fw-bold text-success fs-6" id="slideshow-trip-progress">0 km / 0 km</span>
-                    </div>
-                    
-                    <div class="d-flex align-items-center gap-3">
-                        <!-- Navigation Dots -->
-                        <div class="d-flex align-items-center gap-1.5" id="slideshow-nav-dots"></div>
-                        
-                        <a id="slideshow-open-trip-btn" href="#" class="btn btn-success btn-sm px-4 rounded-pill shadow-sm fw-semibold">
-                            Open Details <i class="fas fa-arrow-right ms-1"></i>
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <!-- Uploaded Photos Thumbnail Strip (injected dynamically) -->
-        <div id="slideshow-manage-photos-section" style="display:none; position:relative; z-index:10; background:rgba(0,0,0,0.6); backdrop-filter:blur(8px); border-top:1px solid rgba(255,255,255,0.1); padding:8px 14px;">
-            <div class="d-flex align-items-center gap-2 flex-wrap">
-                <span class="text-white-50 small me-1" style="font-size:0.7rem; white-space:nowrap;"><i class="fas fa-images me-1"></i>Your Photos:</span>
-                <div id="slideshow-thumb-strip" class="d-flex align-items-center gap-2" style="overflow-x:auto; flex-wrap:nowrap; flex:1;"></div>
-            </div>
-        </div>
-    </div>
 
     <!-- Dashboard Live Travel Tracker -->
     <div class="card mb-4 border-0 shadow-sm overflow-hidden" id="dashboard-active-trip-tracker" style="display: none;">
