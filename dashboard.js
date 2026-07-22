@@ -1556,33 +1556,26 @@ function renderActiveTripHeroSlideshow(activeTrip) {
         `).join('');
     }
     
-    // Render uploaded photo thumbnail strip (only when custom images exist)
-    let thumbStrip = document.getElementById('slideshow-thumb-strip');
-    if (isCustomUpload) {
-        if (!thumbStrip) {
-            thumbStrip = document.createElement('div');
-            thumbStrip.id = 'slideshow-thumb-strip';
-            thumbStrip.style.cssText = 'position:relative; z-index:4; background: rgba(0,0,0,0.55); backdrop-filter: blur(6px); padding: 8px 16px; display: flex; align-items: center; gap: 8px; overflow-x: auto; flex-wrap: nowrap;';
-            slideshowContainer.appendChild(thumbStrip);
-        }
-        thumbStrip.innerHTML = `
-            <span style="color:rgba(255,255,255,0.6); font-size:0.7rem; white-space:nowrap; flex-shrink:0;">
-                <i class="fas fa-images me-1"></i>${uploadedImages.length} uploaded:
-            </span>
-            ${uploadedImages.map((url, idx) => `
-                <div style="position:relative; flex-shrink:0; width:44px; height:44px; border-radius:6px; overflow:hidden; border:2px solid rgba(255,255,255,0.25); cursor:pointer;"
+    // Render uploaded photo thumbnail strip inside the dedicated section
+    const manageSection = document.getElementById('slideshow-manage-photos-section');
+    const thumbStrip = document.getElementById('slideshow-thumb-strip');
+    if (manageSection && thumbStrip) {
+        if (isCustomUpload) {
+            thumbStrip.innerHTML = uploadedImages.map((url, idx) => `
+                <div style="position:relative; flex-shrink:0; width:48px; height:48px; border-radius:6px; overflow:hidden; border:2px solid rgba(255,255,255,0.3); cursor:pointer;"
                      onclick="setSlideshowIndex(${idx})" title="Photo ${idx+1}">
                     <img src="${url}" style="width:100%;height:100%;object-fit:cover;" loading="lazy">
                     <button type="button"
-                        style="position:absolute;top:1px;right:1px;width:16px;height:16px;background:rgba(200,0,0,0.85);color:#fff;border:none;border-radius:50%;font-size:0.55rem;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:5;"
+                        style="position:absolute;top:1px;right:1px;width:16px;height:16px;background:rgba(200,0,0,0.9);color:#fff;border:none;border-radius:50%;font-size:0.55rem;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:5;padding:0;"
                         onclick="event.stopPropagation(); deleteActiveTripPhoto(${idx})"
                         title="Remove this photo">✕</button>
                 </div>
-            `).join('')}
-        `;
-        thumbStrip.style.display = 'flex';
-    } else if (thumbStrip) {
-        thumbStrip.style.display = 'none';
+            `).join('');
+            manageSection.style.display = 'block';
+        } else {
+            thumbStrip.innerHTML = '';
+            manageSection.style.display = 'none';
+        }
     }
     
     if (slideshowInterval) clearInterval(slideshowInterval);

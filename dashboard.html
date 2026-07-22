@@ -428,7 +428,7 @@
     </div>
     
     <!-- Active Trip Hero Slideshow Banner -->
-    <div class="card mb-4 border-0 shadow-lg overflow-hidden position-relative rounded-4" id="dashboard-active-trip-slideshow" style="display: none; min-height: 280px; background: #0f172a; color: white;">
+    <div class="card mb-4 border-0 shadow-lg position-relative rounded-4" id="dashboard-active-trip-slideshow" style="display: none; min-height: 280px; background: #0f172a; color: white; overflow: hidden;">
         <!-- Background Slideshow Images Container -->
         <div id="active-trip-slideshow-wrapper" class="position-absolute top-0 start-0 w-100 h-100" style="z-index: 1;">
             <!-- Slides injected dynamically -->
@@ -479,6 +479,13 @@
                         </a>
                     </div>
                 </div>
+            </div>
+        </div>
+        <!-- Uploaded Photos Thumbnail Strip (injected dynamically) -->
+        <div id="slideshow-manage-photos-section" style="display:none; position:relative; z-index:10; background:rgba(0,0,0,0.6); backdrop-filter:blur(8px); border-top:1px solid rgba(255,255,255,0.1); padding:8px 14px;">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="text-white-50 small me-1" style="font-size:0.7rem; white-space:nowrap;"><i class="fas fa-images me-1"></i>Your Photos:</span>
+                <div id="slideshow-thumb-strip" class="d-flex align-items-center gap-2" style="overflow-x:auto; flex-wrap:nowrap; flex:1;"></div>
             </div>
         </div>
     </div>
