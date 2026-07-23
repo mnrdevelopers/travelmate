@@ -1768,14 +1768,21 @@ async function loadTripItinerary(trip) {
     
     await Promise.all(memberPromises);
     
-    // Group activities by day while preserving original indices
+    // Group activities by day while preserving original indices and filtering old duplicate generic transit cards
     const activitiesByDay = {};
+    const hasDetailedTicketCards = trip.itinerary.some(a => a && a.place && (a.place.startsWith('Departure:') || a.place.startsWith('Arrival:')));
+
     trip.itinerary.forEach((activity, originalIndex) => {
         if (!activity || !activity.day) {
             console.warn('Invalid activity skipped:', activity);
             return;
         }
         
+        // Hide old generic transit cards if new detailed departure/arrival cards exist
+        if (hasDetailedTicketCards && activity.place && activity.place.startsWith('Transit:') && activity.notes && activity.notes.includes('Carrier:')) {
+            return;
+        }
+
         const day = activity.day.toString();
         if (!activitiesByDay[day]) {
             activitiesByDay[day] = [];
@@ -6189,21 +6196,24 @@ async function importTicketsToItinerary() {
     const tripData = tripDoc.data();
     const existing = tripData.itinerary || [];
     
-    // Deduplicate activities
-    const combined = [...existing];
-    let importedCount = 0;
-    newActivities.forEach(item => {
-        const exists = combined.some(e => e.day === item.day && e.place === item.place);
-        if (!exists) {
-            combined.push(item);
-            importedCount++;
-        }
+    // Purge previous auto-imported ticket activities to eliminate duplicates
+    const userManualActivities = existing.filter(act => {
+        if (!act || !act.place) return false;
+        const place = act.place.toLowerCase();
+        const notes = (act.notes || '').toLowerCase();
+        
+        const isImportedTicket = 
+            place.startsWith('departure:') || 
+            place.startsWith('arrival:') || 
+            place.startsWith('transit:') || 
+            place.startsWith('onboard') || 
+            notes.includes('darshan slot') || 
+            notes.includes('carrier:');
+            
+        return !isImportedTicket; // Keep manual user-created activities!
     });
 
-    if (importedCount === 0) {
-        showToast('All booked tickets are already in your itinerary!', 'info');
-        return;
-    }
+    const combined = [...userManualActivities, ...newActivities];
 
     await db.collection('trips').doc(currentTrip.id).update({
         itinerary: combined,
@@ -6211,7 +6221,7 @@ async function importTicketsToItinerary() {
     });
 
     currentTrip.itinerary = combined;
-    showToast(`Successfully imported ${importedCount} ticket leg(s) into exact calendar dates! 🎉`, 'success');
+    showToast(`Successfully refreshed itinerary with ${newActivities.length} clean ticket leg(s) on exact calendar dates! 🎉`, 'success');
     loadTripDetails();
 }
 
