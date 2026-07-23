@@ -1,4 +1,4 @@
-const CACHE_NAME = 'travelmate-cache-v23';
+const CACHE_NAME = 'travelmate-cache-v24';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -19,9 +19,18 @@ const ASSETS_TO_CACHE = [
   './js/destination-db.js',
   './js/ai-planner-engine.js',
   './js/ai-planner-ui.js',
+  './js/offline-sync-engine.js',
   './icon.png',
   './manifest.json'
 ];
+
+// Helper to check if cross-origin URL is a cacheable CDN asset
+function isCacheableCdn(url) {
+  return url.includes('gstatic.com') ||
+         url.includes('jsdelivr.net') ||
+         url.includes('cdnjs.cloudflare.com') ||
+         url.includes('googleapis.com');
+}
 
 // Install event: cache assets safely with Promise.allSettled
 self.addEventListener('install', event => {
@@ -47,26 +56,38 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
-// Fetch event: Network-First strategy for HTML and JS scripts for fresh updates
+// Fetch event: Network-First strategy with Cache Fallback for offline support
 self.addEventListener('fetch', event => {
-  if (
-    event.request.method !== 'GET' ||
-    !event.request.url.startsWith(self.location.origin)
-  ) {
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
+  const url = event.request.url;
+  const isSameOrigin = url.startsWith(self.location.origin);
+
+  // Ignore non-cacheable third-party API endpoints
+  if (!isSameOrigin && !isCacheableCdn(url)) {
     return;
   }
 
   event.respondWith(
     fetch(event.request)
       .then(networkResponse => {
-        if (networkResponse && networkResponse.status === 200) {
+        if (networkResponse && (networkResponse.status === 200 || networkResponse.type === 'opaque')) {
           const cacheCopy = networkResponse.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, cacheCopy));
         }
         return networkResponse;
       })
       .catch(() => {
-        return caches.match(event.request);
+        return caches.match(event.request).then(cachedResponse => {
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+          if (event.request.headers.get('accept')?.includes('text/html')) {
+            return caches.match('./dashboard.html');
+          }
+        });
       })
   );
 });
