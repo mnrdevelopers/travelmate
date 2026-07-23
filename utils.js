@@ -961,6 +961,36 @@ if ('serviceWorker' in navigator) {
     });
 }
 
+// PWA Installation Manager & Install Prompt Listener
+let deferredPwaPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPwaPrompt = e;
+
+    const installBtns = document.querySelectorAll('#pwa-install-btn');
+    installBtns.forEach(btn => {
+        btn.classList.remove('d-none');
+        btn.onclick = async () => {
+            if (!deferredPwaPrompt) return;
+            deferredPwaPrompt.prompt();
+            const choiceResult = await deferredPwaPrompt.userChoice;
+            if (choiceResult.outcome === 'accepted') {
+                console.log('User accepted PWA installation');
+            }
+            deferredPwaPrompt = null;
+            btn.classList.add('d-none');
+        };
+    });
+});
+
+window.addEventListener('appinstalled', () => {
+    console.log('TravelMate PWA installed successfully!');
+    deferredPwaPrompt = null;
+    document.querySelectorAll('#pwa-install-btn').forEach(b => b.classList.add('d-none'));
+    if (typeof showToast === 'function') showToast('TravelMate App installed successfully!', 'success');
+});
+
 function showUpdateToast() {
     const container = document.getElementById('toast-container') || document.body;
     const toast = document.createElement('div');

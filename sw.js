@@ -1,45 +1,53 @@
-const CACHE_NAME = 'travelmate-cache-v21';
+const CACHE_NAME = 'travelmate-cache-v22';
 const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/dashboard.html',
-  '/login.html',
-  '/signup.html',
-  '/trip-details.html',
-  '/styles.css',
-  '/dashboard.js',
-  '/auth.js',
-  '/firebase-config.js',
-  '/utils.js',
-  '/trip-details.js',
-  '/js/ai-memory.js',
-  '/js/destination-db.js',
-  '/js/ai-planner-engine.js',
-  '/js/ai-planner-ui.js',
-  '/icon.png',
+  './',
+  './index.html',
+  './dashboard.html',
+  './login.html',
+  './signup.html',
+  './trip-details.html',
+  './car-calculations.html',
+  './styles.css',
+  './dashboard.js',
+  './auth.js',
+  './firebase-config.js',
+  './utils.js',
+  './trip-details.js',
+  './car-calculations.js',
+  './js/ai-memory.js',
+  './js/destination-db.js',
+  './js/ai-planner-engine.js',
+  './js/ai-planner-ui.js',
+  './icon.png',
+  './manifest.json'
 ];
 
-// Install event: cache assets and force skip waiting
+// Install event: cache assets using Promise.allSettled so 404s never fail installation
 self.addEventListener('install', event => {
-  self.skipWaiting(); // Force the waiting service worker to become active immediately
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS_TO_CACHE))
+    caches.open(CACHE_NAME).then(cache => {
+      return Promise.allSettled(
+        ASSETS_TO_CACHE.map(url => 
+          cache.add(url).catch(err => console.warn('PWA Cache warning for asset:', url, err))
+        )
+      );
+    })
   );
 });
 
-// Activate event: cleanup old caches
+// Activate event: cleanup old caches and claim clients immediately
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
       Promise.all(keys.map(key => key !== CACHE_NAME && caches.delete(key)))
     )
   );
-  self.clients.claim(); // Become controller immediately for all open client tabs
+  self.clients.claim();
 });
 
-// Fetch event: Network-First strategy for HTML and JS scripts to ensure fresh code updates!
+// Fetch event: Network-First strategy for HTML and JS scripts for fresh updates
 self.addEventListener('fetch', event => {
-  // Only intercept local GET requests (skip APIs, Firebase DB, CDN auth calls)
   if (
     event.request.method !== 'GET' ||
     !event.request.url.startsWith(self.location.origin)
@@ -62,10 +70,9 @@ self.addEventListener('fetch', event => {
   );
 });
 
-
-// Sync data logic (optional)
+// Message listener for sync / reload signals
 self.addEventListener('message', event => {
-  if (event.data && event.data.type === 'SYNCDATA') {
-    // Add custom offline data syncing if needed
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
   }
 });

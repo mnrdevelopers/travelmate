@@ -1,22 +1,26 @@
 {
-  "name": "TravelMate",
+  "name": "TravelMate - AI Travel Planner",
   "short_name": "TravelMate",
-  "description": "Plan and manage your trips, expenses, and itineraries.",
-  "start_url": "/index.html",
+  "description": "Plan and manage your trips, expenses, itineraries, and routes with AI.",
+  "id": "travelmate-pwa",
+  "start_url": "./dashboard.html",
+  "scope": "./",
   "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#4361ee",
-  "theme_color": "#4361ee",
+  "orientation": "portrait-primary",
+  "background_color": "#e65100",
+  "theme_color": "#e65100",
   "icons": [
     {
       "src": "icon.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "icon.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }
