@@ -6044,18 +6044,18 @@ async function callAIModelForItinerary(prompt) {
     return null;
 }
 
-function buildFallbackItinerary(trip, totalDays, pace) {
+function buildFallbackItinerary(trip, totalDays, pace, dayChoices = {}) {
     const activities = [];
     const tickets = trip.tickets || [];
-    const destination = trip.destination || 'Destination';
+    const destination = (trip.destination || 'Destination').trim();
+    const startDate = new Date(trip.startDate);
 
-    // 1. Incorporate booked tickets
+    // 1. Incorporate booked tickets & Darshan passes
     tickets.forEach((t) => {
         let day = 1;
         let time = '08:00';
         if (t.departureTime) {
             const ticketDate = new Date(t.departureTime);
-            const startDate = new Date(trip.startDate);
             const diffDays = Math.ceil((ticketDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
             day = Math.min(Math.max(1, diffDays), totalDays);
             time = t.departureTime.includes('T') ? t.departureTime.split('T')[1].substring(0, 5) : '08:00';
@@ -6084,8 +6084,26 @@ function buildFallbackItinerary(trip, totalDays, pace) {
         }
     });
 
-    // 2. Fill in exploring activities for each day
+    // 2. Fill in exploring activities ONLY for non-full-transit days
     for (let d = 1; d <= totalDays; d++) {
+        const choice = dayChoices[d] || 'exploring';
+        
+        if (choice === 'transit') {
+            const hasTransit = activities.some(a => a.day === d && a.category === 'transit');
+            if (!hasTransit) {
+                activities.push({
+                    day: d,
+                    time: '08:00',
+                    category: 'transit',
+                    place: `Onboard Train / In Transit`,
+                    notes: 'Full day journey on train. Relax, enjoy scenic views & rest.',
+                    addedBy: auth.currentUser?.uid || 'system',
+                    addedAt: new Date().toISOString()
+                });
+            }
+            continue; // Skip sightseeing for full-day train journey!
+        }
+
         const hasTemple = activities.some(a => a.day === d && a.category === 'temple');
         const hasSightseeing = activities.some(a => a.day === d && a.category === 'sightseeing');
 
@@ -6094,8 +6112,8 @@ function buildFallbackItinerary(trip, totalDays, pace) {
                 day: d,
                 time: '09:00',
                 category: 'temple',
-                place: `${destination} Main Temple / Devotional Visit`,
-                notes: 'Morning prayers, peaceful darshan & spiritual exploration.',
+                place: `${destination} Main Temple / Shrine`,
+                notes: 'Morning holy prayers, peaceful darshan & spiritual exploration.',
                 addedBy: auth.currentUser?.uid || 'system',
                 addedAt: new Date().toISOString()
             });
@@ -6106,8 +6124,8 @@ function buildFallbackItinerary(trip, totalDays, pace) {
                 day: d,
                 time: '11:30',
                 category: 'sightseeing',
-                place: `${destination} Famous Landmarks & Sightseeing Spot`,
-                notes: 'Explore top attractions, cultural sights & scenic viewpoints.',
+                place: `${destination} Top Famous Attraction & Viewpoint`,
+                notes: 'Explore iconic heritage landmarks, cultural sights & scenic views.',
                 addedBy: auth.currentUser?.uid || 'system',
                 addedAt: new Date().toISOString()
             });
@@ -6118,7 +6136,7 @@ function buildFallbackItinerary(trip, totalDays, pace) {
             time: '13:30',
             category: 'food',
             place: `Famous Regional Restaurant in ${destination}`,
-            notes: 'Enjoy authentic local delicacies & refreshing lunch.',
+            notes: 'Enjoy authentic local thali & delicious regional specialties.',
             addedBy: auth.currentUser?.uid || 'system',
             addedAt: new Date().toISOString()
         });
@@ -6128,7 +6146,7 @@ function buildFallbackItinerary(trip, totalDays, pace) {
             time: '17:00',
             category: 'shopping',
             place: `${destination} Evening Market & Local Bazaar`,
-            notes: 'Handicrafts, local shopping, souvenirs & evening snacks.',
+            notes: 'Handicrafts, local souvenirs, street shopping & evening tea.',
             addedBy: auth.currentUser?.uid || 'system',
             addedAt: new Date().toISOString()
         });
@@ -6166,6 +6184,62 @@ function showAiAutoItineraryModal() {
         }
     }
 
+    // Populate Day-by-Day Travel Type Selectors
+    const dayTypesContainer = document.getElementById('ai-itinerary-day-types-list');
+    if (dayTypesContainer && currentTrip.startDate && currentTrip.endDate) {
+        const startDate = new Date(currentTrip.startDate);
+        const endDate = new Date(currentTrip.endDate);
+        const totalDays = Math.max(1, Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1);
+        const tickets = currentTrip.tickets || [];
+
+        let html = '';
+        for (let d = 1; d <= totalDays; d++) {
+            const dDate = new Date(startDate.getTime() + (d - 1) * 24 * 60 * 60 * 1000);
+            const dateStr = dDate.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' });
+            
+            // Smart auto-detect default travel choice based on tickets
+            let defaultVal = 'exploring';
+            if (tickets.length > 0) {
+                const dayStart = new Date(dDate); dayStart.setHours(0, 0, 0, 0);
+                const dayEnd = new Date(dDate); dayEnd.setHours(23, 59, 59, 999);
+
+                const transitTicket = tickets.find(t => {
+                    if (t.type === 'darshan' || !t.departureTime) return false;
+                    const depD = new Date(t.departureTime);
+                    const arrD = t.arrivalTime ? new Date(t.arrivalTime) : depD;
+                    return (depD < dayEnd && arrD > dayStart);
+                });
+
+                if (transitTicket) {
+                    const depD = new Date(transitTicket.departureTime);
+                    const arrD = transitTicket.arrivalTime ? new Date(transitTicket.arrivalTime) : depD;
+                    if (depD < dayStart && arrD > dayEnd) {
+                        defaultVal = 'transit'; // Full day on train
+                    } else if (depD < dayStart && arrD <= dayEnd) {
+                        defaultVal = 'arrival'; // Train arrives today
+                    } else if (depD >= dayStart && arrD > dayEnd) {
+                        defaultVal = 'arrival'; // Departs later today
+                    }
+                }
+            }
+
+            html += `
+                <div class="d-flex align-items-center justify-content-between py-1 border-bottom last-border-0">
+                    <div class="small fw-bold text-dark me-2">
+                        <span class="badge bg-secondary me-1">Day ${d}</span>
+                        <span class="text-secondary">${dateStr}</span>
+                    </div>
+                    <select class="form-select form-select-sm w-auto py-1 px-2 ai-day-type-select" data-day="${d}" style="font-size:0.78rem;">
+                        <option value="exploring" ${defaultVal === 'exploring' ? 'selected' : ''}>🏛️ Destination Exploring</option>
+                        <option value="transit" ${defaultVal === 'transit' ? 'selected' : ''}>🚂 Train / Travel Transit (All Day)</option>
+                        <option value="arrival" ${defaultVal === 'arrival' ? 'selected' : ''}>🛬 Arrival (Travel + Exploring)</option>
+                    </select>
+                </div>
+            `;
+        }
+        dayTypesContainer.innerHTML = html;
+    }
+
     const statusEl = document.getElementById('ai-itinerary-status');
     const formEl = document.getElementById('ai-itinerary-form');
     const submitBtn = document.getElementById('btn-generate-ai-itinerary-submit');
@@ -6184,6 +6258,13 @@ async function runAiAutoItineraryGeneration() {
     const pace = document.getElementById('ai-itinerary-pace').value;
     const userGuidance = document.getElementById('ai-itinerary-user-guidance')?.value.trim() || '';
 
+    // Collect Day-by-Day travel choices set by user
+    const dayChoices = {};
+    document.querySelectorAll('.ai-day-type-select').forEach(sel => {
+        const d = parseInt(sel.getAttribute('data-day'));
+        dayChoices[d] = sel.value;
+    });
+
     const statusEl = document.getElementById('ai-itinerary-status');
     const statusText = document.getElementById('ai-itinerary-status-text');
     const formEl = document.getElementById('ai-itinerary-form');
@@ -6198,7 +6279,7 @@ async function runAiAutoItineraryGeneration() {
         const endDate = new Date(currentTrip.endDate);
         const totalDays = Math.max(1, Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1);
 
-        if (statusText) statusText.textContent = `Analyzing tickets, custom preferences & generating Day 1 to Day ${totalDays} schedule for ${currentTrip.destination}...`;
+        if (statusText) statusText.textContent = `Analyzing tickets, custom choices & generating Day 1 to Day ${totalDays} schedule for ${currentTrip.destination}...`;
 
         const ticketsList = (currentTrip.tickets || []).map((t, idx) => {
             if (t.type === 'darshan') {
@@ -6207,16 +6288,19 @@ async function runAiAutoItineraryGeneration() {
             return `Ticket #${idx+1} [${t.type.toUpperCase()}]: Carrier "${t.serviceNo ? t.serviceNo + ' - ' : ''}${t.serviceName || t.operator}", Departs "${t.departurePlace}" at "${t.departureTime}", Arrives "${t.arrivalPlace}" at "${t.arrivalTime || 'N/A'}"`;
         }).join('\n');
 
-        const stayAnalysis = typeof calculateJourneyStayTimes === 'function' ? calculateJourneyStayTimes(currentTrip) : null;
-        let exploringWindowsText = '';
-        if (stayAnalysis && stayAnalysis.stayLegs && stayAnalysis.stayLegs.length > 0) {
-            exploringWindowsText = stayAnalysis.stayLegs.map((leg, idx) => {
-                const startStr = leg.stayStart.toLocaleString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
-                const endStr = leg.stayEnd.toLocaleString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
-                const hrs = (leg.durationMs / 3600000).toFixed(1);
-                return `Exploring Window #${idx+1} at "${leg.location}": Available from ${startStr} to ${endStr} (${hrs} total hours available).`;
-            }).join('\n');
-        }
+        const dayScheduleText = Object.keys(dayChoices).map(dStr => {
+            const d = parseInt(dStr);
+            const dObj = new Date(startDate.getTime() + (d - 1) * 24 * 60 * 60 * 1000);
+            const dateFormatted = dObj.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+            const choice = dayChoices[d];
+            if (choice === 'transit') {
+                return `* Day ${d} (${dateFormatted}): 🚨 TRAIN / TRAVEL TRANSIT DAY (USER SPECIFIED). User is traveling inside train/flight all day. DO NOT schedule any sightseeing, temples, or dining for Day ${d}! Output ONLY 1 transit card!`;
+            } else if (choice === 'arrival') {
+                return `* Day ${d} (${dateFormatted}): 🛬 ARRIVAL DAY. Morning transit/arrival, then schedule 2 to 3 famous sightseeing spots & food places in ${currentTrip.destination} for the rest of the day.`;
+            } else {
+                return `* Day ${d} (${dateFormatted}): 🏛️ DESTINATION EXPLORING DAY. Generate 3 to 5 famous real sightseeing places, temples, local food, and shopping bazaars in ${currentTrip.destination}.`;
+            }
+        }).join('\n');
 
         const prompt = `You are a professional travel itinerary planner API.
 Destination: "${currentTrip.destination}"
@@ -6228,16 +6312,16 @@ ${userGuidance ? `USER CUSTOM GUIDANCE & INSTRUCTIONS (MUST BE PRIORITIZED & SAT
 BOOKED TRAVEL TICKETS & APPOINTMENTS:
 ${ticketsList || 'No specific tickets booked.'}
 
-EXACT DESTINATION EXPLORING TIME WINDOWS (EXCLUDES JOURNEY TRANSIT HOURS):
-${exploringWindowsText || 'Plan activities after arrival at the destination.'}
+DAY-BY-DAY TRAVEL TYPES SPECIFIED BY TRAVELER (STRICT DIRECTIVES):
+${dayScheduleText}
 
-CRITICAL TIMING & PLANNING RULES:
-1. PRIORITIZE USER CUSTOM GUIDANCE: Carefully include all specific places, food preferences, family/elderly constraints, or timing requests entered in the User Custom Guidance!
-2. AVOID PLANNING SIGHTSEEING DURING JOURNEY TRANSIT TIME: Do NOT schedule sightseeing, shopping, or temple visits during the hours when travelers are inside a train, flight, or bus traveling between cities! Mark journey travel hours simply as "Travel in Transit to [City]" with category "transit".
-3. PLAN ACTIVITIES ONLY DURING ACTUAL EXPLORING TIME WINDOWS: Schedule activities only after arrival in a city (after train/flight arrival) and before the next transport departure time.
-4. RESPECT DARSHAN SLOTS EXACTLY: For Darshan tickets, schedule temple queue reporting at the exact slot date & time.
-5. For each day, include 3 to 5 realistic activities (Sightseeing, Temple visits, Famous local food, Shopping, Hotel check-in/rest, Travel transit).
-6. OUTPUT FORMAT REQUIREMENTS:
+CRITICAL PLANNING RULES:
+1. STRICTLY RESPECT USER DAY TYPES:
+   - For days marked as "TRAIN / TRAVEL TRANSIT DAY", output ONLY 1 activity item for that entire day with category "transit", place "Onboard Train in Transit", time "08:00", and notes "Full day journey on train. Relax & enjoy scenic views." DO NOT schedule any sightseeing or restaurants!
+   - For days marked as "DESTINATION EXPLORING DAY" or "ARRIVAL DAY", generate 3 to 5 famous real tourist attractions, temples, local dining, and shopping bazaars in ${currentTrip.destination}!
+2. PRIORITIZE USER CUSTOM GUIDANCE: Include all specific places, dietary preferences, or timing requests entered in User Custom Guidance!
+3. RESPECT DARSHAN SLOTS EXACTLY: For Darshan tickets, schedule temple queue reporting at the exact slot date & time.
+4. OUTPUT FORMAT REQUIREMENTS:
    - Output MUST be ONLY a raw JSON array of objects.
    - Do NOT include any markdown codeblocks (\`\`\`json ... \`\`\`), no text outside the array.
    - Schema for each object:
@@ -6283,8 +6367,28 @@ Allowed values for "category": "temple", "sightseeing", "food", "shopping", "hot
         // Fallback: If AI returned non-JSON text or API failed, build ticket-aware itinerary
         if (formattedActivities.length === 0) {
             console.log('🤖 Building ticket-aware fallback itinerary...');
-            formattedActivities = buildFallbackItinerary(currentTrip, totalDays, pace);
+            formattedActivities = buildFallbackItinerary(currentTrip, totalDays, pace, dayChoices);
         }
+
+        // POST-PROCESSING SANITIZER: Strictly clean full-day transit days selected by user
+        Object.keys(dayChoices).forEach(dStr => {
+            const d = parseInt(dStr);
+            if (dayChoices[d] === 'transit') {
+                formattedActivities = formattedActivities.filter(act => act.day !== d || act.category === 'transit');
+                const hasTransit = formattedActivities.some(act => act.day === d && act.category === 'transit');
+                if (!hasTransit) {
+                    formattedActivities.push({
+                        day: d,
+                        time: '08:00',
+                        category: 'transit',
+                        place: `Onboard Train / In Transit`,
+                        notes: 'Full day journey on train. Relax & enjoy scenic views.',
+                        addedBy: auth.currentUser.uid,
+                        addedAt: new Date().toISOString()
+                    });
+                }
+            }
+        });
 
         const tripDoc = await db.collection('trips').doc(currentTrip.id).get();
         if (!tripDoc.exists) throw new Error('Trip not found');
