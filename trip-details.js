@@ -1788,7 +1788,9 @@ async function loadTripItinerary(trip) {
 
     const sortedDayKeys = Object.keys(activitiesByDay).sort((a, b) => parseInt(a) - parseInt(b));
 
-    // Render Day Filter Buttons
+    const tripStartDate = trip.startDate ? new Date(trip.startDate) : null;
+
+    // Render Day Filter Buttons with actual calendar dates
     if (dayFiltersContainer) {
         const activeFilter = window._activeItineraryDayFilter || 'all';
         let filtersHtml = `<button type="button" class="btn btn-xs ${activeFilter === 'all' ? 'btn-primary active' : 'btn-outline-secondary'} rounded-pill me-1 mb-1 itinerary-day-chip" data-day="all"><i class="fas fa-layer-group me-1"></i>All Days (${trip.itinerary.length})</button>`;
@@ -1796,7 +1798,13 @@ async function loadTripItinerary(trip) {
         sortedDayKeys.forEach(d => {
             const count = activitiesByDay[d].length;
             const isActive = activeFilter === d;
-            filtersHtml += `<button type="button" class="btn btn-xs ${isActive ? 'btn-primary active' : 'btn-outline-secondary'} rounded-pill me-1 mb-1 itinerary-day-chip" data-day="${d}">Day ${d} (${count})</button>`;
+            let dateChipLabel = `Day ${d}`;
+            if (tripStartDate && !isNaN(tripStartDate.getTime())) {
+                const dayNum = parseInt(d);
+                const dDate = new Date(tripStartDate.getTime() + (dayNum - 1) * 24 * 60 * 60 * 1000);
+                dateChipLabel = dDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+            }
+            filtersHtml += `<button type="button" class="btn btn-xs ${isActive ? 'btn-primary active' : 'btn-outline-secondary'} rounded-pill me-1 mb-1 itinerary-day-chip" data-day="${d}">${dateChipLabel} (${count})</button>`;
         });
         
         dayFiltersContainer.innerHTML = filtersHtml;
@@ -1807,7 +1815,7 @@ async function loadTripItinerary(trip) {
     
     const activeFilter = window._activeItineraryDayFilter || 'all';
 
-    // Sort days numerically and create day cards
+    // Sort days numerically and create day cards with calendar dates
     sortedDayKeys.forEach(day => {
             if (activeFilter !== 'all' && day !== activeFilter) return;
 
@@ -1818,11 +1826,18 @@ async function loadTripItinerary(trip) {
             const sortedActivities = activitiesByDay[day].sort((a, b) => {
                 return a.time.localeCompare(b.time);
             });
+
+            let dayTitleStr = `Day ${day} Schedule`;
+            if (tripStartDate && !isNaN(tripStartDate.getTime())) {
+                const dayNum = parseInt(day);
+                const dDate = new Date(tripStartDate.getTime() + (dayNum - 1) * 24 * 60 * 60 * 1000);
+                dayTitleStr = dDate.toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+            }
             
             dayCard.innerHTML = `
                 <div class="card-header bg-success text-white py-2 px-3 d-flex align-items-center justify-content-between">
                     <h6 class="mb-0 fw-bold">
-                        <i class="fas fa-calendar-day me-2"></i>Day ${day} Schedule
+                        <i class="fas fa-calendar-day me-2"></i>${dayTitleStr}
                     </h6>
                     <span class="badge bg-white text-success fw-bold" style="font-size:0.75rem;">${sortedActivities.length} Activities</span>
                 </div>
@@ -2429,7 +2444,8 @@ function showAddActivityModal() {
             const option = document.createElement('option');
             option.value = i;
             const dayDate = new Date(startDate.getTime() + (i-1) * 24 * 60 * 60 * 1000);
-            option.textContent = `Day ${i} (${formatDate(dayDate.toISOString().split('T')[0])})`;
+            const dateStr = dayDate.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+            option.textContent = `${dateStr} (Day ${i})`;
             daySelect.appendChild(option);
         }
     }
