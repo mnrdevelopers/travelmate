@@ -5940,37 +5940,77 @@ function shareItineraryText() {
 // =========================================================================
 
 async function callAIModelForItinerary(prompt) {
-    let apiKey = window._openrouterApiKey;
-    if (!apiKey && typeof loadOpenRouterKeyShared === 'function') {
-        apiKey = await loadOpenRouterKeyShared();
+    if (typeof loadOpenRouterKeyShared === 'function') {
+        await loadOpenRouterKeyShared();
     }
     
+    let openrouterKey = window._openrouterApiKey ? window._openrouterApiKey.trim() : '';
+    let groqKey = window._groqApiKey ? window._groqApiKey.trim() : '';
+
     const systemPrompt = "You are a professional travel planner API that returns strictly valid JSON arrays of itinerary activity objects. Return ONLY the raw JSON array without markdown codeblocks or introductory text.";
 
-    const modelsToTry = [
-        'openrouter/free',
+    // 1. Try Groq API first if key is available
+    if (groqKey) {
+        const groqModels = ['llama-3.3-70b-versatile', 'llama3-8b-8192', 'mixtral-8x7b-32768'];
+        for (const model of groqModels) {
+            try {
+                console.log(`🤖 Trying Groq model for AI Itinerary: ${model}`);
+                const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${groqKey}`
+                    },
+                    body: JSON.stringify({
+                        model,
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: prompt }
+                        ],
+                        max_tokens: 1500,
+                        temperature: 0.3
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const text = data.choices?.[0]?.message?.content?.trim();
+                    if (text) {
+                        console.log(`✅ Groq model ${model} successfully returned AI itinerary.`);
+                        return text;
+                    }
+                } else {
+                    console.warn(`Groq model ${model} status ${response.status}`);
+                }
+            } catch (err) {
+                console.warn(`Groq model ${model} exception:`, err.message);
+            }
+        }
+    }
+
+    // 2. Try OpenRouter API
+    const openrouterModels = [
         'meta-llama/llama-3.3-70b-instruct:free',
         'google/gemini-2.0-flash-exp:free',
         'qwen/qwen-2.5-72b-instruct:free',
-        'deepseek/deepseek-r1:free'
+        'deepseek/deepseek-r1:free',
+        'openrouter/free'
     ];
 
-    if (window._openrouterModel && window._openrouterModel !== 'auto') {
-        modelsToTry.unshift(window._openrouterModel);
+    if (window._openrouterModel && window._openrouterModel !== 'auto' && window._openrouterModel !== 'custom') {
+        openrouterModels.unshift(window._openrouterModel);
     }
 
-    let lastError = 'AI generation failed.';
-
-    for (const model of modelsToTry) {
+    for (const model of openrouterModels) {
         try {
-            console.log(`🤖 Requesting AI Itinerary via model: ${model}`);
+            console.log(`🤖 Requesting OpenRouter AI Itinerary via model: ${model}`);
             const headers = {
                 'Content-Type': 'application/json',
                 'HTTP-Referer': window.location.origin,
                 'X-Title': 'TravelMate AI Planner'
             };
-            if (apiKey) {
-                headers['Authorization'] = `Bearer ${apiKey}`;
+            if (openrouterKey) {
+                headers['Authorization'] = `Bearer ${openrouterKey}`;
             }
 
             const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -5983,14 +6023,13 @@ async function callAIModelForItinerary(prompt) {
                         { role: 'user', content: prompt }
                     ],
                     max_tokens: 1500,
-                    temperature: 0.7
+                    temperature: 0.3
                 })
             });
 
             if (!response.ok) {
                 const errText = await response.text();
-                console.warn(`OpenRouter ${model} error:`, response.status, errText);
-                lastError = `Model ${model} returned status ${response.status}`;
+                console.warn(`OpenRouter ${model} status ${response.status}:`, errText);
                 continue;
             }
 
@@ -5998,12 +6037,104 @@ async function callAIModelForItinerary(prompt) {
             const text = data.choices?.[0]?.message?.content?.trim();
             if (text) return text;
         } catch (e) {
-            console.warn(`OpenRouter ${model} exception:`, e);
-            lastError = e.message;
+            console.warn(`OpenRouter ${model} exception:`, e.message);
         }
     }
 
-    throw new Error(lastError);
+    return null;
+}
+
+function buildFallbackItinerary(trip, totalDays, pace) {
+    const activities = [];
+    const tickets = trip.tickets || [];
+    const destination = trip.destination || 'Destination';
+
+    // 1. Incorporate booked tickets
+    tickets.forEach((t) => {
+        let day = 1;
+        let time = '08:00';
+        if (t.departureTime) {
+            const ticketDate = new Date(t.departureTime);
+            const startDate = new Date(trip.startDate);
+            const diffDays = Math.ceil((ticketDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+            day = Math.min(Math.max(1, diffDays), totalDays);
+            time = t.departureTime.includes('T') ? t.departureTime.split('T')[1].substring(0, 5) : '08:00';
+        }
+
+        if (t.type === 'darshan') {
+            activities.push({
+                day,
+                time,
+                category: 'temple',
+                place: t.templeName || `${destination} Temple`,
+                notes: `🙏 Darshan Slot (${t.darshanCategory || 'Special Entry'}) - Gate: ${t.reportingVenue || t.departurePlace || 'Reporting Gate'}`,
+                addedBy: auth.currentUser?.uid || 'system',
+                addedAt: new Date().toISOString()
+            });
+        } else {
+            activities.push({
+                day,
+                time,
+                category: 'transit',
+                place: `Transit: ${t.departurePlace} → ${t.arrivalPlace}`,
+                notes: `🚕 ${t.type.toUpperCase()} Carrier: ${t.serviceNo ? t.serviceNo + ' - ' : ''}${t.serviceName || t.operator || 'Transport'}. Departure @ ${time}.`,
+                addedBy: auth.currentUser?.uid || 'system',
+                addedAt: new Date().toISOString()
+            });
+        }
+    });
+
+    // 2. Fill in exploring activities for each day
+    for (let d = 1; d <= totalDays; d++) {
+        const hasTemple = activities.some(a => a.day === d && a.category === 'temple');
+        const hasSightseeing = activities.some(a => a.day === d && a.category === 'sightseeing');
+
+        if (!hasTemple && (pace === 'spiritual' || pace === 'balanced')) {
+            activities.push({
+                day: d,
+                time: '09:00',
+                category: 'temple',
+                place: `${destination} Main Temple / Devotional Visit`,
+                notes: 'Morning prayers, peaceful darshan & spiritual exploration.',
+                addedBy: auth.currentUser?.uid || 'system',
+                addedAt: new Date().toISOString()
+            });
+        }
+
+        if (!hasSightseeing) {
+            activities.push({
+                day: d,
+                time: '11:30',
+                category: 'sightseeing',
+                place: `${destination} Famous Landmarks & Sightseeing Spot`,
+                notes: 'Explore top attractions, cultural sights & scenic viewpoints.',
+                addedBy: auth.currentUser?.uid || 'system',
+                addedAt: new Date().toISOString()
+            });
+        }
+
+        activities.push({
+            day: d,
+            time: '13:30',
+            category: 'food',
+            place: `Famous Regional Restaurant in ${destination}`,
+            notes: 'Enjoy authentic local delicacies & refreshing lunch.',
+            addedBy: auth.currentUser?.uid || 'system',
+            addedAt: new Date().toISOString()
+        });
+
+        activities.push({
+            day: d,
+            time: '17:00',
+            category: 'shopping',
+            place: `${destination} Evening Market & Local Bazaar`,
+            notes: 'Handicrafts, local shopping, souvenirs & evening snacks.',
+            addedBy: auth.currentUser?.uid || 'system',
+            addedAt: new Date().toISOString()
+        });
+    }
+
+    return activities;
 }
 
 function showAiAutoItineraryModal() {
@@ -6117,29 +6248,37 @@ CRITICAL TIMING & PLANNING RULES:
 Allowed values for "category": "temple", "sightseeing", "food", "shopping", "hotel", "transit", "other".
 `;
 
+        let formattedActivities = [];
         const aiResponseText = await callAIModelForItinerary(prompt);
 
-        // Clean response string and parse JSON
-        let cleanText = aiResponseText.replace(/```json/g, '').replace(/```/g, '').trim();
-        const jsonMatch = cleanText.match(/\[[\s\S]*\]/);
-        if (jsonMatch) cleanText = jsonMatch[0];
+        if (aiResponseText) {
+            try {
+                let cleanText = aiResponseText.replace(/```json/g, '').replace(/```/g, '').trim();
+                const jsonMatch = cleanText.match(/\[[\s\S]*\]/);
+                if (jsonMatch) cleanText = jsonMatch[0];
 
-        let generatedActivities = JSON.parse(cleanText);
-
-        if (!Array.isArray(generatedActivities) || generatedActivities.length === 0) {
-            throw new Error('AI generated invalid itinerary format. Please try again.');
+                const parsed = JSON.parse(cleanText);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    formattedActivities = parsed.map(act => ({
+                        day: Math.min(Math.max(1, parseInt(act.day) || 1), totalDays),
+                        time: act.time || '10:00',
+                        category: ['temple', 'sightseeing', 'food', 'shopping', 'hotel', 'transit'].includes(act.category) ? act.category : 'sightseeing',
+                        place: (act.place || 'Local Sightseeing').trim(),
+                        notes: (act.notes || '').trim(),
+                        addedBy: auth.currentUser.uid,
+                        addedAt: new Date().toISOString()
+                    }));
+                }
+            } catch (jsonErr) {
+                console.warn('AI text response was non-JSON, using ticket-aware fallback generator:', jsonErr.message);
+            }
         }
 
-        // Standardize & sanitize generated activities
-        const formattedActivities = generatedActivities.map(act => ({
-            day: Math.min(Math.max(1, parseInt(act.day) || 1), totalDays),
-            time: act.time || '10:00',
-            category: ['temple', 'sightseeing', 'food', 'shopping', 'hotel', 'transit'].includes(act.category) ? act.category : 'sightseeing',
-            place: (act.place || 'Local Sightseeing').trim(),
-            notes: (act.notes || '').trim(),
-            addedBy: auth.currentUser.uid,
-            addedAt: new Date().toISOString()
-        }));
+        // Fallback: If AI returned non-JSON text or API failed, build ticket-aware itinerary
+        if (formattedActivities.length === 0) {
+            console.log('🤖 Building ticket-aware fallback itinerary...');
+            formattedActivities = buildFallbackItinerary(currentTrip, totalDays, pace);
+        }
 
         const tripDoc = await db.collection('trips').doc(currentTrip.id).get();
         if (!tripDoc.exists) throw new Error('Trip not found');
