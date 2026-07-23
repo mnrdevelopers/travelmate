@@ -6089,41 +6089,89 @@ async function importTicketsToItinerary() {
     }
 
     const tickets = currentTrip.tickets;
-    const startDate = new Date(currentTrip.startDate);
-    const endDate = new Date(currentTrip.endDate);
-    const totalDays = Math.max(1, Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1);
+    const startDateStr = currentTrip.startDate ? currentTrip.startDate.split('T')[0] : '';
+    if (!startDateStr) {
+        showToast('Trip start date missing!', 'warning');
+        return;
+    }
+    
+    const tripStartMidnight = new Date(startDateStr + 'T00:00:00');
+    const endDateStr = currentTrip.endDate ? currentTrip.endDate.split('T')[0] : startDateStr;
+    const tripEndMidnight = new Date(endDateStr + 'T00:00:00');
+    const totalDays = Math.max(1, Math.round((tripEndMidnight - tripStartMidnight) / (1000 * 60 * 60 * 24)) + 1);
+
+    const getDayNumberFromIso = (isoStr) => {
+        if (!isoStr) return 1;
+        const dateOnly = new Date(isoStr.split('T')[0] + 'T00:00:00');
+        const diffDays = Math.round((dateOnly - tripStartMidnight) / (1000 * 60 * 60 * 24));
+        return Math.min(Math.max(1, diffDays + 1), totalDays);
+    };
 
     const newActivities = [];
     tickets.forEach(t => {
-        let day = 1;
-        let time = '08:00';
-        if (t.departureTime) {
-            const ticketDate = new Date(t.departureTime);
-            const diffDays = Math.ceil((ticketDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
-            day = Math.min(Math.max(1, diffDays), totalDays);
-            time = t.departureTime.includes('T') ? t.departureTime.split('T')[1].substring(0, 5) : '08:00';
-        }
-
         if (t.type === 'darshan') {
+            const depDay = getDayNumberFromIso(t.departureTime);
+            const depTime = t.departureTime && t.departureTime.includes('T') ? t.departureTime.split('T')[1].substring(0, 5) : '08:00';
+            
             newActivities.push({
-                day,
-                time,
+                day: depDay,
+                date: t.departureTime ? t.departureTime.split('T')[0] : startDateStr,
+                time: depTime,
                 category: 'temple',
                 place: t.templeName || `${currentTrip.destination} Temple`,
-                notes: `🙏 Darshan Slot (${t.darshanCategory || 'Special Entry'}) - Gate: ${t.reportingVenue || t.departurePlace || 'Reporting Gate'}`,
+                notes: `🙏 Darshan Slot (${t.darshanCategory || 'Special Entry'}) - Gate: ${t.reportingVenue || t.departurePlace || 'Reporting Gate'}${t.devoteesCount ? ` (${t.devoteesCount} devotee(s))` : ''}`,
                 addedBy: auth.currentUser.uid,
                 addedAt: new Date().toISOString()
             });
         } else {
+            // Transport Ticket (Train, Flight, Bus)
+            const depDay = getDayNumberFromIso(t.departureTime);
+            const depTime = t.departureTime && t.departureTime.includes('T') ? t.departureTime.split('T')[1].substring(0, 5) : '08:00';
+            
+            // Departure Activity
             newActivities.push({
-                day,
-                time,
+                day: depDay,
+                date: t.departureTime ? t.departureTime.split('T')[0] : startDateStr,
+                time: depTime,
                 category: 'transit',
-                place: `Transit: ${t.departurePlace} → ${t.arrivalPlace}`,
-                notes: `🚕 ${t.type.toUpperCase()} Carrier: ${t.serviceNo ? t.serviceNo + ' - ' : ''}${t.serviceName || t.operator || 'Transport'}. Departure @ ${time}.`,
+                place: `Departure: ${t.departurePlace} (${t.type.toUpperCase()})`,
+                notes: `🚕 Carrier: ${t.serviceNo ? t.serviceNo + ' - ' : ''}${t.serviceName || t.operator || 'Transport'}${t.seat ? ` | Seat/Berth: ${t.seat}` : ''}`,
                 addedBy: auth.currentUser.uid,
                 addedAt: new Date().toISOString()
             });
+
+            // If arrival date is present and different from departure date, add Arrival Activity & Intermediate Full Journey Day Activity!
+            if (t.arrivalTime) {
+                const arrDay = getDayNumberFromIso(t.arrivalTime);
+                const arrTime = t.arrivalTime.includes('T') ? t.arrivalTime.split('T')[1].substring(0, 5) : '08:00';
+
+                // Add intermediate full transit days (e.g. Day 2)
+                for (let d = depDay + 1; d < arrDay; d++) {
+                    const midDate = new Date(tripStartMidnight.getTime() + (d - 1) * 24 * 60 * 60 * 1000);
+                    newActivities.push({
+                        day: d,
+                        date: midDate.toISOString().split('T')[0],
+                        time: '08:00',
+                        category: 'transit',
+                        place: `Onboard ${t.type.toUpperCase()} in Transit (${t.departurePlace} → ${t.arrivalPlace})`,
+                        notes: `🚂 Traveling inside ${t.serviceNo ? t.serviceNo + ' ' : ''}${t.serviceName || t.operator}. Relax & enjoy scenic views.`,
+                        addedBy: auth.currentUser.uid,
+                        addedAt: new Date().toISOString()
+                    });
+                }
+
+                // Add Arrival Activity
+                newActivities.push({
+                    day: arrDay,
+                    date: t.arrivalTime.split('T')[0],
+                    time: arrTime,
+                    category: 'transit',
+                    place: `Arrival: ${t.arrivalPlace} (${t.type.toUpperCase()})`,
+                    notes: `🛬 Arrived via ${t.serviceNo ? t.serviceNo + ' - ' : ''}${t.serviceName || t.operator}. Proceed to hotel check-in.`,
+                    addedBy: auth.currentUser.uid,
+                    addedAt: new Date().toISOString()
+                });
+            }
         }
     });
 
@@ -6154,7 +6202,7 @@ async function importTicketsToItinerary() {
     });
 
     currentTrip.itinerary = combined;
-    showToast(`Successfully imported ${importedCount} booked ticket(s) into your itinerary! 🎉`, 'success');
+    showToast(`Successfully imported ${importedCount} ticket leg(s) into exact calendar dates! 🎉`, 'success');
     loadTripDetails();
 }
 
