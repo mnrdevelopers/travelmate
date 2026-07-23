@@ -5935,6 +5935,232 @@ function shareItineraryText() {
     }
 }
 
+// =========================================================================
+// AI AUTO-ITINERARY PLANNER ENGINE (USES BOOKED TICKETS & DESTINATION DATA)
+// =========================================================================
+
+async function callAIModelForItinerary(prompt) {
+    let apiKey = window._openrouterApiKey;
+    if (!apiKey && typeof loadOpenRouterKeyShared === 'function') {
+        apiKey = await loadOpenRouterKeyShared();
+    }
+    
+    const systemPrompt = "You are a professional travel planner API that returns strictly valid JSON arrays of itinerary activity objects. Return ONLY the raw JSON array without markdown codeblocks or introductory text.";
+
+    const modelsToTry = [
+        'openrouter/free',
+        'meta-llama/llama-3.3-70b-instruct:free',
+        'google/gemini-2.0-flash-exp:free',
+        'qwen/qwen-2.5-72b-instruct:free',
+        'deepseek/deepseek-r1:free'
+    ];
+
+    if (window._openrouterModel && window._openrouterModel !== 'auto') {
+        modelsToTry.unshift(window._openrouterModel);
+    }
+
+    let lastError = 'AI generation failed.';
+
+    for (const model of modelsToTry) {
+        try {
+            console.log(`🤖 Requesting AI Itinerary via model: ${model}`);
+            const headers = {
+                'Content-Type': 'application/json',
+                'HTTP-Referer': window.location.origin,
+                'X-Title': 'TravelMate AI Planner'
+            };
+            if (apiKey) {
+                headers['Authorization'] = `Bearer ${apiKey}`;
+            }
+
+            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    model,
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: prompt }
+                    ],
+                    max_tokens: 1500,
+                    temperature: 0.7
+                })
+            });
+
+            if (!response.ok) {
+                const errText = await response.text();
+                console.warn(`OpenRouter ${model} error:`, response.status, errText);
+                lastError = `Model ${model} returned status ${response.status}`;
+                continue;
+            }
+
+            const data = await response.json();
+            const text = data.choices?.[0]?.message?.content?.trim();
+            if (text) return text;
+        } catch (e) {
+            console.warn(`OpenRouter ${model} exception:`, e);
+            lastError = e.message;
+        }
+    }
+
+    throw new Error(lastError);
+}
+
+function showAiAutoItineraryModal() {
+    if (!currentTrip) {
+        showToast('No trip selected', 'warning');
+        return;
+    }
+    
+    const summaryContainer = document.getElementById('ai-itinerary-ticket-summary');
+    if (summaryContainer) {
+        const tickets = currentTrip.tickets || [];
+        if (tickets.length > 0) {
+            summaryContainer.innerHTML = `
+                <div class="fw-bold text-dark mb-1"><i class="fas fa-ticket-alt text-primary me-1"></i>Found ${tickets.length} Booked Ticket(s) & Slots:</div>
+                <ul class="mb-0 ps-3 text-secondary" style="font-size:0.8rem;">
+                    ${tickets.slice(0, 5).map(t => {
+                        if (t.type === 'darshan') {
+                            return `<li><strong>🙏 Darshan Pass:</strong> ${t.templeName || t.operator} (${t.darshanCategory || 'Special Entry'}) - Slot: ${t.departureTime.replace('T', ' ')}</li>`;
+                        }
+                        return `<li><strong>${t.type.toUpperCase()}:</strong> ${t.serviceNo ? t.serviceNo + ' - ' : ''}${t.serviceName || t.operator} (${t.departurePlace} → ${t.arrivalPlace}) @ ${t.departureTime.replace('T', ' ')}</li>`;
+                    }).join('')}
+                    ${tickets.length > 5 ? `<li><em>...and ${tickets.length - 5} more ticket(s)</em></li>` : ''}
+                </ul>
+            `;
+        } else {
+            summaryContainer.innerHTML = `
+                <div class="text-secondary small"><i class="fas fa-info-circle text-info me-1"></i>No tickets added yet. AI will generate an optimal day-wise itinerary for <strong>${currentTrip.destination}</strong> based on trip duration (${currentTrip.startDate} to ${currentTrip.endDate}).</div>
+            `;
+        }
+    }
+
+    const statusEl = document.getElementById('ai-itinerary-status');
+    const formEl = document.getElementById('ai-itinerary-form');
+    const submitBtn = document.getElementById('btn-generate-ai-itinerary-submit');
+    if (statusEl) statusEl.classList.add('d-none');
+    if (formEl) formEl.classList.remove('d-none');
+    if (submitBtn) submitBtn.disabled = false;
+
+    const modal = new bootstrap.Modal(document.getElementById('aiAutoItineraryModal'));
+    modal.show();
+}
+
+async function runAiAutoItineraryGeneration() {
+    if (!currentTrip) return;
+
+    const mode = document.getElementById('ai-itinerary-mode').value;
+    const pace = document.getElementById('ai-itinerary-pace').value;
+
+    const statusEl = document.getElementById('ai-itinerary-status');
+    const statusText = document.getElementById('ai-itinerary-status-text');
+    const formEl = document.getElementById('ai-itinerary-form');
+    const submitBtn = document.getElementById('btn-generate-ai-itinerary-submit');
+
+    if (statusEl) statusEl.classList.remove('d-none');
+    if (formEl) formEl.classList.add('d-none');
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+        const startDate = new Date(currentTrip.startDate);
+        const endDate = new Date(currentTrip.endDate);
+        const totalDays = Math.max(1, Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1);
+
+        if (statusText) statusText.textContent = `Analyzing tickets & generating Day 1 to Day ${totalDays} schedule for ${currentTrip.destination}...`;
+
+        const ticketsList = (currentTrip.tickets || []).map((t, idx) => {
+            if (t.type === 'darshan') {
+                return `Ticket #${idx+1} [DARSHAN PASS]: Temple "${t.templeName || t.operator}", Slot Date/Time "${t.departureTime}", Reporting Gate "${t.reportingVenue || t.departurePlace}", Category "${t.darshanCategory || 'Special Entry'}"`;
+            }
+            return `Ticket #${idx+1} [${t.type.toUpperCase()}]: Carrier "${t.serviceNo ? t.serviceNo + ' - ' : ''}${t.serviceName || t.operator}", Departs "${t.departurePlace}" at "${t.departureTime}", Arrives "${t.arrivalPlace}" at "${t.arrivalTime || 'N/A'}"`;
+        }).join('\n');
+
+        const prompt = `You are a professional travel itinerary planner API.
+Destination: "${currentTrip.destination}"
+Trip Dates: ${currentTrip.startDate} to ${currentTrip.endDate} (${totalDays} total day(s))
+Travel Style / Focus: ${pace}
+
+BOOKED TRAVEL TICKETS & APPOINTMENTS (MUST BE INCORPORATED ACCURATELY):
+${ticketsList || 'No specific tickets booked.'}
+
+INSTRUCTIONS:
+1. Create a day-wise itinerary covering Day 1 to Day ${totalDays}.
+2. Ensure you respect the exact arrival times, departure times, and Darshan reporting slots mentioned in the tickets!
+3. For each day, include 3 to 5 realistic activities (Sightseeing, Temple visits, Famous local food, Shopping, Hotel check-in/rest, Travel transit).
+4. OUTPUT FORMAT REQUIREMENTS:
+   - Output MUST be ONLY a raw JSON array of objects.
+   - Do NOT include any markdown codeblocks (\`\`\`json ... \`\`\`), no text outside the array.
+   - Schema for each object:
+     {
+       "day": 1,
+       "time": "09:00",
+       "category": "temple|sightseeing|food|shopping|hotel|transit",
+       "place": "Name of location/place",
+       "notes": "Brief tips or instructions"
+     }
+
+Allowed values for "category": "temple", "sightseeing", "food", "shopping", "hotel", "transit", "other".
+`;
+
+        const aiResponseText = await callAIModelForItinerary(prompt);
+
+        // Clean response string and parse JSON
+        let cleanText = aiResponseText.replace(/```json/g, '').replace(/```/g, '').trim();
+        const jsonMatch = cleanText.match(/\[[\s\S]*\]/);
+        if (jsonMatch) cleanText = jsonMatch[0];
+
+        let generatedActivities = JSON.parse(cleanText);
+
+        if (!Array.isArray(generatedActivities) || generatedActivities.length === 0) {
+            throw new Error('AI generated invalid itinerary format. Please try again.');
+        }
+
+        // Standardize & sanitize generated activities
+        const formattedActivities = generatedActivities.map(act => ({
+            day: Math.min(Math.max(1, parseInt(act.day) || 1), totalDays),
+            time: act.time || '10:00',
+            category: ['temple', 'sightseeing', 'food', 'shopping', 'hotel', 'transit'].includes(act.category) ? act.category : 'sightseeing',
+            place: (act.place || 'Local Sightseeing').trim(),
+            notes: (act.notes || '').trim(),
+            addedBy: auth.currentUser.uid,
+            addedAt: new Date().toISOString()
+        }));
+
+        const tripDoc = await db.collection('trips').doc(currentTrip.id).get();
+        if (!tripDoc.exists) throw new Error('Trip not found');
+
+        const tripData = tripDoc.data();
+        let finalItinerary = [];
+
+        if (mode === 'append') {
+            finalItinerary = [...(tripData.itinerary || []), ...formattedActivities];
+        } else {
+            finalItinerary = formattedActivities;
+        }
+
+        await db.collection('trips').doc(currentTrip.id).update({
+            itinerary: finalItinerary,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        currentTrip.itinerary = finalItinerary;
+
+        const modal = bootstrap.Modal.getInstance(document.getElementById('aiAutoItineraryModal'));
+        modal?.hide();
+
+        showToast(`AI successfully generated ${formattedActivities.length} itinerary activities! 🎉`, 'success');
+        loadTripDetails();
+
+    } catch (err) {
+        console.error('Error generating AI itinerary:', err);
+        showToast(err.message || 'Failed to generate AI itinerary. Please try again.', 'danger');
+    } finally {
+        if (statusEl) statusEl.classList.add('d-none');
+        if (formEl) formEl.classList.remove('d-none');
+        if (submitBtn) submitBtn.disabled = false;
+    }
+}
+
 // Expose functions globally for onclick calls
 window.showEditTicketModal = showEditTicketModal;
 window.deleteTicket = deleteTicket;
@@ -5943,3 +6169,5 @@ window.loadTripTickets = loadTripTickets;
 window.loadTripWeather = loadTripWeather;
 window.renderJourneyStayBreakdown = renderJourneyStayBreakdown;
 window.shareItineraryText = shareItineraryText;
+window.showAiAutoItineraryModal = showAiAutoItineraryModal;
+window.runAiAutoItineraryGeneration = runAiAutoItineraryGeneration;
