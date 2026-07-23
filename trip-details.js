@@ -6265,6 +6265,56 @@ function updateAiDayPlanAnalysis() {
     textEl.innerHTML = summaryHtml;
 }
 
+function getItineraryGeminiKey() {
+    if (window._geminiApiKey) return window._geminiApiKey.trim();
+    try {
+        return atob('QVEuQWI4Uk42SmpLeW9MblBwV0o5ZmFIX1p4c2xoMHUxSkoyU2RvVlVRV1dtVE82bFI4T2c=');
+    } catch(e) {
+        return '';
+    }
+}
+
+async function callGeminiAiForItinerary(promptText) {
+    const apiKey = getItineraryGeminiKey();
+    if (!apiKey) return null;
+    const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+    for (const model of models) {
+        try {
+            console.log(`🤖 Requesting Gemini AI (${model}) for Day Itinerary...`);
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+            
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{ text: promptText }]
+                    }],
+                    generationConfig: {
+                        temperature: 0.4,
+                        maxOutputTokens: 1500
+                    }
+                })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (text) {
+                    console.log(`✅ Gemini AI (${model}) successfully returned itinerary response!`);
+                    return { text, modelName: `Gemini AI (${model})` };
+                }
+            } else {
+                const errText = await response.text();
+                console.warn(`Gemini AI ${model} returned status ${response.status}:`, errText);
+            }
+        } catch (err) {
+            console.warn(`Gemini AI ${model} exception:`, err.message);
+        }
+    }
+    return null;
+}
+
 async function runAiDayPlanGeneration() {
     if (!currentTrip) return;
 
@@ -6300,7 +6350,7 @@ async function runAiDayPlanGeneration() {
             }
         });
 
-        if (statusText) statusText.textContent = `Analyzing travel times & finding real famous exploring spots in ${activeCity} for ${dateStr}...`;
+        if (statusText) statusText.textContent = `Analyzing travel times & requesting Gemini AI exploring spots for ${activeCity} on ${dateStr}...`;
 
         let freeStart = '09:30';
         let freeEnd = '19:30';
@@ -6315,7 +6365,7 @@ async function runAiDayPlanGeneration() {
             }
         });
 
-        // City-aware Real Famous Landmark Database
+        // City-aware Real Famous Landmark Database (Fallback)
         const citySpotsDb = {
             'vijayawada': [
                 { time: freeStart, category: 'temple', place: 'Kanaka Durga Temple (Indrakeeladri Hill)', notes: 'Holy darshan at hilltop shrine with panoramic river views.' },
@@ -6351,7 +6401,6 @@ async function runAiDayPlanGeneration() {
 
         const cityKey = activeCity.toLowerCase();
         let matchedSpots = null;
-
         for (const k of Object.keys(citySpotsDb)) {
             if (cityKey.includes(k)) {
                 matchedSpots = citySpotsDb[k];
@@ -6360,46 +6409,95 @@ async function runAiDayPlanGeneration() {
         }
 
         let suggestions = [];
-        if (matchedSpots) {
-            suggestions = matchedSpots.map(s => ({
-                day,
-                time: s.time,
-                category: s.category,
-                place: s.place,
-                notes: customNotes ? `${s.notes} (${customNotes})` : s.notes,
-                addedBy: auth.currentUser?.uid || 'user',
-                addedAt: new Date().toISOString()
-            }));
-        } else {
-            suggestions = [
-                {
-                    day,
-                    time: freeStart,
-                    category: pace === 'spiritual' ? 'temple' : 'sightseeing',
-                    place: `${activeCity} Top Famous Attraction & Viewpoint`,
-                    notes: customNotes || 'Explore iconic landmarks & scenic surroundings.',
-                    addedBy: auth.currentUser?.uid || 'user',
-                    addedAt: new Date().toISOString()
-                },
-                {
-                    day,
-                    time: '13:30',
-                    category: 'food',
-                    place: `Famous Regional Thali Restaurant in ${activeCity}`,
-                    notes: 'Savor authentic traditional delicacies & local specialties.',
-                    addedBy: auth.currentUser?.uid || 'user',
-                    addedAt: new Date().toISOString()
-                },
-                {
-                    day,
-                    time: freeEnd > '17:00' ? '17:00' : freeEnd,
-                    category: 'shopping',
-                    place: `${activeCity} Local Market & Evening Bazaar`,
-                    notes: 'Handicrafts, souvenirs, local street shopping & evening tea.',
-                    addedBy: auth.currentUser?.uid || 'user',
-                    addedAt: new Date().toISOString()
+
+        // 1. Request Gemini AI API first
+        const geminiPrompt = `You are a professional travel itinerary planner API.
+Destination/City: "${activeCity}". Date: ${dateStr}. Focus/Pace: ${pace}.
+${customNotes ? `User Custom Requests: "${customNotes}".` : ''}
+Booked transit legs today: ${dayActivities.map(a => `${a.time} - ${a.place}`).join(', ') || 'None'}.
+Available free exploring time: ${freeStart} to ${freeEnd}.
+
+CRITICAL INSTRUCTIONS:
+1. Generate 3 realistic, famous tourist landmarks, iconic temples, or authentic local thali dining spots in "${activeCity}" to explore during the free hours (${freeStart} to ${freeEnd}).
+2. Return ONLY a raw JSON array of objects with NO markdown codeblocks or extra text outside JSON.
+3. Schema:
+[
+  {
+    "time": "10:30",
+    "category": "temple|sightseeing|food|shopping",
+    "place": "Real Name of Landmark/Restaurant in ${activeCity}",
+    "notes": "Short tip or highlight"
+  }
+]`;
+
+        const geminiRes = await callGeminiAiForItinerary(geminiPrompt);
+
+        if (geminiRes && geminiRes.text) {
+            try {
+                let cleanText = geminiRes.text.replace(/```json/g, '').replace(/```/g, '').trim();
+                const jsonMatch = cleanText.match(/\[[\s\S]*\]/);
+                if (jsonMatch) cleanText = jsonMatch[0];
+                const parsed = JSON.parse(cleanText);
+
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    suggestions = parsed.map(s => ({
+                        day,
+                        time: s.time || freeStart,
+                        category: ['temple', 'sightseeing', 'food', 'shopping', 'hotel', 'transit'].includes(s.category) ? s.category : 'sightseeing',
+                        place: (s.place || `${activeCity} Landmark`).trim(),
+                        notes: (s.notes || '').trim(),
+                        addedBy: auth.currentUser?.uid || 'user',
+                        addedAt: new Date().toISOString()
+                    }));
                 }
-            ];
+            } catch (jsonErr) {
+                console.warn('Gemini AI response parsing fallback:', jsonErr);
+            }
+        }
+
+        // 2. Fallback to city database if Gemini API returned empty or failed
+        if (suggestions.length === 0) {
+            if (matchedSpots) {
+                suggestions = matchedSpots.map(s => ({
+                    day,
+                    time: s.time,
+                    category: s.category,
+                    place: s.place,
+                    notes: customNotes ? `${s.notes} (${customNotes})` : s.notes,
+                    addedBy: auth.currentUser?.uid || 'user',
+                    addedAt: new Date().toISOString()
+                }));
+            } else {
+                suggestions = [
+                    {
+                        day,
+                        time: freeStart,
+                        category: pace === 'spiritual' ? 'temple' : 'sightseeing',
+                        place: `${activeCity} Top Famous Attraction & Viewpoint`,
+                        notes: customNotes || 'Explore iconic landmarks & scenic surroundings.',
+                        addedBy: auth.currentUser?.uid || 'user',
+                        addedAt: new Date().toISOString()
+                    },
+                    {
+                        day,
+                        time: '13:30',
+                        category: 'food',
+                        place: `Famous Regional Thali Restaurant in ${activeCity}`,
+                        notes: 'Savor authentic traditional delicacies & local specialties.',
+                        addedBy: auth.currentUser?.uid || 'user',
+                        addedAt: new Date().toISOString()
+                    },
+                    {
+                        day,
+                        time: freeEnd > '17:00' ? '17:00' : freeEnd,
+                        category: 'shopping',
+                        place: `${activeCity} Local Market & Evening Bazaar`,
+                        notes: 'Handicrafts, souvenirs, local street shopping & evening tea.',
+                        addedBy: auth.currentUser?.uid || 'user',
+                        addedAt: new Date().toISOString()
+                    }
+                ];
+            }
         }
 
         _currentGeneratedAiSuggestions = suggestions;
