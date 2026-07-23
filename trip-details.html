@@ -517,8 +517,8 @@
                 <small class="text-muted">Day-wise schedule & attractions for your journey</small>
             </div>
             <div class="d-flex gap-2">
-                <button class="btn btn-gradient btn-outline-primary btn-sm rounded-pill shadow-sm" id="btn-ai-auto-itinerary" onclick="showAiAutoItineraryModal()">
-                    <i class="fas fa-wand-magic-sparkles me-1 text-warning"></i>AI Auto-Plan
+                <button class="btn btn-outline-primary btn-sm rounded-pill shadow-sm" id="btn-import-tickets-itinerary" onclick="importTicketsToItinerary()">
+                    <i class="fas fa-ticket-alt me-1 text-primary"></i>Import Booked Tickets
                 </button>
                 <button class="btn btn-outline-success btn-sm rounded-pill shadow-sm" id="btn-share-itinerary" onclick="shareItineraryText()">
                     <i class="fab fa-whatsapp me-1"></i>Share Itinerary
@@ -1031,23 +1031,60 @@
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title">Add Activity</h5>
+                        <h5 class="modal-title"><i class="fas fa-calendar-plus text-primary me-2"></i>Add Activity</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
+                        <!-- 1-Click Quick Presets -->
+                        <div class="mb-3 p-2 bg-light border rounded-3">
+                            <label class="form-label small fw-bold text-dark mb-1">
+                                <i class="fas fa-bolt text-warning me-1"></i>1-Click Quick Presets:
+                            </label>
+                            <div class="d-flex flex-wrap gap-1">
+                                <button type="button" class="btn btn-xs btn-outline-warning rounded-pill quick-preset-chip" 
+                                    onclick="applyQuickPreset('temple', '08:30', 'Temple / Shrine Darshan', 'Morning holy prayers & peaceful darshan')">
+                                    🕉️ Temple Darshan
+                                </button>
+                                <button type="button" class="btn btn-xs btn-outline-primary rounded-pill quick-preset-chip" 
+                                    onclick="applyQuickPreset('sightseeing', '10:30', 'Famous City Sightseeing Spot', 'Explore top attractions & heritage sights')">
+                                    🏛️ City Sightseeing
+                                </button>
+                                <button type="button" class="btn btn-xs btn-outline-danger rounded-pill quick-preset-chip" 
+                                    onclick="applyQuickPreset('food', '13:00', 'Famous Regional Restaurant', 'Savor authentic local delicacies')">
+                                    🍽️ Local Food
+                                </button>
+                                <button type="button" class="btn btn-xs btn-outline-success rounded-pill quick-preset-chip" 
+                                    onclick="applyQuickPreset('shopping', '17:00', 'Evening Bazaar & Local Market', 'Handicrafts, souvenirs & local shopping')">
+                                    🛍️ Evening Bazaar
+                                </button>
+                                <button type="button" class="btn btn-xs btn-outline-info rounded-pill quick-preset-chip" 
+                                    onclick="applyQuickPreset('hotel', '15:00', 'Hotel Check-in & Rest', 'Check-in, refresh & relax')">
+                                    🏨 Hotel Rest
+                                </button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary rounded-pill quick-preset-chip" 
+                                    onclick="applyQuickPreset('transit', '08:00', 'Onboard Train / Travel Transit', 'Full day journey in transit')">
+                                    🚂 Train Journey
+                                </button>
+                                <button type="button" class="btn btn-xs btn-outline-dark rounded-pill quick-preset-chip" 
+                                    onclick="applyQuickPreset('sightseeing', '18:30', 'Sunset Viewpoint / River Cruise', 'Enjoy evening sunset views & photography')">
+                                    🌅 Sunset Cruise
+                                </button>
+                            </div>
+                        </div>
+
                         <form id="add-activity-form">
                             <div class="mb-3">
-                                <label for="activity-day" class="form-label">Day</label>
+                                <label for="activity-day" class="form-label fw-semibold">Day</label>
                                 <select class="form-select" id="activity-day" required>
                                     <!-- Days will be populated dynamically -->
                                 </select>
                             </div>
                             <div class="mb-3">
-                                <label for="activity-time" class="form-label">Time</label>
+                                <label for="activity-time" class="form-label fw-semibold">Time</label>
                                 <input type="time" class="form-control" id="activity-time" required>
                             </div>
                             <div class="mb-3">
-                                <label for="activity-category" class="form-label">Category</label>
+                                <label for="activity-category" class="form-label fw-semibold">Category</label>
                                 <select class="form-select" id="activity-category">
                                     <option value="sightseeing">🏛️ Sightseeing & Attractions</option>
                                     <option value="temple">🕉️ Temple / Darshan / Devotional</option>
@@ -1059,93 +1096,18 @@
                                 </select>
                             </div>
                             <div class="mb-3">
-                                <label for="activity-place" class="form-label">Place / Location Name</label>
+                                <label for="activity-place" class="form-label fw-semibold">Place / Location Name</label>
                                 <input type="text" class="form-control" id="activity-place" placeholder="e.g. Maa Kamakhya Temple, Charminar, Taj Mahal..." required>
                             </div>
                             <div class="mb-3">
-                                <label for="activity-notes" class="form-label">Notes / Instructions</label>
-                                <textarea class="form-control" id="activity-notes" rows="3" placeholder="e.g. Carry shoes in bag, dress code applies, photography allowed..."></textarea>
+                                <label for="activity-notes" class="form-label fw-semibold">Notes / Instructions</label>
+                                <textarea class="form-control" id="activity-notes" rows="2" placeholder="e.g. Carry shoes in bag, dress code applies, photography allowed..."></textarea>
                             </div>
                         </form>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-primary" id="save-activity-btn">Add Activity</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- AI Auto-Itinerary Modal -->
-        <div class="modal fade" id="aiAutoItineraryModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content border-0 shadow-lg rounded-3">
-                    <div class="modal-header bg-gradient text-white py-3" style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);">
-                        <h5 class="modal-title fw-bold mb-0">
-                            <i class="fas fa-wand-magic-sparkles me-2 text-warning"></i>AI Smart Itinerary Planner
-                        </h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body p-4">
-                        <div class="alert alert-primary bg-primary bg-opacity-10 border border-primary border-opacity-25 rounded-3 mb-3 small">
-                            <i class="fas fa-robot text-primary me-2"></i>
-                            TravelMate AI inspects your <strong>booked tickets (Trains, Flights, Buses, & Darshan slots)</strong> to exclude journey transit travel hours and build a day-wise schedule <strong>strictly for your actual destination exploring time!</strong>
-                        </div>
-
-                        <div id="ai-itinerary-ticket-summary" class="bg-light p-3 rounded-3 border mb-3 small">
-                            <!-- Populated with ticket preview -->
-                        </div>
-
-                        <form id="ai-itinerary-form">
-                            <div class="mb-3">
-                                <label for="ai-itinerary-mode" class="form-label fw-semibold">Plan Generation Mode</label>
-                                <select class="form-select" id="ai-itinerary-mode">
-                                    <option value="replace">🔄 Overwrite / Create Complete Plan</option>
-                                    <option value="append">➕ Append AI Suggestions to Existing Activities</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label for="ai-itinerary-pace" class="form-label fw-semibold">Travel Style & Focus</label>
-                                <select class="form-select" id="ai-itinerary-pace">
-                                    <option value="balanced">☯️ Balanced (Sightseeing + Spiritual + Rest)</option>
-                                    <option value="spiritual">🕉️ Devotional & Temple Focused</option>
-                                    <option value="fast">⚡ Action-Packed (Cover Maximum Places)</option>
-                                    <option value="relaxed">☕ Relaxed & Leisurely</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold text-dark mb-1">
-                                    <i class="fas fa-calendar-check text-primary me-1"></i>Day-by-Day Schedule Type (Train vs. Exploring)
-                                </label>
-                                <div id="ai-itinerary-day-types-list" class="p-2 border rounded-3 bg-light" style="max-height: 180px; overflow-y: auto;">
-                                    <!-- Populated dynamically per trip day -->
-                                </div>
-                                <div class="form-text small text-muted mt-1">
-                                    <i class="fas fa-info-circle text-info me-1"></i>Select <strong>"Train / Travel Transit"</strong> for days spent inside a train/flight so AI doesn't schedule sightseeing on travel days!
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="ai-itinerary-user-guidance" class="form-label fw-semibold">
-                                    <i class="fas fa-comment-dots text-primary me-1"></i>Guide AI / Special Requests <span class="text-muted fw-normal">(Optional)</span>
-                                </label>
-                                <textarea class="form-control" id="ai-itinerary-user-guidance" rows="3" 
-                                    placeholder="e.g. Traveling with family & kids, include vegetarian food, visit Kamakhya temple at sunrise, include sunset river cruise, keep walking light..."></textarea>
-                                <div class="form-text small text-muted">
-                                    <i class="fas fa-lightbulb text-warning me-1"></i>Tell TravelMate AI any specific places, dietary preferences, or timing requests you want included!
-                                </div>
-                            </div>
-                        </form>
-                        
-                        <div id="ai-itinerary-status" class="d-none text-center py-3">
-                            <div class="spinner-border text-primary mb-2" role="status"></div>
-                            <p class="small text-muted mb-0 fw-semibold" id="ai-itinerary-status-text">Analyzing your tickets & generating day-wise schedule...</p>
-                        </div>
-                    </div>
-                    <div class="modal-footer bg-light">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-primary px-4 fw-bold rounded-pill" id="btn-generate-ai-itinerary-submit" onclick="runAiAutoItineraryGeneration()">
-                            <i class="fas fa-wand-magic-sparkles me-1 text-warning"></i>Generate Plan
-                        </button>
+                        <button type="button" class="btn btn-primary" id="save-activity-btn">Save Activity</button>
                     </div>
                 </div>
             </div>

@@ -1858,6 +1858,11 @@ async function loadTripItinerary(trip) {
                                                 <i class="fas fa-compass me-1"></i>Directions
                                             </a>
                                             ${canEdit ? `
+                                                <button class="btn btn-xs btn-outline-secondary py-1 px-2 rounded-pill" 
+                                                        onclick="duplicateActivity(${activity.originalIndex})"
+                                                        title="Duplicate Activity" style="font-size:0.7rem;">
+                                                    <i class="far fa-copy me-1"></i>Copy
+                                                </button>
                                                 <button class="btn btn-xs btn-outline-primary edit-activity-btn py-1 px-2 rounded-pill" 
                                                         data-activity-index="${activity.originalIndex}"
                                                         title="Edit Activity" style="font-size:0.7rem;">
@@ -6044,14 +6049,36 @@ async function callAIModelForItinerary(prompt) {
     return null;
 }
 
-function buildFallbackItinerary(trip, totalDays, pace, dayChoices = {}) {
-    const activities = [];
-    const tickets = trip.tickets || [];
-    const destination = (trip.destination || 'Destination').trim();
-    const startDate = new Date(trip.startDate);
+function applyQuickPreset(category, time, place, notes) {
+    const catEl = document.getElementById('activity-category');
+    const timeEl = document.getElementById('activity-time');
+    const placeEl = document.getElementById('activity-place');
+    const notesEl = document.getElementById('activity-notes');
 
-    // 1. Incorporate booked tickets & Darshan passes
-    tickets.forEach((t) => {
+    if (catEl) catEl.value = category;
+    if (timeEl && !timeEl.value) timeEl.value = time;
+    if (placeEl) {
+        placeEl.value = place;
+        placeEl.focus();
+    }
+    if (notesEl && !notesEl.value) notesEl.value = notes;
+    
+    showToast(`Loaded preset "${place}"! Modify or click Save.`, 'info');
+}
+
+async function importTicketsToItinerary() {
+    if (!currentTrip || !currentTrip.tickets || currentTrip.tickets.length === 0) {
+        showToast('No booked tickets found to import. Add tickets in the Tickets tab first!', 'warning');
+        return;
+    }
+
+    const tickets = currentTrip.tickets;
+    const startDate = new Date(currentTrip.startDate);
+    const endDate = new Date(currentTrip.endDate);
+    const totalDays = Math.max(1, Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1);
+
+    const newActivities = [];
+    tickets.forEach(t => {
         let day = 1;
         let time = '08:00';
         if (t.departureTime) {
@@ -6062,371 +6089,77 @@ function buildFallbackItinerary(trip, totalDays, pace, dayChoices = {}) {
         }
 
         if (t.type === 'darshan') {
-            activities.push({
+            newActivities.push({
                 day,
                 time,
                 category: 'temple',
-                place: t.templeName || `${destination} Temple`,
+                place: t.templeName || `${currentTrip.destination} Temple`,
                 notes: `🙏 Darshan Slot (${t.darshanCategory || 'Special Entry'}) - Gate: ${t.reportingVenue || t.departurePlace || 'Reporting Gate'}`,
-                addedBy: auth.currentUser?.uid || 'system',
+                addedBy: auth.currentUser.uid,
                 addedAt: new Date().toISOString()
             });
         } else {
-            activities.push({
+            newActivities.push({
                 day,
                 time,
                 category: 'transit',
                 place: `Transit: ${t.departurePlace} → ${t.arrivalPlace}`,
                 notes: `🚕 ${t.type.toUpperCase()} Carrier: ${t.serviceNo ? t.serviceNo + ' - ' : ''}${t.serviceName || t.operator || 'Transport'}. Departure @ ${time}.`,
-                addedBy: auth.currentUser?.uid || 'system',
+                addedBy: auth.currentUser.uid,
                 addedAt: new Date().toISOString()
             });
         }
     });
 
-    // 2. Fill in exploring activities ONLY for non-full-transit days
-    for (let d = 1; d <= totalDays; d++) {
-        const choice = dayChoices[d] || 'exploring';
-        
-        if (choice === 'transit') {
-            const hasTransit = activities.some(a => a.day === d && a.category === 'transit');
-            if (!hasTransit) {
-                activities.push({
-                    day: d,
-                    time: '08:00',
-                    category: 'transit',
-                    place: `Onboard Train / In Transit`,
-                    notes: 'Full day journey on train. Relax, enjoy scenic views & rest.',
-                    addedBy: auth.currentUser?.uid || 'system',
-                    addedAt: new Date().toISOString()
-                });
-            }
-            continue; // Skip sightseeing for full-day train journey!
+    const tripDoc = await db.collection('trips').doc(currentTrip.id).get();
+    if (!tripDoc.exists) return;
+    const tripData = tripDoc.data();
+    const existing = tripData.itinerary || [];
+    
+    // Deduplicate activities
+    const combined = [...existing];
+    let importedCount = 0;
+    newActivities.forEach(item => {
+        const exists = combined.some(e => e.day === item.day && e.place === item.place);
+        if (!exists) {
+            combined.push(item);
+            importedCount++;
         }
+    });
 
-        const hasTemple = activities.some(a => a.day === d && a.category === 'temple');
-        const hasSightseeing = activities.some(a => a.day === d && a.category === 'sightseeing');
-
-        if (!hasTemple && (pace === 'spiritual' || pace === 'balanced')) {
-            activities.push({
-                day: d,
-                time: '09:00',
-                category: 'temple',
-                place: `${destination} Main Temple / Shrine`,
-                notes: 'Morning holy prayers, peaceful darshan & spiritual exploration.',
-                addedBy: auth.currentUser?.uid || 'system',
-                addedAt: new Date().toISOString()
-            });
-        }
-
-        if (!hasSightseeing) {
-            activities.push({
-                day: d,
-                time: '11:30',
-                category: 'sightseeing',
-                place: `${destination} Top Famous Attraction & Viewpoint`,
-                notes: 'Explore iconic heritage landmarks, cultural sights & scenic views.',
-                addedBy: auth.currentUser?.uid || 'system',
-                addedAt: new Date().toISOString()
-            });
-        }
-
-        activities.push({
-            day: d,
-            time: '13:30',
-            category: 'food',
-            place: `Famous Regional Restaurant in ${destination}`,
-            notes: 'Enjoy authentic local thali & delicious regional specialties.',
-            addedBy: auth.currentUser?.uid || 'system',
-            addedAt: new Date().toISOString()
-        });
-
-        activities.push({
-            day: d,
-            time: '17:00',
-            category: 'shopping',
-            place: `${destination} Evening Market & Local Bazaar`,
-            notes: 'Handicrafts, local souvenirs, street shopping & evening tea.',
-            addedBy: auth.currentUser?.uid || 'system',
-            addedAt: new Date().toISOString()
-        });
-    }
-
-    return activities;
-}
-
-function showAiAutoItineraryModal() {
-    if (!currentTrip) {
-        showToast('No trip selected', 'warning');
+    if (importedCount === 0) {
+        showToast('All booked tickets are already in your itinerary!', 'info');
         return;
     }
-    
-    const summaryContainer = document.getElementById('ai-itinerary-ticket-summary');
-    if (summaryContainer) {
-        const tickets = currentTrip.tickets || [];
-        if (tickets.length > 0) {
-            summaryContainer.innerHTML = `
-                <div class="fw-bold text-dark mb-1"><i class="fas fa-ticket-alt text-primary me-1"></i>Found ${tickets.length} Booked Ticket(s) & Slots:</div>
-                <ul class="mb-0 ps-3 text-secondary" style="font-size:0.8rem;">
-                    ${tickets.slice(0, 5).map(t => {
-                        if (t.type === 'darshan') {
-                            return `<li><strong>🙏 Darshan Pass:</strong> ${t.templeName || t.operator} (${t.darshanCategory || 'Special Entry'}) - Slot: ${t.departureTime.replace('T', ' ')}</li>`;
-                        }
-                        return `<li><strong>${t.type.toUpperCase()}:</strong> ${t.serviceNo ? t.serviceNo + ' - ' : ''}${t.serviceName || t.operator} (${t.departurePlace} → ${t.arrivalPlace}) @ ${t.departureTime.replace('T', ' ')}</li>`;
-                    }).join('')}
-                    ${tickets.length > 5 ? `<li><em>...and ${tickets.length - 5} more ticket(s)</em></li>` : ''}
-                </ul>
-            `;
-        } else {
-            summaryContainer.innerHTML = `
-                <div class="text-secondary small"><i class="fas fa-info-circle text-info me-1"></i>No tickets added yet. AI will generate an optimal day-wise itinerary for <strong>${currentTrip.destination}</strong> based on trip duration (${currentTrip.startDate} to ${currentTrip.endDate}).</div>
-            `;
-        }
-    }
 
-    // Populate Day-by-Day Travel Type Selectors
-    const dayTypesContainer = document.getElementById('ai-itinerary-day-types-list');
-    if (dayTypesContainer && currentTrip.startDate && currentTrip.endDate) {
-        const startDate = new Date(currentTrip.startDate);
-        const endDate = new Date(currentTrip.endDate);
-        const totalDays = Math.max(1, Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1);
-        const tickets = currentTrip.tickets || [];
-
-        let html = '';
-        for (let d = 1; d <= totalDays; d++) {
-            const dDate = new Date(startDate.getTime() + (d - 1) * 24 * 60 * 60 * 1000);
-            const dateStr = dDate.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' });
-            
-            // Smart auto-detect default travel choice based on tickets
-            let defaultVal = 'exploring';
-            if (tickets.length > 0) {
-                const dayStart = new Date(dDate); dayStart.setHours(0, 0, 0, 0);
-                const dayEnd = new Date(dDate); dayEnd.setHours(23, 59, 59, 999);
-
-                const transitTicket = tickets.find(t => {
-                    if (t.type === 'darshan' || !t.departureTime) return false;
-                    const depD = new Date(t.departureTime);
-                    const arrD = t.arrivalTime ? new Date(t.arrivalTime) : depD;
-                    return (depD < dayEnd && arrD > dayStart);
-                });
-
-                if (transitTicket) {
-                    const depD = new Date(transitTicket.departureTime);
-                    const arrD = transitTicket.arrivalTime ? new Date(transitTicket.arrivalTime) : depD;
-                    if (depD < dayStart && arrD > dayEnd) {
-                        defaultVal = 'transit'; // Full day on train
-                    } else if (depD < dayStart && arrD <= dayEnd) {
-                        defaultVal = 'arrival'; // Train arrives today
-                    } else if (depD >= dayStart && arrD > dayEnd) {
-                        defaultVal = 'arrival'; // Departs later today
-                    }
-                }
-            }
-
-            html += `
-                <div class="d-flex align-items-center justify-content-between py-1 border-bottom last-border-0">
-                    <div class="small fw-bold text-dark me-2">
-                        <span class="badge bg-secondary me-1">Day ${d}</span>
-                        <span class="text-secondary">${dateStr}</span>
-                    </div>
-                    <select class="form-select form-select-sm w-auto py-1 px-2 ai-day-type-select" data-day="${d}" style="font-size:0.78rem;">
-                        <option value="exploring" ${defaultVal === 'exploring' ? 'selected' : ''}>🏛️ Destination Exploring</option>
-                        <option value="transit" ${defaultVal === 'transit' ? 'selected' : ''}>🚂 Train / Travel Transit (All Day)</option>
-                        <option value="arrival" ${defaultVal === 'arrival' ? 'selected' : ''}>🛬 Arrival (Travel + Exploring)</option>
-                    </select>
-                </div>
-            `;
-        }
-        dayTypesContainer.innerHTML = html;
-    }
-
-    const statusEl = document.getElementById('ai-itinerary-status');
-    const formEl = document.getElementById('ai-itinerary-form');
-    const submitBtn = document.getElementById('btn-generate-ai-itinerary-submit');
-    if (statusEl) statusEl.classList.add('d-none');
-    if (formEl) formEl.classList.remove('d-none');
-    if (submitBtn) submitBtn.disabled = false;
-
-    const modal = new bootstrap.Modal(document.getElementById('aiAutoItineraryModal'));
-    modal.show();
-}
-
-async function runAiAutoItineraryGeneration() {
-    if (!currentTrip) return;
-
-    const mode = document.getElementById('ai-itinerary-mode').value;
-    const pace = document.getElementById('ai-itinerary-pace').value;
-    const userGuidance = document.getElementById('ai-itinerary-user-guidance')?.value.trim() || '';
-
-    // Collect Day-by-Day travel choices set by user
-    const dayChoices = {};
-    document.querySelectorAll('.ai-day-type-select').forEach(sel => {
-        const d = parseInt(sel.getAttribute('data-day'));
-        dayChoices[d] = sel.value;
+    await db.collection('trips').doc(currentTrip.id).update({
+        itinerary: combined,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 
-    const statusEl = document.getElementById('ai-itinerary-status');
-    const statusText = document.getElementById('ai-itinerary-status-text');
-    const formEl = document.getElementById('ai-itinerary-form');
-    const submitBtn = document.getElementById('btn-generate-ai-itinerary-submit');
+    currentTrip.itinerary = combined;
+    showToast(`Successfully imported ${importedCount} booked ticket(s) into your itinerary! 🎉`, 'success');
+    loadTripDetails();
+}
 
-    if (statusEl) statusEl.classList.remove('d-none');
-    if (formEl) formEl.classList.add('d-none');
-    if (submitBtn) submitBtn.disabled = true;
-
-    try {
-        const startDate = new Date(currentTrip.startDate);
-        const endDate = new Date(currentTrip.endDate);
-        const totalDays = Math.max(1, Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1);
-
-        if (statusText) statusText.textContent = `Analyzing tickets, custom choices & generating Day 1 to Day ${totalDays} schedule for ${currentTrip.destination}...`;
-
-        const ticketsList = (currentTrip.tickets || []).map((t, idx) => {
-            if (t.type === 'darshan') {
-                return `Ticket #${idx+1} [DARSHAN PASS]: Temple "${t.templeName || t.operator}", Slot Date/Time "${t.departureTime}", Reporting Gate "${t.reportingVenue || t.departurePlace}", Category "${t.darshanCategory || 'Special Entry'}"`;
-            }
-            return `Ticket #${idx+1} [${t.type.toUpperCase()}]: Carrier "${t.serviceNo ? t.serviceNo + ' - ' : ''}${t.serviceName || t.operator}", Departs "${t.departurePlace}" at "${t.departureTime}", Arrives "${t.arrivalPlace}" at "${t.arrivalTime || 'N/A'}"`;
-        }).join('\n');
-
-        const dayScheduleText = Object.keys(dayChoices).map(dStr => {
-            const d = parseInt(dStr);
-            const dObj = new Date(startDate.getTime() + (d - 1) * 24 * 60 * 60 * 1000);
-            const dateFormatted = dObj.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
-            const choice = dayChoices[d];
-            if (choice === 'transit') {
-                return `* Day ${d} (${dateFormatted}): 🚨 TRAIN / TRAVEL TRANSIT DAY (USER SPECIFIED). User is traveling inside train/flight all day. DO NOT schedule any sightseeing, temples, or dining for Day ${d}! Output ONLY 1 transit card!`;
-            } else if (choice === 'arrival') {
-                return `* Day ${d} (${dateFormatted}): 🛬 ARRIVAL DAY. Morning transit/arrival, then schedule 2 to 3 famous sightseeing spots & food places in ${currentTrip.destination} for the rest of the day.`;
-            } else {
-                return `* Day ${d} (${dateFormatted}): 🏛️ DESTINATION EXPLORING DAY. Generate 3 to 5 famous real sightseeing places, temples, local food, and shopping bazaars in ${currentTrip.destination}.`;
-            }
-        }).join('\n');
-
-        const prompt = `You are a professional travel itinerary planner API.
-Destination: "${currentTrip.destination}"
-Trip Dates: ${currentTrip.startDate} to ${currentTrip.endDate} (${totalDays} total day(s))
-Travel Style / Focus: ${pace}
-
-${userGuidance ? `USER CUSTOM GUIDANCE & INSTRUCTIONS (MUST BE PRIORITIZED & SATISFIED):\n"${userGuidance}"\n` : ''}
-
-BOOKED TRAVEL TICKETS & APPOINTMENTS:
-${ticketsList || 'No specific tickets booked.'}
-
-DAY-BY-DAY TRAVEL TYPES SPECIFIED BY TRAVELER (STRICT DIRECTIVES):
-${dayScheduleText}
-
-CRITICAL PLANNING RULES:
-1. STRICTLY RESPECT USER DAY TYPES:
-   - For days marked as "TRAIN / TRAVEL TRANSIT DAY", output ONLY 1 activity item for that entire day with category "transit", place "Onboard Train in Transit", time "08:00", and notes "Full day journey on train. Relax & enjoy scenic views." DO NOT schedule any sightseeing or restaurants!
-   - For days marked as "DESTINATION EXPLORING DAY" or "ARRIVAL DAY", generate 3 to 5 famous real tourist attractions, temples, local dining, and shopping bazaars in ${currentTrip.destination}!
-2. PRIORITIZE USER CUSTOM GUIDANCE: Include all specific places, dietary preferences, or timing requests entered in User Custom Guidance!
-3. RESPECT DARSHAN SLOTS EXACTLY: For Darshan tickets, schedule temple queue reporting at the exact slot date & time.
-4. OUTPUT FORMAT REQUIREMENTS:
-   - Output MUST be ONLY a raw JSON array of objects.
-   - Do NOT include any markdown codeblocks (\`\`\`json ... \`\`\`), no text outside the array.
-   - Schema for each object:
-     {
-       "day": 1,
-       "time": "09:00",
-       "category": "temple|sightseeing|food|shopping|hotel|transit",
-       "place": "Name of location/place",
-       "notes": "Brief tips or instructions"
-     }
-
-Allowed values for "category": "temple", "sightseeing", "food", "shopping", "hotel", "transit", "other".
-`;
-
-        let formattedActivities = [];
-        let usedModelName = '';
-        const aiResult = await callAIModelForItinerary(prompt);
-
-        if (aiResult && aiResult.text) {
-            usedModelName = aiResult.modelName || 'AI Engine';
-            try {
-                let cleanText = aiResult.text.replace(/```json/g, '').replace(/```/g, '').trim();
-                const jsonMatch = cleanText.match(/\[[\s\S]*\]/);
-                if (jsonMatch) cleanText = jsonMatch[0];
-
-                const parsed = JSON.parse(cleanText);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    formattedActivities = parsed.map(act => ({
-                        day: Math.min(Math.max(1, parseInt(act.day) || 1), totalDays),
-                        time: act.time || '10:00',
-                        category: ['temple', 'sightseeing', 'food', 'shopping', 'hotel', 'transit'].includes(act.category) ? act.category : 'sightseeing',
-                        place: (act.place || 'Local Sightseeing').trim(),
-                        notes: (act.notes || '').trim(),
-                        addedBy: auth.currentUser.uid,
-                        addedAt: new Date().toISOString()
-                    }));
-                }
-            } catch (jsonErr) {
-                console.warn('AI text response was non-JSON, using ticket-aware fallback generator:', jsonErr.message);
-            }
-        }
-
-        // Fallback: If AI returned non-JSON text or API failed, build ticket-aware itinerary
-        if (formattedActivities.length === 0) {
-            console.log('🤖 Building ticket-aware fallback itinerary...');
-            formattedActivities = buildFallbackItinerary(currentTrip, totalDays, pace, dayChoices);
-        }
-
-        // POST-PROCESSING SANITIZER: Strictly clean full-day transit days selected by user
-        Object.keys(dayChoices).forEach(dStr => {
-            const d = parseInt(dStr);
-            if (dayChoices[d] === 'transit') {
-                formattedActivities = formattedActivities.filter(act => act.day !== d || act.category === 'transit');
-                const hasTransit = formattedActivities.some(act => act.day === d && act.category === 'transit');
-                if (!hasTransit) {
-                    formattedActivities.push({
-                        day: d,
-                        time: '08:00',
-                        category: 'transit',
-                        place: `Onboard Train / In Transit`,
-                        notes: 'Full day journey on train. Relax & enjoy scenic views.',
-                        addedBy: auth.currentUser.uid,
-                        addedAt: new Date().toISOString()
-                    });
-                }
-            }
-        });
-
-        const tripDoc = await db.collection('trips').doc(currentTrip.id).get();
-        if (!tripDoc.exists) throw new Error('Trip not found');
-
-        const tripData = tripDoc.data();
-        let finalItinerary = [];
-
-        if (mode === 'append') {
-            finalItinerary = [...(tripData.itinerary || []), ...formattedActivities];
-        } else {
-            finalItinerary = formattedActivities;
-        }
-
-        await db.collection('trips').doc(currentTrip.id).update({
-            itinerary: finalItinerary,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-
-        currentTrip.itinerary = finalItinerary;
-
-        const modal = bootstrap.Modal.getInstance(document.getElementById('aiAutoItineraryModal'));
-        modal?.hide();
-
-        const toastMsg = usedModelName 
-            ? `🤖 ${usedModelName} generated ${formattedActivities.length} customized itinerary activities for ${currentTrip.destination}! 🎉`
-            : `AI Planner generated ${formattedActivities.length} ticket-aware itinerary activities for ${currentTrip.destination}! 🎉`;
-            
-        showToast(toastMsg, 'success');
-        loadTripDetails();
-
-    } catch (err) {
-        console.error('Error generating AI itinerary:', err);
-        showToast(err.message || 'Failed to generate AI itinerary. Please try again.', 'danger');
-    } finally {
-        if (statusEl) statusEl.classList.add('d-none');
-        if (formEl) formEl.classList.remove('d-none');
-        if (submitBtn) submitBtn.disabled = false;
-    }
+async function duplicateActivity(index) {
+    if (!currentTrip || !currentTrip.itinerary || !currentTrip.itinerary[index]) return;
+    const original = currentTrip.itinerary[index];
+    const copy = {
+        ...original,
+        place: `${original.place} (Copy)`,
+        addedBy: auth.currentUser.uid,
+        addedAt: new Date().toISOString()
+    };
+    
+    const updated = [...currentTrip.itinerary, copy];
+    await db.collection('trips').doc(currentTrip.id).update({
+        itinerary: updated,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    currentTrip.itinerary = updated;
+    showToast(`Activity "${original.place}" duplicated!`, 'success');
+    loadTripDetails();
 }
 
 // Expose functions globally for onclick calls
@@ -6437,5 +6170,6 @@ window.loadTripTickets = loadTripTickets;
 window.loadTripWeather = loadTripWeather;
 window.renderJourneyStayBreakdown = renderJourneyStayBreakdown;
 window.shareItineraryText = shareItineraryText;
-window.showAiAutoItineraryModal = showAiAutoItineraryModal;
-window.runAiAutoItineraryGeneration = runAiAutoItineraryGeneration;
+window.applyQuickPreset = applyQuickPreset;
+window.importTicketsToItinerary = importTicketsToItinerary;
+window.duplicateActivity = duplicateActivity;
