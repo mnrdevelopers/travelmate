@@ -3247,8 +3247,7 @@ ${staySection}`;
 const GROQ_MODELS = [
     'llama-3.3-70b-versatile',
     'llama-3.1-8b-instant',
-    'gemma2-9b-it',
-    'llama3-70b-8192'
+    'gemma2-9b-it'
 ];
 
 function buildSystemPrompt(tripContext) {
@@ -3346,10 +3345,11 @@ function buildChatConversationMessages(userMessage, systemPrompt) {
     
     if (messagesEl) {
         const msgNodes = Array.from(messagesEl.querySelectorAll('.ai-chat-message:not(#ai-typing-indicator)'));
-        const recentNodes = msgNodes.slice(-10);
+        const recentNodes = msgNodes.slice(-4);
         recentNodes.forEach(node => {
             const role = node.classList.contains('user') ? 'user' : 'assistant';
-            const text = node.dataset.rawText || node.innerText || '';
+            let text = node.dataset.rawText || node.innerText || '';
+            if (text.length > 800) text = text.substring(0, 800) + '...';
             if (text && !text.includes('Hello! I am your AI')) {
                 messages.push({ role, content: text });
             }
@@ -3366,7 +3366,7 @@ function buildChatConversationMessages(userMessage, systemPrompt) {
 async function sendToGroq(userMessage, apiKey) {
     const tripContext = buildTripContext();
     const systemPrompt = buildSystemPrompt(tripContext);
-    const messages = buildChatConversationMessages(userMessage, systemPrompt);
+    let messages = buildChatConversationMessages(userMessage, systemPrompt);
 
     let lastError = 'No Groq models available.';
     for (const model of GROQ_MODELS) {
@@ -3381,7 +3381,7 @@ async function sendToGroq(userMessage, apiKey) {
                 body: JSON.stringify({
                     model,
                     messages,
-                    max_tokens: 3500,
+                    max_tokens: 1200,
                     temperature: 0.7
                 })
             });
@@ -3391,6 +3391,12 @@ async function sendToGroq(userMessage, apiKey) {
                 try { const e = await response.json(); errMsg = e.error?.message || errMsg; } catch (_) {}
                 console.warn('Groq model failed, trying next:', errMsg);
                 lastError = errMsg;
+
+                // Handle 413 Content Too Large by purging past conversation history
+                if (response.status === 413 && messages.length > 2) {
+                    console.warn('Groq payload too large (413), truncating conversation history...');
+                    messages = [{ role: 'system', content: systemPrompt }, { role: 'user', content: userMessage }];
+                }
                 continue;
             }
             
@@ -3438,7 +3444,7 @@ async function sendToOpenRouter(userMessage, apiKey) {
                 body: JSON.stringify({
                     model,
                     messages,
-                    max_tokens: 3500,
+                    max_tokens: 2500,
                     temperature: 0.7
                 })
             });
@@ -3449,10 +3455,10 @@ async function sendToOpenRouter(userMessage, apiKey) {
                 console.warn('OpenRouter model failed, trying next:', errMsg);
                 lastError = errMsg;
 
-                // If OpenRouter rate limit (429) or quota limit (402) is hit, fast-track fallback to Groq if Groq key exists!
-                if ((response.status === 429 || response.status === 402) && window._groqApiKey) {
-                    console.warn(`⚡ OpenRouter limit hit (${response.status}) on ${model}. Fast-tracking Groq fallback!`);
-                    break;
+                // Stop retrying OpenRouter models on rate/quota limits so sendToAiAssistant can trigger Groq fallback cleanly
+                if (response.status === 429 || response.status === 402) {
+                    console.warn(`⚡ OpenRouter limit hit (${response.status}) on ${model}. Fast-tracking Groq fallback.`);
+                    throw new Error(`OpenRouter rate/quota limit reached (${response.status})`);
                 }
                 continue;
             }
@@ -3466,19 +3472,11 @@ async function sendToOpenRouter(userMessage, apiKey) {
             return text;
             
         } catch (networkErr) {
-            console.warn('Network error for model', model, networkErr.message);
+            console.warn('Network/API error for model', model, networkErr.message);
             lastError = networkErr.message;
-        }
-    }
-    
-    // If all OpenRouter models failed or rate limit hit, try Groq fallback
-    if (window._groqApiKey) {
-        console.warn('🔄 OpenRouter limit/failure detected. Attempting fallback to Groq...');
-        try {
-            return await sendToGroq(userMessage, window._groqApiKey);
-        } catch (groqErr) {
-            console.error('❌ Groq fallback failed as well:', groqErr);
-            throw new Error(`OpenRouter limit hit (${lastError}) AND Groq fallback failed (${groqErr.message})`);
+            if (networkErr.message.includes('limit reached')) {
+                throw networkErr;
+            }
         }
     }
     
@@ -3495,7 +3493,7 @@ async function sendToAiAssistant(userMessage) {
         throw new Error('⚠️ No AI API Key found. Please add an OpenRouter or Groq API Key in Profile Settings to enable AI features.');
     }
 
-    let lastError = '';
+    let openrouterError = '';
 
     // 1. Try OpenRouter if key is configured
     if (openrouterKey) {
@@ -3503,20 +3501,23 @@ async function sendToAiAssistant(userMessage) {
             return await sendToOpenRouter(userMessage, openrouterKey);
         } catch (orErr) {
             console.warn('⚠️ OpenRouter call failed:', orErr.message);
-            lastError = orErr.message;
+            openrouterError = orErr.message;
         }
     }
 
     // 2. Fallback to Groq if Groq key is configured
     if (groqKey) {
-        console.warn('🔄 Directing request to Groq API...');
+        console.warn('🔄 Directing request to Groq API fallback...');
         try {
             return await sendToGroq(userMessage, groqKey);
         } catch (groqErr) {
             console.error('❌ Groq execution failed:', groqErr.message);
-            throw new Error(`OpenRouter failed (${lastError}) AND Groq fallback failed (${groqErr.message})`);
+            throw new Error(`OpenRouter failed (${openrouterError}) AND Groq fallback failed (${groqErr.message})`);
         }
     }
+
+    throw new Error(openrouterError);
+}
 
     throw new Error(lastError);
 }

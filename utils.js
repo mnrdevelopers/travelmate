@@ -125,8 +125,7 @@ Do NOT add explanations, units, or any text outside the JSON array.`;
     const groqModels = [
         'llama-3.3-70b-versatile',
         'llama-3.1-8b-instant',
-        'gemma2-9b-it',
-        'llama3-70b-8192'
+        'gemma2-9b-it'
     ];
 
     for (const model of groqModels) {
