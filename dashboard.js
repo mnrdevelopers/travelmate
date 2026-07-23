@@ -3093,19 +3093,20 @@ function buildTripContext() {
             return `  ${idx + 1}. [${t.type.toUpperCase()}] ${t.serviceNo || ''} ${t.serviceName || t.operator || ''} | PNR: ${t.ticketNo} | Departs: ${depStr} | Arrives: ${arrStr} | Seat: ${t.seatNo || 'N/A'} | Status: ${t.bookingStatus || 'CNF'} | Cost: ₹${t.cost || 0}`;
         }).join('\n');
         
-        // Layover and Exploring Stay calculations
+        // Layover and Exploring Stay calculations (Transport tickets only)
+        const transportTickets = sortedTickets.filter(t => ['flight', 'train', 'bus'].includes(t.type));
         const stayLegs = [];
         let totalTransitMs = 0;
         let totalStayMs = 0;
         
-        for (let i = 0; i < sortedTickets.length; i++) {
-            const currentT = sortedTickets[i];
+        for (let i = 0; i < transportTickets.length; i++) {
+            const currentT = transportTickets[i];
             const depT = new Date(currentT.departureTime);
             const arrT = currentT.arrivalTime ? new Date(currentT.arrivalTime) : depT;
             totalTransitMs += Math.max(0, arrT - depT);
             
-            if (i < sortedTickets.length - 1) {
-                const nextT = sortedTickets[i + 1];
+            if (i < transportTickets.length - 1) {
+                const nextT = transportTickets[i + 1];
                 const nextDepT = new Date(nextT.departureTime);
                 const stayMs = Math.max(0, nextDepT - arrT);
                 totalStayMs += stayMs;

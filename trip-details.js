@@ -5446,15 +5446,18 @@ function updateDepartureAlerts(trip) {
         
         let typeIcon = 'fa-plane';
         let alertClass = 'alert-danger';
+        const isDarshan = tkt.type === 'darshan';
         
         if (tkt.type === 'train') {
             typeIcon = 'fa-train-subway';
         } else if (tkt.type === 'bus') {
             typeIcon = 'fa-bus';
+        } else if (isDarshan) {
+            typeIcon = 'fa-gopuram';
         }
         
         if (diffHrs >= 12) {
-            alertClass = 'alert-info';
+            alertClass = isDarshan ? 'alert-warning' : 'alert-info';
         } else if (diffHrs >= 4) {
             alertClass = 'alert-warning';
         }
@@ -5463,17 +5466,27 @@ function updateDepartureAlerts(trip) {
             ? `${diffHrs}h ${diffMins}m`
             : `${diffMins}m`;
             
+        const titleText = isDarshan 
+            ? `🙏 Darshan Slot: ${tkt.templeName || tkt.operator}` 
+            : `Upcoming ${tkt.type} to ${tkt.arrivalPlace}`;
+            
+        const detailText = isDarshan 
+            ? `Reporting Gate: <strong>${tkt.reportingVenue || tkt.departurePlace}</strong> @ <strong>${new Date(tkt.departureTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</strong>. Pass: ${tkt.darshanCategory || 'Special Entry'}` 
+            : `Departure from <strong>${tkt.departurePlace}</strong> @ <strong>${new Date(tkt.departureTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</strong>. Seat: ${tkt.seatNo || '--'}`;
+
+        const badgeText = isDarshan ? `Slot in ${countdownText}` : `Departs in ${countdownText}`;
+            
         const alertHtml = `
             <div class="alert ${alertClass} d-flex align-items-center justify-content-between p-3 border-0 shadow-sm animate-pulse-slow mb-2" role="alert">
                 <div class="d-flex align-items-center">
                     <div class="me-3 fs-4"><i class="fas ${typeIcon}"></i></div>
                     <div>
-                        <strong class="d-block text-capitalize" style="font-size:0.9rem;">Upcoming ${tkt.type} to ${tkt.arrivalPlace}</strong>
-                        <span class="small text-secondary" style="font-size:0.75rem;">Departure from <strong>${tkt.departurePlace}</strong> @ <strong>${new Date(tkt.departureTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</strong>. Seat: ${tkt.seatNo || '--'}</span>
+                        <strong class="d-block text-capitalize" style="font-size:0.9rem;">${titleText}</strong>
+                        <span class="small text-secondary" style="font-size:0.75rem;">${detailText}</span>
                     </div>
                 </div>
                 <div class="text-end">
-                    <span class="badge rounded-pill bg-dark py-1 px-3" style="font-size:0.7rem;">Departs in ${countdownText}</span>
+                    <span class="badge rounded-pill bg-dark py-1 px-3" style="font-size:0.7rem;">${badgeText}</span>
                 </div>
             </div>
         `;
@@ -5495,9 +5508,9 @@ function calculateJourneyStayTimes(trip) {
     const tickets = trip.tickets || [];
     if (tickets.length === 0) return null;
     
-    // Sort tickets chronologically by departureTime
+    // Sort transport tickets chronologically by departureTime (exclude Darshan, Events, etc. which are part of destination exploration)
     const validTickets = tickets
-        .filter(t => t.departureTime)
+        .filter(t => t.departureTime && ['flight', 'train', 'bus'].includes(t.type))
         .sort((a, b) => new Date(a.departureTime) - new Date(b.departureTime));
         
     if (validTickets.length === 0) return null;
