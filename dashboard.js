@@ -3246,8 +3246,9 @@ ${staySection}`;
 
 const GROQ_MODELS = [
     'llama-3.3-70b-versatile',
-    'llama3-8b-8192',
-    'mixtral-8x7b-32768'
+    'llama-3.1-8b-instant',
+    'gemma2-9b-it',
+    'llama3-70b-8192'
 ];
 
 function buildSystemPrompt(tripContext) {
@@ -3413,7 +3414,7 @@ async function sendToOpenRouter(userMessage, apiKey) {
     const systemPrompt = buildSystemPrompt(tripContext);
     const messages = buildChatConversationMessages(userMessage, systemPrompt);
     
-    let lastError = 'No free models available at the moment. Please try again later.';
+    let lastError = 'No free OpenRouter models available at the moment.';
     
     let modelsToTry = [...OPENROUTER_FREE_MODELS];
     let preferredModel = window._openrouterModel || 'auto';
@@ -3447,7 +3448,13 @@ async function sendToOpenRouter(userMessage, apiKey) {
                 try { const e = await response.json(); errMsg = e.error?.message || errMsg; } catch (_) {}
                 console.warn('OpenRouter model failed, trying next:', errMsg);
                 lastError = errMsg;
-                continue; // try next model
+
+                // If OpenRouter rate limit (429) or quota limit (402) is hit, fast-track fallback to Groq if Groq key exists!
+                if ((response.status === 429 || response.status === 402) && window._groqApiKey) {
+                    console.warn(`⚡ OpenRouter limit hit (${response.status}) on ${model}. Fast-tracking Groq fallback!`);
+                    break;
+                }
+                continue;
             }
             
             const data = await response.json();
@@ -3464,17 +3471,53 @@ async function sendToOpenRouter(userMessage, apiKey) {
         }
     }
     
-    // If all OpenRouter models failed, try Groq fallback
+    // If all OpenRouter models failed or rate limit hit, try Groq fallback
     if (window._groqApiKey) {
-        console.warn('OpenRouter failed. Attempting fallback to Groq...');
+        console.warn('🔄 OpenRouter limit/failure detected. Attempting fallback to Groq...');
         try {
             return await sendToGroq(userMessage, window._groqApiKey);
         } catch (groqErr) {
-            console.error('Groq fallback failed as well:', groqErr);
-            throw new Error(`OpenRouter failed (${lastError}) AND Groq fallback failed (${groqErr.message})`);
+            console.error('❌ Groq fallback failed as well:', groqErr);
+            throw new Error(`OpenRouter limit hit (${lastError}) AND Groq fallback failed (${groqErr.message})`);
         }
     }
     
+    throw new Error(lastError);
+}
+
+// Master AI Entrypoint with robust fallback between OpenRouter and Groq
+async function sendToAiAssistant(userMessage) {
+    await loadOpenRouterKey();
+    const openrouterKey = window._openrouterApiKey;
+    const groqKey = window._groqApiKey;
+
+    if (!openrouterKey && !groqKey) {
+        throw new Error('⚠️ No AI API Key found. Please add an OpenRouter or Groq API Key in Profile Settings to enable AI features.');
+    }
+
+    let lastError = '';
+
+    // 1. Try OpenRouter if key is configured
+    if (openrouterKey) {
+        try {
+            return await sendToOpenRouter(userMessage, openrouterKey);
+        } catch (orErr) {
+            console.warn('⚠️ OpenRouter call failed:', orErr.message);
+            lastError = orErr.message;
+        }
+    }
+
+    // 2. Fallback to Groq if Groq key is configured
+    if (groqKey) {
+        console.warn('🔄 Directing request to Groq API...');
+        try {
+            return await sendToGroq(userMessage, groqKey);
+        } catch (groqErr) {
+            console.error('❌ Groq execution failed:', groqErr.message);
+            throw new Error(`OpenRouter failed (${lastError}) AND Groq fallback failed (${groqErr.message})`);
+        }
+    }
+
     throw new Error(lastError);
 }
 
@@ -3765,10 +3808,10 @@ function openAISuggestedPlacesTab(lat, lng) {
             </div>
             
             <script>
-                // Async request to fetch AI suggestions for these coordinates
+                // Async request to fetch AI suggestions for these coordinates with Groq fallback
                 async function fetchSuggestions() {
-                    const apiKey = "${window._openrouterApiKey || window._groqApiKey || ''}";
-                    const isGroq = !${!!window._openrouterApiKey} && ${!!window._groqApiKey};
+                    const openrouterKey = "${window._openrouterApiKey || ''}";
+                    const groqKey = "${window._groqApiKey || ''}";
                     
                     const prompt = \\\`You are a local travel guide. Provide 4 top tourist/sightseeing recommendations near coordinates: Latitude \${lat}, Longitude \${lng}.
 For each place, provide name, category (e.g. Scenic, Historic, Food, Temple, Park), road distance from coordinates (estimate in km), and a short, exciting description (15-25 words).
@@ -3779,37 +3822,82 @@ Reply ONLY with a valid JSON array of objects with the fields: name, category, d
 ]
 Do NOT write any introduction or explanation outside the JSON.\\\`;
 
-                    try {
-                        const url = isGroq ? 'https://api.groq.com/openai/v1/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions';
-                        const headers = { 'Content-Type': 'application/json' };
-                        headers['Authorization'] = 'Bearer ' + apiKey;
-                        
-                        const response = await fetch(url, {
-                            method: 'POST',
-                            headers: headers,
-                            body: JSON.stringify({
-                                model: isGroq ? 'llama-3.3-70b-versatile' : 'openrouter/free',
-                                messages: [{ role: 'user', content: prompt }],
-                                max_tokens: 400,
-                                temperature: 0.6
-                            })
-                        });
-                        
-                        if (!response.ok) throw new Error('API failed');
-                        
-                        const data = await response.json();
-                        const text = data.choices[0].message.content.trim();
-                        const jsonMatch = text.match(/\\\\\\\\[[\\\\\\\s\\\\\\\S]*?\\\\\\\\\]/);
-                        if (!jsonMatch) throw new Error('Invalid JSON structure');
-                        
-                        const places = JSON.parse(jsonMatch[0]);
-                        renderPlaces(places);
-                    } catch (e) {
-                        console.error(e);
+                    let success = false;
+
+                    // 1. Try OpenRouter if key is available
+                    if (openrouterKey) {
+                        try {
+                            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': 'Bearer ' + openrouterKey,
+                                    'HTTP-Referer': window.location.origin,
+                                    'X-Title': 'TravelMate AI GPS'
+                                },
+                                body: JSON.stringify({
+                                    model: 'openrouter/free',
+                                    messages: [{ role: 'user', content: prompt }],
+                                    max_tokens: 450,
+                                    temperature: 0.6
+                                })
+                            });
+                            
+                            if (response.ok) {
+                                const data = await response.json();
+                                const text = data.choices?.[0]?.message?.content?.trim() || '';
+                                const jsonMatch = text.match(/\\\\\\\\[[\\\\\\\s\\\\\\\S]*?\\\\\\\\\]/);
+                                if (jsonMatch) {
+                                    const places = JSON.parse(jsonMatch[0]);
+                                    renderPlaces(places);
+                                    success = true;
+                                }
+                            } else {
+                                console.warn('OpenRouter fetchSuggestions HTTP ' + response.status + ', trying Groq fallback...');
+                            }
+                        } catch (e) {
+                            console.warn('OpenRouter fetchSuggestions failed, trying Groq fallback:', e);
+                        }
+                    }
+
+                    // 2. Try Groq fallback if OpenRouter failed or key was missing
+                    if (!success && groqKey) {
+                        try {
+                            console.log('🤖 Fetching GPS suggestions via Groq fallback...');
+                            const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': 'Bearer ' + groqKey
+                                },
+                                body: JSON.stringify({
+                                    model: 'llama-3.3-70b-versatile',
+                                    messages: [{ role: 'user', content: prompt }],
+                                    max_tokens: 450,
+                                    temperature: 0.6
+                                })
+                            });
+                            
+                            if (response.ok) {
+                                const data = await response.json();
+                                const text = data.choices?.[0]?.message?.content?.trim() || '';
+                                const jsonMatch = text.match(/\\\\\\\\[[\\\\\\\s\\\\\\\S]*?\\\\\\\\\]/);
+                                if (jsonMatch) {
+                                    const places = JSON.parse(jsonMatch[0]);
+                                    renderPlaces(places);
+                                    success = true;
+                                }
+                            }
+                        } catch (e) {
+                            console.warn('Groq fetchSuggestions failed as well:', e);
+                        }
+                    }
+
+                    if (!success) {
                         document.getElementById('suggestions-loading').innerHTML = \\\`
                             <div class="alert alert-warning">
                                 <i class="fas fa-circle-exclamation me-2 fs-4"></i>
-                                <strong>Could not load AI recommendations.</strong> Here are some nearby places on the map instead!
+                                <strong>Could not load AI recommendations.</strong> Please check your OpenRouter or Groq API key in Profile settings.
                             </div>
                         \\\`;
                     }
@@ -3931,19 +4019,12 @@ function showTypingIndicator() {
 }
 
 async function triggerChatRegeneration(message) {
-    const apiKey = await loadOpenRouterKey();
-    if (!apiKey) {
-        appendChatMessage('assistant',
-            '⚠️ No OpenRouter API key found. Go to **Profile → OpenRouter API Key** and paste your free key to enable AI features.');
-        return;
-    }
-    
     const typingIndicator = showTypingIndicator();
     const sendBtn = document.getElementById('ai-chat-send');
     if (sendBtn) sendBtn.disabled = true;
     
     try {
-        const reply = await sendToOpenRouter(message, apiKey);
+        const reply = await sendToAiAssistant(message);
         if (typingIndicator) typingIndicator.remove();
         appendChatMessage('assistant', reply);
         
@@ -3951,7 +4032,7 @@ async function triggerChatRegeneration(message) {
         handleAIActionParsing(reply);
     } catch (err) {
         if (typingIndicator) typingIndicator.remove();
-        console.error('OpenRouter API error:', err);
+        console.error('AI Assistant API error:', err);
         let errorMsg = `❌ **Error**: ${err.message}`;
         appendChatMessage('assistant', errorMsg);
     } finally {
@@ -3967,19 +4048,12 @@ async function handleChatSend() {
     input.value = '';
     appendChatMessage('user', message);
     
-    const apiKey = await loadOpenRouterKey();
-    if (!apiKey) {
-        appendChatMessage('assistant',
-            '⚠️ No OpenRouter API key found. Go to **Profile → OpenRouter API Key** and paste your free key from [openrouter.ai/keys](https://openrouter.ai/keys) to enable AI features.');
-        return;
-    }
-    
     const typingIndicator = showTypingIndicator();
     const sendBtn = document.getElementById('ai-chat-send');
     if (sendBtn) sendBtn.disabled = true;
     
     try {
-        const reply = await sendToOpenRouter(message, apiKey);
+        const reply = await sendToAiAssistant(message);
         if (typingIndicator) typingIndicator.remove();
         appendChatMessage('assistant', reply);
         
@@ -3987,21 +4061,18 @@ async function handleChatSend() {
         handleAIActionParsing(reply);
     } catch (err) {
         if (typingIndicator) typingIndicator.remove();
-        console.error('OpenRouter API error:', err);
+        console.error('AI Assistant API error:', err);
         
-        let errorMsg = `❌ **Error**: ${err.message}`;
+        let errorMsg = `❌ **AI Service Notice**: ${err.message}`;
         const errStr = String(err.message).toLowerCase();
         if (errStr.includes('rate limit') || errStr.includes('rate_limit') || errStr.includes('429')) {
-            errorMsg = `❌ **Rate Limit Exceeded**
+            errorMsg = `❌ **OpenRouter Rate Limit Exceeded**
             
-You have reached the daily limit for free AI models on OpenRouter.
+You have reached the free limit for OpenRouter models.
 
-**How to fix this:**
-1. **Add credits**: Go to [openrouter.ai/credits](https://openrouter.ai/credits) and add a small amount (minimum $5) to unlock **1000 free requests per day** and use paid models.
-2. **Switch to a Paid Model**: Go to **Profile → AI Model Preference** (click your avatar at top-right) and select a high-quality paid model like **Google Gemini 2.5 Flash** (costs less than $0.05 for hundreds of questions).
-3. **Wait it out**: Your free limit resets daily.`;
-        } else {
-            errorMsg += `\n\nCheck your API key is valid at [openrouter.ai/keys](https://openrouter.ai/keys) and has credits for free models.`;
+**Instant Options:**
+1. **Add a Free Groq Key**: Paste a free API key from [console.groq.com](https://console.groq.com/keys) in **Profile → AI Settings** to get ultra-fast free responses!
+2. **Add OpenRouter Credits**: Add $5 at [openrouter.ai/credits](https://openrouter.ai/credits) for 1000s of requests.`;
         }
         appendChatMessage('assistant', errorMsg);
     } finally {
