@@ -3260,15 +3260,34 @@ Available commands:
 Always explain to the user in your message what you are doing before adding the command. Limit your command block to a single ACTION command at the end of the text. Do not output commands if they are not requested.`;
 }
 
+function buildChatConversationMessages(userMessage, systemPrompt) {
+    const messages = [{ role: 'system', content: systemPrompt }];
+    const messagesEl = document.getElementById('ai-chat-messages');
+    
+    if (messagesEl) {
+        const msgNodes = Array.from(messagesEl.querySelectorAll('.ai-chat-message:not(#ai-typing-indicator)'));
+        const recentNodes = msgNodes.slice(-10);
+        recentNodes.forEach(node => {
+            const role = node.classList.contains('user') ? 'user' : 'assistant';
+            const text = node.dataset.rawText || node.innerText || '';
+            if (text && !text.includes('Hello! I am your AI')) {
+                messages.push({ role, content: text });
+            }
+        });
+    }
+
+    if (messages.length === 1 || messages[messages.length - 1].content !== userMessage) {
+        messages.push({ role: 'user', content: userMessage });
+    }
+
+    return messages;
+}
+
 async function sendToGroq(userMessage, apiKey) {
     const tripContext = buildTripContext();
     const systemPrompt = buildSystemPrompt(tripContext);
+    const messages = buildChatConversationMessages(userMessage, systemPrompt);
 
-    const messages = [
-        { role: 'system', content: systemPrompt },
-        { role: 'user',   content: userMessage }
-    ];
-    
     let lastError = 'No Groq models available.';
     for (const model of GROQ_MODELS) {
         try {
@@ -3282,7 +3301,7 @@ async function sendToGroq(userMessage, apiKey) {
                 body: JSON.stringify({
                     model,
                     messages,
-                    max_tokens: 1000,
+                    max_tokens: 3500,
                     temperature: 0.7
                 })
             });
@@ -3313,11 +3332,7 @@ async function sendToGroq(userMessage, apiKey) {
 async function sendToOpenRouter(userMessage, apiKey) {
     const tripContext = buildTripContext();
     const systemPrompt = buildSystemPrompt(tripContext);
-    
-    const messages = [
-        { role: 'system', content: systemPrompt },
-        { role: 'user',   content: userMessage }
-    ];
+    const messages = buildChatConversationMessages(userMessage, systemPrompt);
     
     let lastError = 'No free models available at the moment. Please try again later.';
     
@@ -3343,7 +3358,7 @@ async function sendToOpenRouter(userMessage, apiKey) {
                 body: JSON.stringify({
                     model,
                     messages,
-                    max_tokens: 1000,
+                    max_tokens: 3500,
                     temperature: 0.7
                 })
             });
