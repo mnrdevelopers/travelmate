@@ -1733,15 +1733,28 @@ function renderPaymentChart(trip) {
     });
 }
 
-function getActivityCategoryBadge(cat) {
+function getActivityCategoryBadge(cat, place = '') {
+    const p = (place || '').toLowerCase();
+
+    if (cat === 'transit' || p.includes('departure:') || p.includes('arrival:') || p.includes('transit')) {
+        if (p.includes('train')) {
+            return '<span class="badge bg-primary text-white border border-primary me-2 px-2 py-1 shadow-sm" style="font-size:0.72rem;"><i class="fas fa-train me-1"></i>Train</span>';
+        } else if (p.includes('flight')) {
+            return '<span class="badge bg-info text-dark border border-info me-2 px-2 py-1 shadow-sm" style="font-size:0.72rem;"><i class="fas fa-plane me-1"></i>Flight</span>';
+        } else if (p.includes('bus')) {
+            return '<span class="badge bg-warning text-dark border border-warning me-2 px-2 py-1 shadow-sm" style="font-size:0.72rem;"><i class="fas fa-bus me-1"></i>Bus</span>';
+        }
+        return '<span class="badge bg-secondary text-white border border-secondary me-2 px-2 py-1 shadow-sm" style="font-size:0.72rem;"><i class="fas fa-route me-1"></i>Transit</span>';
+    }
+
     switch(cat) {
-        case 'temple': return '<span class="badge bg-warning bg-opacity-25 text-warning-emphasis border border-warning border-opacity-50 me-2" style="font-size:0.7rem;"><i class="fas fa-gopuram me-1"></i>Temple / Devotional</span>';
-        case 'sightseeing': return '<span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 me-2" style="font-size:0.7rem;"><i class="fas fa-landmark me-1"></i>Sightseeing</span>';
-        case 'food': return '<span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 me-2" style="font-size:0.7rem;"><i class="fas fa-utensils me-1"></i>Food & Dining</span>';
-        case 'shopping': return '<span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 me-2" style="font-size:0.7rem;"><i class="fas fa-shopping-bag me-1"></i>Shopping</span>';
-        case 'hotel': return '<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 me-2" style="font-size:0.7rem;"><i class="fas fa-hotel me-1"></i>Hotel / Rest</span>';
-        case 'transit': return '<span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 me-2" style="font-size:0.7rem;"><i class="fas fa-car me-1"></i>Transit</span>';
-        default: return '<span class="badge bg-light text-dark border me-2" style="font-size:0.7rem;"><i class="fas fa-map-marker-alt me-1"></i>Activity</span>';
+        case 'temple': return '<span class="badge bg-warning text-dark border border-warning me-2 px-2 py-1 shadow-sm" style="font-size:0.72rem;"><i class="fas fa-gopuram me-1"></i>Temple / Devotional</span>';
+        case 'sightseeing': return '<span class="badge bg-primary bg-opacity-10 text-primary border border-primary me-2 px-2 py-1" style="font-size:0.72rem;"><i class="fas fa-landmark me-1"></i>Sightseeing</span>';
+        case 'food': return '<span class="badge bg-danger bg-opacity-10 text-danger border border-danger me-2 px-2 py-1" style="font-size:0.72rem;"><i class="fas fa-utensils me-1"></i>Food & Dining</span>';
+        case 'shopping': return '<span class="badge bg-info bg-opacity-10 text-info border border-info me-2 px-2 py-1" style="font-size:0.72rem;"><i class="fas fa-shopping-bag me-1"></i>Shopping</span>';
+        case 'hotel': return '<span class="badge bg-success bg-opacity-10 text-success border border-success me-2 px-2 py-1" style="font-size:0.72rem;"><i class="fas fa-hotel me-1"></i>Hotel / Rest</span>';
+        case 'transit': return '<span class="badge bg-secondary text-white border me-2 px-2 py-1" style="font-size:0.72rem;"><i class="fas fa-route me-1"></i>Transit</span>';
+        default: return '<span class="badge bg-dark text-white border me-2 px-2 py-1" style="font-size:0.72rem;"><i class="fas fa-map-marker-alt me-1"></i>Activity</span>';
     }
 }
 
@@ -1852,7 +1865,7 @@ async function loadTripItinerary(trip) {
                     ${sortedActivities.map(activity => {
                         const canEdit = activity.addedBy === auth.currentUser.uid;
                         const memberName = memberNames[activity.addedBy] || 'Traveler';
-                        const categoryBadge = getActivityCategoryBadge(activity.category);
+                        const categoryBadge = getActivityCategoryBadge(activity.category, activity.place);
                         const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(activity.place)}`;
                         
                         return `
