@@ -3519,9 +3519,6 @@ async function sendToAiAssistant(userMessage) {
     throw new Error(openrouterError);
 }
 
-    throw new Error(lastError);
-}
-
 function appendChatMessage(role, text, shouldSave = true) {
     const messagesEl = document.getElementById('ai-chat-messages');
     if (!messagesEl) return;
