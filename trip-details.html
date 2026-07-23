@@ -516,7 +516,10 @@
                 <h4 class="mb-0">Itinerary & Activities</h4>
                 <small class="text-muted">Day-wise schedule & attractions for your journey</small>
             </div>
-            <div class="d-flex gap-2">
+            <div class="d-flex gap-2 flex-wrap">
+                <button class="btn btn-warning btn-sm text-dark fw-bold rounded-pill shadow-sm" id="btn-pro-ai-planner" onclick="aiPlannerUi.openPlannerModal(currentTrip)">
+                    <i class="fas fa-brain me-1"></i>🧠 AI Travel Companion
+                </button>
                 <button class="btn btn-outline-primary btn-sm rounded-pill shadow-sm" id="btn-import-tickets-itinerary" onclick="importTicketsToItinerary()">
                     <i class="fas fa-ticket-alt me-1 text-primary"></i>Import Booked Tickets
                 </button>
@@ -1214,12 +1217,49 @@
         </div>
     </div>
 
+    <!-- Professional AI Travel Planner Engine Modal -->
+    <div class="modal fade" id="professionalAiPlannerModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+            <div class="modal-content shadow-lg border-0 rounded-4">
+                <div class="modal-header bg-warning text-dark border-0 py-3 px-4">
+                    <h5 class="modal-title fw-bold">
+                        <i class="fas fa-brain me-2 text-dark"></i>TravelMate Professional AI Travel Planner Engine
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4 bg-light">
+                    <!-- Loading State -->
+                    <div id="ai-planner-loading-spinner" class="text-center py-5">
+                        <div class="spinner-border text-warning mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
+                        <h6 class="fw-bold text-dark mb-1">AI Engine is Reasoning Over Your Journey...</h6>
+                        <small class="text-muted">Analyzing train milestone tickets, route clustering, weather, darshan timings & smart budget matrix</small>
+                    </div>
+
+                    <!-- Dynamic Content Container -->
+                    <div id="ai-planner-content-container" class="d-none">
+                        <!-- Rendered by ai-planner-ui.js -->
+                    </div>
+                </div>
+                <div class="modal-footer bg-white border-top py-2.5 px-4">
+                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-sm btn-warning rounded-pill fw-bold text-dark shadow-sm" onclick="aiPlannerUi.openPlannerModal(currentTrip)">
+                        <i class="fas fa-sync-alt me-1"></i>Re-Optimize Itinerary
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js"></script>
     <script src="utils.js"></script>
+    <script src="js/ai-memory.js"></script>
+    <script src="js/destination-db.js"></script>
+    <script src="js/ai-planner-engine.js"></script>
+    <script src="js/ai-planner-ui.js"></script>
     <script src="dashboard.js"></script>
     <script src="trip-details.js"></script>
 </body>

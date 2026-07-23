@@ -1,4 +1,4 @@
-const CACHE_NAME = 'travelmate-cache-v17';
+const CACHE_NAME = 'travelmate-cache-v18';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -12,6 +12,10 @@ const ASSETS_TO_CACHE = [
   '/firebase-config.js',
   '/utils.js',
   '/trip-details.js',
+  '/js/ai-memory.js',
+  '/js/destination-db.js',
+  '/js/ai-planner-engine.js',
+  '/js/ai-planner-ui.js',
   '/icon.png',
 ];
 
