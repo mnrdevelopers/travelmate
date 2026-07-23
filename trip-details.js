@@ -5967,8 +5967,8 @@ async function callAIModelForItinerary(prompt) {
                             { role: 'system', content: systemPrompt },
                             { role: 'user', content: prompt }
                         ],
-                        max_tokens: 1500,
-                        temperature: 0.3
+                        max_tokens: 2000,
+                        temperature: 0.4
                     })
                 });
 
@@ -5977,7 +5977,7 @@ async function callAIModelForItinerary(prompt) {
                     const text = data.choices?.[0]?.message?.content?.trim();
                     if (text) {
                         console.log(`✅ Groq model ${model} successfully returned AI itinerary.`);
-                        return text;
+                        return { text, modelName: `Groq (${model})` };
                     }
                 } else {
                     console.warn(`Groq model ${model} status ${response.status}`);
@@ -6022,8 +6022,8 @@ async function callAIModelForItinerary(prompt) {
                         { role: 'system', content: systemPrompt },
                         { role: 'user', content: prompt }
                     ],
-                    max_tokens: 1500,
-                    temperature: 0.3
+                    max_tokens: 2000,
+                    temperature: 0.4
                 })
             });
 
@@ -6035,7 +6035,7 @@ async function callAIModelForItinerary(prompt) {
 
             const data = await response.json();
             const text = data.choices?.[0]?.message?.content?.trim();
-            if (text) return text;
+            if (text) return { text, modelName: `OpenRouter (${model})` };
         } catch (e) {
             console.warn(`OpenRouter ${model} exception:`, e.message);
         }
@@ -6249,11 +6249,13 @@ Allowed values for "category": "temple", "sightseeing", "food", "shopping", "hot
 `;
 
         let formattedActivities = [];
-        const aiResponseText = await callAIModelForItinerary(prompt);
+        let usedModelName = '';
+        const aiResult = await callAIModelForItinerary(prompt);
 
-        if (aiResponseText) {
+        if (aiResult && aiResult.text) {
+            usedModelName = aiResult.modelName || 'AI Engine';
             try {
-                let cleanText = aiResponseText.replace(/```json/g, '').replace(/```/g, '').trim();
+                let cleanText = aiResult.text.replace(/```json/g, '').replace(/```/g, '').trim();
                 const jsonMatch = cleanText.match(/\[[\s\S]*\]/);
                 if (jsonMatch) cleanText = jsonMatch[0];
 
@@ -6302,7 +6304,11 @@ Allowed values for "category": "temple", "sightseeing", "food", "shopping", "hot
         const modal = bootstrap.Modal.getInstance(document.getElementById('aiAutoItineraryModal'));
         modal?.hide();
 
-        showToast(`AI successfully generated ${formattedActivities.length} itinerary activities! 🎉`, 'success');
+        const toastMsg = usedModelName 
+            ? `🤖 ${usedModelName} generated ${formattedActivities.length} customized itinerary activities for ${currentTrip.destination}! 🎉`
+            : `AI Planner generated ${formattedActivities.length} ticket-aware itinerary activities for ${currentTrip.destination}! 🎉`;
+            
+        showToast(toastMsg, 'success');
         loadTripDetails();
 
     } catch (err) {
