@@ -6285,7 +6285,7 @@ function getItineraryGeminiKey() {
 async function callGeminiAiForItinerary(promptText) {
     const apiKey = getItineraryGeminiKey();
     if (!apiKey) return null;
-    const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+    const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-latest'];
     for (const model of models) {
         try {
             console.log(`🤖 Requesting Gemini AI (${model}) for Day Itinerary...`);
@@ -6312,12 +6312,12 @@ async function callGeminiAiForItinerary(promptText) {
                     console.log(`✅ Gemini AI (${model}) successfully returned itinerary response!`);
                     return { text, modelName: `Gemini AI (${model})` };
                 }
-            } else if (response.status === 401) {
-                console.warn(`Gemini API key returned 401 (Unauthorized). Switching to City-Aware Real Landmark Generator.`);
+            } else if (response.status === 429) {
+                console.warn(`Gemini API quota/rate limit reached (429). Seamlessly using City-Aware Landmark Generator.`);
                 return null;
-            } else {
-                const errText = await response.text();
-                console.warn(`Gemini AI ${model} returned status ${response.status}:`, errText);
+            } else if (response.status === 401) {
+                console.warn(`Gemini API key 401 Unauthorized. Seamlessly using City-Aware Landmark Generator.`);
+                return null;
             }
         } catch (err) {
             console.warn(`Gemini AI ${model} exception:`, err.message);
