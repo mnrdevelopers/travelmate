@@ -660,6 +660,15 @@
                         <label for="edit-trip-budget" class="form-label">Total Budget (<span class="rupee-symbol">₹</span>)</label>
                         <input type="number" class="form-control" id="edit-trip-budget" min="0" step="0.01" required>
                     </div>
+                    <!-- Edit Trip Photos Upload Section -->
+                    <div class="mb-3 border p-3 rounded bg-light bg-opacity-50">
+                        <label for="edit-trip-image-input" class="form-label fw-semibold text-primary mb-1">
+                            <i class="fas fa-camera me-1"></i>Trip Photos / Cover Images (for Slideshow Vibe)
+                        </label>
+                        <input type="file" class="form-control form-control-sm" id="edit-trip-image-input" accept="image/*" multiple>
+                        <div class="form-text small">Upload additional photos or manage images for your trip slideshow.</div>
+                        <div id="edit-trip-image-previews" class="d-flex flex-wrap gap-2 mt-2"></div>
+                    </div>
                     <div class="form-check mb-3">
                         <input class="form-check-input" type="checkbox" id="edit-calculate-distance">
                         <label class="form-check-label" for="edit-calculate-distance">

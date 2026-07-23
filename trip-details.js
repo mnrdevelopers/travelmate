@@ -221,6 +221,12 @@ function setupTripDetailsEventListeners() {
     // Add event listener for update trip button in trip details page
     document.getElementById('update-trip-btn-trip-details').addEventListener('click', updateTripFromDetails);
     
+    // Wire up edit trip image input
+    const editTripImgInput = document.getElementById('edit-trip-image-input');
+    if (editTripImgInput) {
+        editTripImgInput.addEventListener('change', (e) => handleTripPhotoUpload(e, true));
+    }
+    
     // Wire up edit add stop button
     const editAddTripStopBtn = document.getElementById('edit-add-trip-stop-btn');
     if (editAddTripStopBtn) {
@@ -2926,6 +2932,12 @@ function addTripActions(trip) {
 function editCurrentTrip() {
     if (!currentTrip) return;
     
+    window._pendingEditTripImages = (currentTrip.images && Array.isArray(currentTrip.images)) ? [...currentTrip.images] : [];
+    const editPreviewContainer = document.getElementById('edit-trip-image-previews');
+    if (editPreviewContainer) renderTripImagePreviews(editPreviewContainer, window._pendingEditTripImages, true);
+    const editImgInput = document.getElementById('edit-trip-image-input');
+    if (editImgInput) editImgInput.value = '';
+
     // Populate the edit modal with current trip data
     document.getElementById('edit-trip-id').value = currentTrip.id;
     document.getElementById('edit-trip-name').value = currentTrip.name;
@@ -2965,6 +2977,102 @@ function editCurrentTrip() {
     // Show the edit modal
     const modal = new bootstrap.Modal(document.getElementById('editTripModal'));
     modal.show();
+}
+
+async function handleTripPhotoUpload(event, isEdit = true) {
+    const files = Array.from(event.target.files);
+    event.target.value = '';
+    if (files.length === 0) return;
+    
+    const previewContainer = document.getElementById(isEdit ? 'edit-trip-image-previews' : 'trip-image-previews');
+    const targetArrayKey = isEdit ? '_pendingEditTripImages' : '_pendingTripImages';
+    window[targetArrayKey] = window[targetArrayKey] || [];
+    
+    const settings = typeof getImageKitSettings === 'function' ? getImageKitSettings() : null;
+    let addedCount = 0;
+    
+    if (typeof showToast === 'function') showToast('Processing photo upload...', 'info');
+
+    for (const file of files) {
+        if (!file.type.startsWith('image/')) continue;
+        
+        try {
+            let finalUrl = '';
+            
+            if (settings && settings.urlEndpoint && settings.publicKey && settings.privateKey && typeof uploadToImageKit === 'function') {
+                const ikRes = await uploadToImageKit(file, `trip_cover_${Date.now()}_${file.name.replace(/\s+/g, '_')}`, settings);
+                if (ikRes && ikRes.url) {
+                    finalUrl = ikRes.url;
+                }
+            }
+            
+            if (!finalUrl) {
+                finalUrl = await compressImageToDataUrl(file, 900, 0.75);
+            }
+            
+            if (finalUrl) {
+                window[targetArrayKey].push(finalUrl);
+                addedCount++;
+            }
+        } catch (e) {
+            console.error('Error processing trip photo upload:', e);
+        }
+    }
+
+    if (addedCount > 0) {
+        renderTripImagePreviews(previewContainer, window[targetArrayKey], isEdit);
+        if (typeof showToast === 'function') showToast(`${addedCount} photo(s) added! Click "Update Trip" to save.`, 'success');
+    } else {
+        if (typeof showToast === 'function') showToast('Failed to process uploaded image file(s)', 'warning');
+    }
+}
+
+function compressImageToDataUrl(file, maxWidth = 900, quality = 0.75) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                
+                if (width > maxWidth) {
+                    height = Math.round((height * maxWidth) / width);
+                    width = maxWidth;
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                resolve(canvas.toDataURL('image/jpeg', quality));
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+function renderTripImagePreviews(container, imagesArray, isEdit = true) {
+    if (!container) return;
+    container.innerHTML = imagesArray.map((url, idx) => `
+        <div class="position-relative rounded overflow-hidden shadow-sm border" style="width: 70px; height: 70px;">
+            <img src="${url}" style="width: 100%; height: 100%; object-fit: cover;">
+            <button type="button" class="btn btn-danger btn-xs position-absolute top-0 end-0 p-0 rounded-circle d-flex align-items-center justify-content-center"
+                    style="width: 18px; height: 18px; font-size: 0.6rem; margin: 2px;"
+                    onclick="removeTripImagePreview(${idx}, ${isEdit})" title="Remove photo">&times;</button>
+        </div>
+    `).join('');
+}
+
+function removeTripImagePreview(idx, isEdit = true) {
+    const key = isEdit ? '_pendingEditTripImages' : '_pendingTripImages';
+    if (window[key]) {
+        window[key].splice(idx, 1);
+        const container = document.getElementById(isEdit ? 'edit-trip-image-previews' : 'trip-image-previews');
+        renderTripImagePreviews(container, window[key], isEdit);
+    }
 }
 
 async function deleteCurrentTrip() {
@@ -3279,6 +3387,7 @@ async function updateTripFromDetails() {
             startLocation: startLocation.trim(),
             destination: destination.trim(),
             stops: stops,
+            images: window._pendingEditTripImages || [],
             startDate,
             endDate,
             budget,

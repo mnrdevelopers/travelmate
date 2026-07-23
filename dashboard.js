@@ -142,6 +142,16 @@ function setupDashboardEventListeners() {
         slideshowQuickInput.addEventListener('change', handleQuickActiveTripPhotoUpload);
     }
     
+    // Modal photo upload inputs (Create & Edit trip modals)
+    const tripImgInput = document.getElementById('trip-image-input');
+    if (tripImgInput) {
+        tripImgInput.addEventListener('change', (e) => handleTripPhotoUpload(e, false));
+    }
+    const editTripImgInput = document.getElementById('edit-trip-image-input');
+    if (editTripImgInput) {
+        editTripImgInput.addEventListener('change', (e) => handleTripPhotoUpload(e, true));
+    }
+    
     // Protect any other navigation links
     const protectedLinks = document.querySelectorAll('.nav-link[href="#"]');
     protectedLinks.forEach(link => {
@@ -1630,6 +1640,7 @@ function updateSlideshowDOM() {}
 // Function to handle photo uploads from Create & Edit modals
 async function handleTripPhotoUpload(event, isEdit = false) {
     const files = Array.from(event.target.files);
+    event.target.value = ''; // Reset input so same files can be re-selected if needed
     if (files.length === 0) return;
     
     const previewContainer = document.getElementById(isEdit ? 'edit-trip-image-previews' : 'trip-image-previews');
@@ -1637,7 +1648,10 @@ async function handleTripPhotoUpload(event, isEdit = false) {
     window[targetArrayKey] = window[targetArrayKey] || [];
     
     const settings = typeof getImageKitSettings === 'function' ? getImageKitSettings() : null;
+    let addedCount = 0;
     
+    if (typeof showToast === 'function') showToast('Processing photo upload...', 'info');
+
     for (const file of files) {
         if (!file.type.startsWith('image/')) continue;
         
@@ -1646,8 +1660,7 @@ async function handleTripPhotoUpload(event, isEdit = false) {
             
             // 1. Try ImageKit Upload if configured
             if (settings && settings.urlEndpoint && settings.publicKey && settings.privateKey && typeof uploadToImageKit === 'function') {
-                if (typeof showToast === 'function') showToast('Uploading photo to ImageKit...', 'info');
-                const ikRes = await uploadToImageKit(file, `trip_cover_${Date.now()}_${file.name}`, settings);
+                const ikRes = await uploadToImageKit(file, `trip_cover_${Date.now()}_${file.name.replace(/\s+/g, '_')}`, settings);
                 if (ikRes && ikRes.url) {
                     finalUrl = ikRes.url;
                 }
@@ -1660,12 +1673,19 @@ async function handleTripPhotoUpload(event, isEdit = false) {
             
             if (finalUrl) {
                 window[targetArrayKey].push(finalUrl);
-                renderTripImagePreviews(previewContainer, window[targetArrayKey], isEdit);
+                addedCount++;
             }
         } catch (e) {
             console.error('Error processing trip photo upload:', e);
-            if (typeof showToast === 'function') showToast('Failed to process image file', 'warning');
         }
+    }
+
+    if (addedCount > 0) {
+        renderTripImagePreviews(previewContainer, window[targetArrayKey], isEdit);
+        const actionText = isEdit ? 'Save/Update Trip' : 'Create Trip';
+        if (typeof showToast === 'function') showToast(`${addedCount} photo(s) added! Click "${actionText}" to save changes.`, 'success');
+    } else {
+        if (typeof showToast === 'function') showToast('Failed to process uploaded image file(s)', 'warning');
     }
 }
 
