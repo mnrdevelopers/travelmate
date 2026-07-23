@@ -6367,7 +6367,7 @@ async function runAiDayPlanGeneration() {
                 category: s.category,
                 place: s.place,
                 notes: customNotes ? `${s.notes} (${customNotes})` : s.notes,
-                addedBy: auth.currentUser.uid,
+                addedBy: auth.currentUser?.uid || 'user',
                 addedAt: new Date().toISOString()
             }));
         } else {
@@ -6378,7 +6378,7 @@ async function runAiDayPlanGeneration() {
                     category: pace === 'spiritual' ? 'temple' : 'sightseeing',
                     place: `${activeCity} Top Famous Attraction & Viewpoint`,
                     notes: customNotes || 'Explore iconic landmarks & scenic surroundings.',
-                    addedBy: auth.currentUser.uid,
+                    addedBy: auth.currentUser?.uid || 'user',
                     addedAt: new Date().toISOString()
                 },
                 {
@@ -6387,7 +6387,7 @@ async function runAiDayPlanGeneration() {
                     category: 'food',
                     place: `Famous Regional Thali Restaurant in ${activeCity}`,
                     notes: 'Savor authentic traditional delicacies & local specialties.',
-                    addedBy: auth.currentUser.uid,
+                    addedBy: auth.currentUser?.uid || 'user',
                     addedAt: new Date().toISOString()
                 },
                 {
@@ -6396,7 +6396,7 @@ async function runAiDayPlanGeneration() {
                     category: 'shopping',
                     place: `${activeCity} Local Market & Evening Bazaar`,
                     notes: 'Handicrafts, souvenirs, local street shopping & evening tea.',
-                    addedBy: auth.currentUser.uid,
+                    addedBy: auth.currentUser?.uid || 'user',
                     addedAt: new Date().toISOString()
                 }
             ];
@@ -6452,7 +6452,12 @@ async function addAiSuggestionsToItinerary() {
         const tripData = tripDoc.data();
         const existing = tripData.itinerary || [];
 
-        const combined = [...existing, ..._currentGeneratedAiSuggestions];
+        const formattedSuggestions = _currentGeneratedAiSuggestions.map(s => ({
+            ...s,
+            addedBy: auth.currentUser ? auth.currentUser.uid : 'traveler'
+        }));
+
+        const combined = [...existing, ...formattedSuggestions];
 
         await db.collection('trips').doc(currentTrip.id).update({
             itinerary: combined,
