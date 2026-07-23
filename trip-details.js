@@ -1524,53 +1524,71 @@ function updateBudgetSummary(trip) {
 function renderExpenseChart(trip) {
     if (!trip.expenses || trip.expenses.length === 0) return;
     
-    const ctx = document.getElementById('expense-chart').getContext('2d');
+    const canvas = document.getElementById('expense-chart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     
     // Destroy previous chart if it exists
     if (expenseChart) expenseChart.destroy();
     
-    // Group expenses by category
-    const categories = {
-        fuel: 0,
-        hotel: 0,
-        food: 0,
-        activities: 0,
-        other: 0
-    };
-    
-    // Add custom categories
-    customCategories.forEach(cat => categories[cat.id] = 0);
+    // Dynamically group expenses by category
+    const categories = {};
     
     trip.expenses.forEach(expense => {
         if (expense.isPersonal) return; // Exclude personal expenses from chart
-        if (categories[expense.category] !== undefined) {
-            categories[expense.category] += expense.amount;
-        } else {
-            categories.other += expense.amount;
-        }
+        const catKey = expense.category || 'other';
+        categories[catKey] = (categories[catKey] || 0) + expense.amount;
     });
     
-    // Filter out categories with no expenses
+    const activeCategoryKeys = Object.keys(categories).filter(catKey => categories[catKey] > 0);
+    if (activeCategoryKeys.length === 0) return;
+    
     const labels = [];
     const data = [];
-    const backgroundColors = [
-        '#ffd166', // fuel
-        '#06d6a0', // hotel
-        '#ef476f', // food
-        '#118ab2', // activities
-        '#073b4c'  // other
+    const backgroundColors = [];
+    
+    // Color palette mapping for categories
+    const categoryColors = {
+        'train': '#28a745',
+        'flight': '#007bff',
+        'bus': '#dc3545',
+        'public-transport': '#fd7e14',
+        'fuel': '#ffd166',
+        'Transport': '#17a2b8',
+        'transportation': '#17a2b8',
+        'hotel': '#06d6a0',
+        'accommodation': '#6610f2',
+        'restaurant': '#e83e8c',
+        'food': '#ef476f',
+        'activities': '#118ab2',
+        'Activities': '#118ab2',
+        'sightseeing': '#20c997',
+        'other': '#073b4c',
+        'misc': '#6c757d'
+    };
+    
+    const fallbackPalette = [
+        '#28a745', '#007bff', '#dc3545', '#ffd166', '#06d6a0', 
+        '#ef476f', '#118ab2', '#7248b9', '#fd7e14', '#e83e8c', 
+        '#20c997', '#073b4c', '#6c757d', '#17a2b8', '#6610f2'
     ];
     
-    // Add colors for custom categories
-    customCategories.forEach((cat, index) => {
-        backgroundColors.push(cat.color || `#${Math.floor(Math.random()*16777215).toString(16)}`);
-    });
-    
-    Object.keys(categories).forEach((category, index) => {
-        if (categories[category] > 0) {
-            labels.push(getCategoryName(category));
-            data.push(categories[category]);
+    activeCategoryKeys.forEach((catKey, index) => {
+        labels.push(getCategoryName(catKey));
+        data.push(categories[catKey]);
+        
+        let color = categoryColors[catKey];
+        if (!color) {
+            const knownCat = professionalCategories.find(c => c.id === catKey);
+            if (knownCat && categoryColors[knownCat.group]) {
+                color = categoryColors[knownCat.group];
+            } else if (window.allTripCategories && window.allTripCategories[catKey] && window.allTripCategories[catKey].color) {
+                color = window.allTripCategories[catKey].color;
+            } else {
+                color = fallbackPalette[index % fallbackPalette.length];
+            }
         }
+        backgroundColors.push(color);
     });
     
     expenseChart = new Chart(ctx, {
@@ -1579,7 +1597,7 @@ function renderExpenseChart(trip) {
             labels: labels,
             datasets: [{
                 data: data,
-                backgroundColor: backgroundColors.slice(0, labels.length),
+                backgroundColor: backgroundColors,
                 borderWidth: 2,
                 borderColor: '#fff'
             }]
@@ -3868,8 +3886,15 @@ async function loadAllMemberNamesForExpenses(expenses) {
 }
 
 function getCategoryGroup(categoryId) {
+    if (!categoryId) return 'misc';
     const category = professionalCategories.find(cat => cat.id === categoryId);
-    return category ? category.group : 'misc';
+    if (category) return category.group;
+    const lower = categoryId.toLowerCase();
+    if (lower.includes('transport') || lower === 'train' || lower === 'flight' || lower === 'bus') return 'transportation';
+    if (lower.includes('hotel') || lower.includes('stay') || lower.includes('accommodation')) return 'accommodation';
+    if (lower.includes('food') || lower.includes('dining')) return 'food';
+    if (lower.includes('activity') || lower.includes('darshan') || lower.includes('event')) return 'activities';
+    return lower;
 }
 
 function getPaymentModeIcon(paymentMode) {
@@ -4982,7 +5007,7 @@ async function saveTicket() {
         let newExpenseIndex = existingTicket ? existingTicket.expenseIndex : undefined;
         
         if (trackExpense && cost > 0) {
-            const expCat = type === 'darshan' ? 'Activities' : 'Transport';
+            const expCat = type === 'darshan' ? 'activities' : (['train', 'flight', 'bus'].includes(type) ? type : 'public-transport');
             const expDesc = type === 'darshan' 
                 ? `[Darshan Ticket] ${templeName || operator}: ${darshanCategory || serviceName} (Token: ${ticketNo})`
                 : `[Ticket] ${type.toUpperCase()}: ${serviceNo ? serviceNo + ' - ' : ''}${serviceName || operator} (${depCode || departurePlace} → ${arrCode || arrivalPlace})`;
