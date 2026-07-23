@@ -321,6 +321,16 @@ function setupTripDetailsEventListeners() {
         }
     });
 
+    const itineraryDayFilters = document.getElementById('itinerary-day-filters');
+    if (itineraryDayFilters) {
+        itineraryDayFilters.addEventListener('click', function(e) {
+            const btn = e.target.closest('.itinerary-day-chip');
+            if (!btn) return;
+            window._activeItineraryDayFilter = btn.getAttribute('data-day');
+            if (currentTrip) loadTripItinerary(currentTrip);
+        });
+    }
+
     // Periodically update departure alerts
     setInterval(() => {
         if (currentTrip) {
@@ -1723,12 +1733,26 @@ function renderPaymentChart(trip) {
     });
 }
 
+function getActivityCategoryBadge(cat) {
+    switch(cat) {
+        case 'temple': return '<span class="badge bg-warning bg-opacity-25 text-warning-emphasis border border-warning border-opacity-50 me-2" style="font-size:0.7rem;"><i class="fas fa-gopuram me-1"></i>Temple / Devotional</span>';
+        case 'sightseeing': return '<span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 me-2" style="font-size:0.7rem;"><i class="fas fa-landmark me-1"></i>Sightseeing</span>';
+        case 'food': return '<span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 me-2" style="font-size:0.7rem;"><i class="fas fa-utensils me-1"></i>Food & Dining</span>';
+        case 'shopping': return '<span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 me-2" style="font-size:0.7rem;"><i class="fas fa-shopping-bag me-1"></i>Shopping</span>';
+        case 'hotel': return '<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 me-2" style="font-size:0.7rem;"><i class="fas fa-hotel me-1"></i>Hotel / Rest</span>';
+        case 'transit': return '<span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 me-2" style="font-size:0.7rem;"><i class="fas fa-car me-1"></i>Transit</span>';
+        default: return '<span class="badge bg-light text-dark border me-2" style="font-size:0.7rem;"><i class="fas fa-map-marker-alt me-1"></i>Activity</span>';
+    }
+}
+
 async function loadTripItinerary(trip) {
     const itineraryDays = document.getElementById('itinerary-days');
     const emptyItinerary = document.getElementById('empty-itinerary');
+    const dayFiltersContainer = document.getElementById('itinerary-day-filters');
     
     if (!trip.itinerary || trip.itinerary.length === 0) {
         itineraryDays.innerHTML = '';
+        if (dayFiltersContainer) dayFiltersContainer.innerHTML = '';
         emptyItinerary.classList.remove('d-none');
         return;
     }
@@ -1761,16 +1785,34 @@ async function loadTripItinerary(trip) {
             originalIndex: originalIndex
         });
     });
+
+    const sortedDayKeys = Object.keys(activitiesByDay).sort((a, b) => parseInt(a) - parseInt(b));
+
+    // Render Day Filter Buttons
+    if (dayFiltersContainer) {
+        const activeFilter = window._activeItineraryDayFilter || 'all';
+        let filtersHtml = `<button type="button" class="btn btn-xs ${activeFilter === 'all' ? 'btn-primary active' : 'btn-outline-secondary'} rounded-pill me-1 mb-1 itinerary-day-chip" data-day="all"><i class="fas fa-layer-group me-1"></i>All Days (${trip.itinerary.length})</button>`;
+        
+        sortedDayKeys.forEach(d => {
+            const count = activitiesByDay[d].length;
+            const isActive = activeFilter === d;
+            filtersHtml += `<button type="button" class="btn btn-xs ${isActive ? 'btn-primary active' : 'btn-outline-secondary'} rounded-pill me-1 mb-1 itinerary-day-chip" data-day="${d}">Day ${d} (${count})</button>`;
+        });
+        
+        dayFiltersContainer.innerHTML = filtersHtml;
+    }
     
     // Clear existing content
     itineraryDays.innerHTML = '';
     
+    const activeFilter = window._activeItineraryDayFilter || 'all';
+
     // Sort days numerically and create day cards
-    Object.keys(activitiesByDay)
-        .sort((a, b) => parseInt(a) - parseInt(b))
-        .forEach(day => {
+    sortedDayKeys.forEach(day => {
+            if (activeFilter !== 'all' && day !== activeFilter) return;
+
             const dayCard = document.createElement('div');
-            dayCard.className = 'card itinerary-card mb-4';
+            dayCard.className = 'card itinerary-card mb-4 border-0 shadow-sm rounded-3 overflow-hidden';
             
             // Sort activities by time within each day
             const sortedActivities = activitiesByDay[day].sort((a, b) => {
@@ -1778,47 +1820,56 @@ async function loadTripItinerary(trip) {
             });
             
             dayCard.innerHTML = `
-                <div class="card-header bg-success text-white">
-                    <h5 class="mb-0">
-                        <i class="fas fa-calendar-day me-2"></i>Day ${day}
-                        <span class="badge bg-light text-dark ms-2">${sortedActivities.length} activities</span>
-                    </h5>
+                <div class="card-header bg-success text-white py-2 px-3 d-flex align-items-center justify-content-between">
+                    <h6 class="mb-0 fw-bold">
+                        <i class="fas fa-calendar-day me-2"></i>Day ${day} Schedule
+                    </h6>
+                    <span class="badge bg-white text-success fw-bold" style="font-size:0.75rem;">${sortedActivities.length} Activities</span>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-3">
                     ${sortedActivities.map(activity => {
                         const canEdit = activity.addedBy === auth.currentUser.uid;
                         const memberName = memberNames[activity.addedBy] || 'Traveler';
+                        const categoryBadge = getActivityCategoryBadge(activity.category);
+                        const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(activity.place)}`;
                         
                         return `
-                            <div class="d-flex align-items-start mb-3 p-3 border rounded activity-item" 
-                                 data-location="${activity.place}" style="cursor: pointer;" title="Click to view on map">
+                            <div class="d-flex align-items-start mb-3 p-3 border rounded-3 bg-white shadow-sm activity-item" 
+                                 data-location="${activity.place}">
                                 <div class="me-3 text-center flex-shrink-0">
-                                    <div class="bg-primary text-white rounded p-2" style="width: 80px;">
+                                    <div class="bg-primary text-white rounded-3 p-2 shadow-sm" style="width: 75px;">
+                                        <i class="far fa-clock small d-block opacity-75"></i>
                                         <div class="fw-bold small">${activity.time}</div>
                                     </div>
                                 </div>
                                 <div class="flex-grow-1">
-                                    <h6 class="mb-1 text-primary">${activity.place}</h6>
-                                    ${activity.notes ? `<p class="mb-2 text-muted small">${activity.notes}</p>` : ''}
-                                    <div class="d-flex justify-content-between align-items-center">
+                                    <div class="d-flex align-items-center flex-wrap mb-1">
+                                        ${categoryBadge}
+                                        <h6 class="mb-0 text-dark fw-bold">${activity.place}</h6>
+                                    </div>
+                                    ${activity.notes ? `<p class="mb-2 text-secondary small" style="font-size:0.8rem;"><i class="fas fa-info-circle text-info me-1"></i>${activity.notes}</p>` : ''}
+                                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 pt-2 border-top mt-2" style="font-size:0.75rem;">
                                         <small class="text-muted">
-                                            <i class="fas fa-user me-1"></i>
+                                            <i class="fas fa-user me-1 text-muted"></i>
                                             <span class="activity-added-by">${memberName}</span>
                                         </small>
-                                        ${canEdit ? `
-                                            <div>
-                                                <button class="btn btn-sm btn-outline-primary edit-activity-btn me-1" 
+                                        <div class="d-flex align-items-center gap-1">
+                                            <a href="${mapsUrl}" target="_blank" class="btn btn-xs btn-outline-success py-1 px-2.5 rounded-pill fw-semibold" style="font-size:0.7rem;" title="Directions on Google Maps">
+                                                <i class="fas fa-compass me-1"></i>Directions
+                                            </a>
+                                            ${canEdit ? `
+                                                <button class="btn btn-xs btn-outline-primary edit-activity-btn py-1 px-2 rounded-pill" 
                                                         data-activity-index="${activity.originalIndex}"
-                                                        title="Edit Activity">
-                                                    <i class="fas fa-edit"></i> Edit
+                                                        title="Edit Activity" style="font-size:0.7rem;">
+                                                    <i class="fas fa-edit me-1"></i>Edit
                                                 </button>
-                                                <button class="btn btn-sm btn-outline-danger delete-activity-btn" 
+                                                <button class="btn btn-xs btn-outline-danger delete-activity-btn py-1 px-2 rounded-pill" 
                                                         data-activity-index="${activity.originalIndex}"
-                                                        title="Delete Activity">
-                                                    <i class="fas fa-trash"></i> Delete
+                                                        title="Delete Activity" style="font-size:0.7rem;">
+                                                    <i class="fas fa-trash me-1"></i>Delete
                                                 </button>
-                                            </div>
-                                        ` : ''}
+                                            ` : ''}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -2390,6 +2441,7 @@ function showAddActivityModal() {
 async function saveActivity() {
     const day = parseInt(document.getElementById('activity-day').value);
     const time = document.getElementById('activity-time').value;
+    const category = document.getElementById('activity-category').value || 'sightseeing';
     const place = document.getElementById('activity-place').value;
     const notes = document.getElementById('activity-notes').value;
     const isEditing = document.getElementById('save-activity-btn').dataset.editingIndex;
@@ -2402,6 +2454,7 @@ async function saveActivity() {
     const activity = {
         day,
         time,
+        category,
         place: place.trim(),
         notes: (notes || '').trim(),
         addedBy: auth.currentUser.uid,
@@ -2802,6 +2855,9 @@ async function editActivity(activityIndex) {
         // Now populate the form with activity data
         document.getElementById('activity-day').value = activity.day;
         document.getElementById('activity-time').value = activity.time;
+        if (document.getElementById('activity-category')) {
+            document.getElementById('activity-category').value = activity.category || 'sightseeing';
+        }
         document.getElementById('activity-place').value = activity.place;
         document.getElementById('activity-notes').value = activity.notes || '';
         
@@ -5843,6 +5899,42 @@ function renderJourneyStayBreakdown(trip) {
     }
 }
 
+function shareItineraryText() {
+    if (!currentTrip || !currentTrip.itinerary || currentTrip.itinerary.length === 0) {
+        showToast('No itinerary items to share! Please add activities first.', 'warning');
+        return;
+    }
+    
+    let text = `✈️ *TravelMate Itinerary for ${currentTrip.title || currentTrip.destination}*\n📅 Dates: ${currentTrip.startDate} to ${currentTrip.endDate}\n\n`;
+    
+    const activitiesByDay = {};
+    currentTrip.itinerary.forEach(act => {
+        if (!activitiesByDay[act.day]) activitiesByDay[act.day] = [];
+        activitiesByDay[act.day].push(act);
+    });
+    
+    Object.keys(activitiesByDay).sort((a,b) => parseInt(a)-parseInt(b)).forEach(day => {
+        text += `📌 *DAY ${day}*\n`;
+        activitiesByDay[day].sort((a,b) => a.time.localeCompare(b.time)).forEach(act => {
+            const catEmoji = act.category === 'temple' ? '🕉️' : (act.category === 'food' ? '🍽️' : (act.category === 'shopping' ? '🛍️' : '🏛️'));
+            text += `  • ⏰ ${act.time} - ${catEmoji} *${act.place}* ${act.notes ? '(' + act.notes + ')' : ''}\n`;
+        });
+        text += `\n`;
+    });
+    
+    text += `Shared via TravelMate 🌍`;
+    
+    if (navigator.share) {
+        navigator.share({ title: currentTrip.title || 'Trip Itinerary', text: text }).catch(() => {
+            navigator.clipboard.writeText(text);
+            showToast('Itinerary copied to clipboard!', 'success');
+        });
+    } else {
+        navigator.clipboard.writeText(text);
+        showToast('Itinerary copied to clipboard! You can paste it in WhatsApp or messages.', 'success');
+    }
+}
+
 // Expose functions globally for onclick calls
 window.showEditTicketModal = showEditTicketModal;
 window.deleteTicket = deleteTicket;
@@ -5850,3 +5942,4 @@ window.viewTicketReceipt = viewTicketReceipt;
 window.loadTripTickets = loadTripTickets;
 window.loadTripWeather = loadTripWeather;
 window.renderJourneyStayBreakdown = renderJourneyStayBreakdown;
+window.shareItineraryText = shareItineraryText;

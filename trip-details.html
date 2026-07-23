@@ -511,11 +511,24 @@
              data-guide-hi="यात्रा कार्यक्रम अनुभाग में आपका स्वागत है! यहाँ आप दिन-वार गतिविधियों की योजना बना सकते हैं, जिसमें विशिष्ट समय स्लॉट और स्थान निर्देशांक शामिल हैं। आप उन पर क्लिक करके सीधे मानचित्र पर गतिविधि स्थान भी देख सकते हैं।"
              data-guide-te="ఇటినెరరీ విభాగానికి స్వాగతం! ఇక్కడ మీరు నిర్దిష్ట సమయాలు మరియు ప్రదేశాలతో రోజువారీ కార్యకలాపాలను ప్లాన్ చేయవచ్చు. మీరు వాటిపై క్లిక్ చేయడం ద్వారా నేరుగా మ్యాప్‌లో ప్రదేశాలను చూడవచ్చు.">
         </div>
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h4>Itinerary</h4>
-            <button class="btn btn-primary" id="add-activity-btn">
-                <i class="fas fa-plus me-1"></i>Add Activity
-            </button>
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <div>
+                <h4 class="mb-0">Itinerary & Activities</h4>
+                <small class="text-muted">Day-wise schedule & attractions for your journey</small>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-success btn-sm rounded-pill shadow-sm" id="btn-share-itinerary" onclick="shareItineraryText()">
+                    <i class="fab fa-whatsapp me-1"></i>Share Itinerary
+                </button>
+                <button class="btn btn-primary btn-sm rounded-pill shadow-sm" id="add-activity-btn">
+                    <i class="fas fa-plus me-1"></i>Add Activity
+                </button>
+            </div>
+        </div>
+
+        <!-- Day Filter Tabs -->
+        <div id="itinerary-day-filters" class="d-flex flex-wrap gap-1 mb-3">
+            <!-- Dynamically populated day filter buttons -->
         </div>
 
         <div id="itinerary-days">
@@ -1031,12 +1044,24 @@
                                 <input type="time" class="form-control" id="activity-time" required>
                             </div>
                             <div class="mb-3">
-                                <label for="activity-place" class="form-label">Place</label>
-                                <input type="text" class="form-control" id="activity-place" required>
+                                <label for="activity-category" class="form-label">Category</label>
+                                <select class="form-select" id="activity-category">
+                                    <option value="sightseeing">🏛️ Sightseeing & Attractions</option>
+                                    <option value="temple">🕉️ Temple / Darshan / Devotional</option>
+                                    <option value="food">🍽️ Food & Dining</option>
+                                    <option value="shopping">🛍️ Shopping & Markets</option>
+                                    <option value="hotel">🏨 Hotel / Check-in & Rest</option>
+                                    <option value="transit">🚕 Travel & Transit</option>
+                                    <option value="other">📌 Other</option>
+                                </select>
                             </div>
                             <div class="mb-3">
-                                <label for="activity-notes" class="form-label">Notes</label>
-                                <textarea class="form-control" id="activity-notes" rows="3"></textarea>
+                                <label for="activity-place" class="form-label">Place / Location Name</label>
+                                <input type="text" class="form-control" id="activity-place" placeholder="e.g. Maa Kamakhya Temple, Charminar, Taj Mahal..." required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="activity-notes" class="form-label">Notes / Instructions</label>
+                                <textarea class="form-control" id="activity-notes" rows="3" placeholder="e.g. Carry shoes in bag, dress code applies, photography allowed..."></textarea>
                             </div>
                         </form>
                     </div>
