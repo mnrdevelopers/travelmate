@@ -4625,6 +4625,76 @@ async function loadTripWeather(trip, targetLocation = null) {
     }
 }
 
+function enableStopsDragAndDrop(container, onReorderCallback) {
+    if (!container || container.dataset.dragInitialized === 'true') return;
+    container.dataset.dragInitialized = 'true';
+
+    let draggedItem = null;
+
+    container.addEventListener('dragstart', (e) => {
+        const row = e.target.closest('.stop-input-row');
+        if (!row) return;
+        draggedItem = row;
+        row.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        try { e.dataTransfer.setData('text/plain', ''); } catch (_) {}
+    });
+
+    container.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        const targetRow = e.target.closest('.stop-input-row');
+        if (targetRow && targetRow !== draggedItem && targetRow.parentNode === container) {
+            const rect = targetRow.getBoundingClientRect();
+            const next = (e.clientY - rect.top) > (rect.height / 2);
+            container.insertBefore(draggedItem, next ? targetRow.nextSibling : targetRow);
+        }
+    });
+
+    container.addEventListener('dragend', () => {
+        if (draggedItem) {
+            draggedItem.classList.remove('dragging');
+            draggedItem = null;
+            if (typeof onReorderCallback === 'function') onReorderCallback();
+        }
+    });
+
+    // Touch Support for Mobile Drag & Drop
+    let touchItem = null;
+
+    container.addEventListener('touchstart', (e) => {
+        const handle = e.target.closest('.drag-handle');
+        if (!handle) return;
+        const row = handle.closest('.stop-input-row');
+        if (!row) return;
+
+        touchItem = row;
+        touchItem.classList.add('dragging');
+    }, { passive: false });
+
+    container.addEventListener('touchmove', (e) => {
+        if (!touchItem) return;
+        e.preventDefault();
+        const touch = e.touches[0];
+        const elem = document.elementFromPoint(touch.clientX, touch.clientY);
+        if (!elem) return;
+        const targetRow = elem.closest('.stop-input-row');
+        if (targetRow && targetRow !== touchItem && targetRow.parentNode === container) {
+            const rect = targetRow.getBoundingClientRect();
+            const next = (touch.clientY - rect.top) > (rect.height / 2);
+            container.insertBefore(touchItem, next ? targetRow.nextSibling : targetRow);
+        }
+    }, { passive: false });
+
+    container.addEventListener('touchend', () => {
+        if (touchItem) {
+            touchItem.classList.remove('dragging');
+            touchItem = null;
+            if (typeof onReorderCallback === 'function') onReorderCallback();
+        }
+    });
+}
+
 function addStopField(container, value = '') {
     if (!container) return;
     
@@ -4640,6 +4710,12 @@ function addStopField(container, value = '') {
     
     const div = document.createElement('div');
     div.className = 'd-flex align-items-center gap-2 stop-input-row animate-fade-in mb-2';
+    div.draggable = true;
+    
+    const dragHandle = document.createElement('span');
+    dragHandle.className = 'drag-handle text-muted me-1 px-1';
+    dragHandle.title = 'Drag to reorder stop';
+    dragHandle.innerHTML = '<i class="fas fa-grip-vertical"></i>';
     
     const span = document.createElement('span');
     span.className = 'text-muted small stop-pin-icon';
@@ -4700,12 +4776,15 @@ function addStopField(container, value = '') {
         triggerRecalc();
     });
     
+    div.appendChild(dragHandle);
     div.appendChild(span);
     div.appendChild(input);
     div.appendChild(select);
     div.appendChild(btn);
     
     container.appendChild(div);
+
+    enableStopsDragAndDrop(container, triggerRecalc);
 }
 
 window.addEventListener('tripRouteUpdated', () => {

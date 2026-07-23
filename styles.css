@@ -2080,3 +2080,37 @@ body.dark-mode .btn-close {
     font-size: 0.75rem;
 }
 
+/* Drag & Drop Route Stops Styling */
+.drag-handle {
+    cursor: grab;
+    cursor: -webkit-grab;
+    user-select: none;
+    touch-action: none;
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.drag-handle:hover, .drag-handle:active {
+    color: var(--primary-color, #e65100) !important;
+    transform: scale(1.15);
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+    cursor: -webkit-grabbing;
+}
+
+.stop-input-row, .itinerary-activity-card, .itinerary-activity-item {
+    transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.stop-input-row.dragging, .itinerary-activity-card.dragging, .itinerary-activity-item.dragging {
+    opacity: 0.45;
+    box-shadow: 0 8px 25px rgba(230, 81, 0, 0.25) !important;
+    border: 2px dashed var(--primary-color, #e65100) !important;
+    background-color: rgba(255, 243, 224, 0.8) !important;
+}
+
+.stop-input-row:hover .drag-handle {
+    color: #475569 !important;
+}
+
