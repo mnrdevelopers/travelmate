@@ -1,4 +1,4 @@
-const CACHE_NAME = 'travelmate-cache-v22';
+const CACHE_NAME = 'travelmate-cache-v23';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -14,6 +14,7 @@ const ASSETS_TO_CACHE = [
   './utils.js',
   './trip-details.js',
   './car-calculations.js',
+  './js/notifications-engine.js',
   './js/ai-memory.js',
   './js/destination-db.js',
   './js/ai-planner-engine.js',
@@ -22,7 +23,7 @@ const ASSETS_TO_CACHE = [
   './manifest.json'
 ];
 
-// Install event: cache assets using Promise.allSettled so 404s never fail installation
+// Install event: cache assets safely with Promise.allSettled
 self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
@@ -70,7 +71,50 @@ self.addEventListener('fetch', event => {
   );
 });
 
-// Message listener for sync / reload signals
+// Push notification event listener
+self.addEventListener('push', event => {
+  let payload = { title: 'TravelMate Journey Alert', body: 'You have an upcoming journey notification.' };
+  if (event.data) {
+    try {
+      payload = event.data.json();
+    } catch (_) {
+      payload.body = event.data.text();
+    }
+  }
+
+  const options = {
+    body: payload.body,
+    icon: 'icon.png',
+    badge: 'icon.png',
+    data: payload.data || {}
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, options)
+  );
+});
+
+// Notification click event handler: open trip details page
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const tripId = event.notification.data ? event.notification.data.tripId : null;
+  const targetUrl = tripId ? `./trip-details.html?id=${tripId}` : './dashboard.html';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
+      for (const client of windowClients) {
+        if (client.url.includes('dashboard.html') || client.url.includes('trip-details.html')) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
+  );
+});
+
+// Message listener for skip waiting
 self.addEventListener('message', event => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();

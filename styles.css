@@ -2114,3 +2114,23 @@ body.dark-mode .btn-close {
     color: #475569 !important;
 }
 
+/* In-App Notification Center Drawer */
+.notif-center-drawer {
+    position: fixed;
+    top: 70px;
+    right: 20px;
+    width: 340px;
+    max-width: 90vw;
+    background: white;
+    border-radius: 16px;
+    overflow: hidden;
+    z-index: 1060;
+    display: none;
+    border: 1px solid rgba(0,0,0,0.1);
+}
+
+.notif-center-drawer.active {
+    display: block;
+    animation: fadeInDown 0.25s ease-out;
+}
+

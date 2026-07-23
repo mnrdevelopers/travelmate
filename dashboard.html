@@ -48,6 +48,12 @@
             <button class="btn btn-warning btn-sm text-dark fw-bold rounded-pill shadow-sm me-2 d-none" id="pwa-install-btn" title="Install TravelMate App">
                 <i class="fas fa-download me-1"></i>Install App
             </button>
+            <div class="position-relative me-2">
+                <button class="btn btn-link nav-link position-relative p-1" id="notif-bell-btn" title="Journey Notifications">
+                    <i class="fas fa-bell fs-5"></i>
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" id="notif-unread-badge" style="font-size: 0.65rem;">0</span>
+                </button>
+            </div>
             <button class="btn btn-link nav-link me-2" id="theme-toggle" title="Toggle Dark Mode">
                 <i class="fas fa-moon"></i>
             </button>
@@ -867,6 +873,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js"></script>
     <script src="utils.js"></script>
+    <script src="js/notifications-engine.js"></script>
     <script src="js/ai-memory.js"></script>
     <script src="js/destination-db.js"></script>
     <script src="dashboard.js"></script>
@@ -931,6 +938,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     </button>
                 </div>
             </div>
+        </div>
+    </div>
+    <!-- In-App Notification Center Drawer -->
+    <div class="notif-center-drawer shadow-lg" id="notif-center-drawer">
+        <div class="p-3 bg-warning text-dark d-flex align-items-center justify-content-between">
+            <h6 class="fw-bold mb-0"><i class="fas fa-bell me-2"></i>Journey & Train Alerts</h6>
+            <div>
+                <button class="btn btn-xs btn-outline-dark me-2 rounded-pill fw-bold" onclick="notificationsEngine.markAllAsRead()">Mark Read</button>
+                <button class="btn-close" onclick="notificationsEngine.toggleNotifDrawer()"></button>
+            </div>
+        </div>
+        <div id="notif-center-list" class="overflow-y-auto" style="max-height: 400px;">
+            <!-- Populated dynamically -->
         </div>
     </div>
 </body>
