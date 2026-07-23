@@ -5933,11 +5933,20 @@ function shareItineraryText() {
         if (!activitiesByDay[act.day]) activitiesByDay[act.day] = [];
         activitiesByDay[act.day].push(act);
     });
+
+    const tripStartDate = currentTrip.startDate ? new Date(currentTrip.startDate) : null;
     
     Object.keys(activitiesByDay).sort((a,b) => parseInt(a)-parseInt(b)).forEach(day => {
-        text += `📌 *DAY ${day}*\n`;
+        let dayHeaderStr = `DAY ${day}`;
+        if (tripStartDate && !isNaN(tripStartDate.getTime())) {
+            const dayNum = parseInt(day);
+            const dDate = new Date(tripStartDate.getTime() + (dayNum - 1) * 24 * 60 * 60 * 1000);
+            dayHeaderStr = dDate.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
+        }
+
+        text += `📌 *${dayHeaderStr}*\n`;
         activitiesByDay[day].sort((a,b) => a.time.localeCompare(b.time)).forEach(act => {
-            const catEmoji = act.category === 'temple' ? '🕉️' : (act.category === 'food' ? '🍽️' : (act.category === 'shopping' ? '🛍️' : '🏛️'));
+            const catEmoji = act.category === 'temple' ? '🕉️' : (act.category === 'food' ? '🍽️' : (act.category === 'shopping' ? '🛍️' : (act.category === 'transit' ? '🚕' : (act.category === 'hotel' ? '🏨' : '🏛️'))));
             text += `  • ⏰ ${act.time} - ${catEmoji} *${act.place}* ${act.notes ? '(' + act.notes + ')' : ''}\n`;
         });
         text += `\n`;
