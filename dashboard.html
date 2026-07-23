@@ -38,31 +38,38 @@
     <!-- Navigation -->
   <nav class="navbar navbar-expand-lg navbar-light sticky-top">
     <div class="container">
-        <button class="navbar-toggler order-0 me-2" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <a class="navbar-brand fw-bold order-1 me-auto" href="dashboard.html">
-            <i class="fas fa-map-marked-alt me-2 text-primary"></i>TravelMate
-        </a>
-        <div class="d-flex align-items-center order-2 order-lg-3">
-            <button class="btn btn-warning btn-sm text-dark fw-bold rounded-pill shadow-sm me-2 d-none" id="pwa-install-btn" title="Install TravelMate App">
-                <i class="fas fa-download me-1"></i>Install App
+        <!-- Brand & Mobile Toggler Group (Left) -->
+        <div class="d-flex align-items-center gap-2 order-0">
+            <button class="navbar-toggler p-1 border-0 shadow-none" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
             </button>
-            <div class="position-relative me-2">
-                <button class="btn btn-link nav-link position-relative p-1" id="notif-bell-btn" title="Journey Notifications">
+            <a class="navbar-brand fw-bold m-0 p-0 me-lg-4" href="dashboard.html">
+                <i class="fas fa-map-marked-alt me-1.5 text-primary"></i>TravelMate
+            </a>
+        </div>
+
+        <!-- Action Items (Right) -->
+        <div class="navbar-actions d-flex align-items-center gap-1 gap-sm-2 order-1 order-lg-2 ms-auto ms-lg-0">
+            <button class="btn btn-warning btn-sm text-dark fw-bold rounded-pill shadow-sm d-none px-2.5 py-1" id="pwa-install-btn" title="Install TravelMate App">
+                <i class="fas fa-download me-1"></i><span class="d-none d-sm-inline">Install App</span><span class="d-sm-none">App</span>
+            </button>
+            <div class="position-relative">
+                <button class="btn btn-link nav-link position-relative p-1.5 text-body" id="notif-bell-btn" title="Journey Notifications">
                     <i class="fas fa-bell fs-5"></i>
                     <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" id="notif-unread-badge" style="font-size: 0.65rem;">0</span>
                 </button>
             </div>
-            <button class="btn btn-link nav-link me-2" id="theme-toggle" title="Toggle Dark Mode">
-                <i class="fas fa-moon"></i>
+            <button class="btn btn-link nav-link p-1.5 text-body" id="theme-toggle" title="Toggle Dark Mode">
+                <i class="fas fa-moon fs-5"></i>
             </button>
-            <button class="btn btn-link nav-link d-lg-none" id="mobile-logout-btn" title="Logout">
-                <i class="fas fa-sign-out-alt"></i>
+            <button class="btn btn-link nav-link p-1.5 text-body d-lg-none" id="mobile-logout-btn" title="Logout">
+                <i class="fas fa-sign-out-alt fs-5"></i>
             </button>
         </div>
-        <div class="collapse navbar-collapse order-3 order-lg-2" id="navbarNav">
-            <ul class="navbar-nav me-auto">
+
+        <!-- Collapsible Navigation (Full Width on Mobile) -->
+        <div class="collapse navbar-collapse order-2 order-lg-1" id="navbarNav">
+            <ul class="navbar-nav me-auto mt-2 mt-lg-0">
                 <li class="nav-item">
                     <a class="nav-link active" href="dashboard.html">
                         <i class="fas fa-home me-1"></i>Home
@@ -79,7 +86,7 @@
                     </a>
                 </li>
             </ul>
-            <div class="d-flex align-items-center" id="nav-auth-section">
+            <div class="d-flex align-items-center mt-2 mt-lg-0" id="nav-auth-section">
                 <!-- This will be populated dynamically based on auth state -->
             </div>
         </div>
