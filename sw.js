@@ -1,4 +1,4 @@
-const CACHE_NAME = 'travelmate-cache-v9';
+const CACHE_NAME = 'travelmate-cache-v10';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -33,7 +33,7 @@ self.addEventListener('activate', event => {
   self.clients.claim(); // Become controller immediately for all open client tabs
 });
 
-// Fetch event: Stale-While-Revalidate caching strategy
+// Fetch event: Network-First strategy for HTML and JS scripts to ensure fresh code updates!
 self.addEventListener('fetch', event => {
   // Only intercept local GET requests (skip APIs, Firebase DB, CDN auth calls)
   if (
@@ -44,23 +44,20 @@ self.addEventListener('fetch', event => {
   }
 
   event.respondWith(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.match(event.request).then(cachedResponse => {
-        const fetchPromise = fetch(event.request).then(networkResponse => {
-          if (networkResponse && networkResponse.status === 200) {
-            cache.put(event.request, networkResponse.clone());
-          }
-          return networkResponse;
-        }).catch(err => {
-          console.warn('[ServiceWorker] Fetch failed, relying on cache:', err);
-        });
-
-        // Return cache instantly (fast loading), fallback to network promise
-        return cachedResponse || fetchPromise;
-      });
-    })
+    fetch(event.request)
+      .then(networkResponse => {
+        if (networkResponse && networkResponse.status === 200) {
+          const cacheCopy = networkResponse.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, cacheCopy));
+        }
+        return networkResponse;
+      })
+      .catch(() => {
+        return caches.match(event.request);
+      })
   );
 });
+
 
 // Sync data logic (optional)
 self.addEventListener('message', event => {
