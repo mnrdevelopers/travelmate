@@ -6075,19 +6075,34 @@ async function runAiAutoItineraryGeneration() {
             return `Ticket #${idx+1} [${t.type.toUpperCase()}]: Carrier "${t.serviceNo ? t.serviceNo + ' - ' : ''}${t.serviceName || t.operator}", Departs "${t.departurePlace}" at "${t.departureTime}", Arrives "${t.arrivalPlace}" at "${t.arrivalTime || 'N/A'}"`;
         }).join('\n');
 
+        const stayAnalysis = typeof calculateJourneyStayTimes === 'function' ? calculateJourneyStayTimes(currentTrip) : null;
+        let exploringWindowsText = '';
+        if (stayAnalysis && stayAnalysis.stayLegs && stayAnalysis.stayLegs.length > 0) {
+            exploringWindowsText = stayAnalysis.stayLegs.map((leg, idx) => {
+                const startStr = leg.stayStart.toLocaleString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
+                const endStr = leg.stayEnd.toLocaleString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
+                const hrs = (leg.durationMs / 3600000).toFixed(1);
+                return `Exploring Window #${idx+1} at "${leg.location}": Available from ${startStr} to ${endStr} (${hrs} total hours available).`;
+            }).join('\n');
+        }
+
         const prompt = `You are a professional travel itinerary planner API.
 Destination: "${currentTrip.destination}"
 Trip Dates: ${currentTrip.startDate} to ${currentTrip.endDate} (${totalDays} total day(s))
 Travel Style / Focus: ${pace}
 
-BOOKED TRAVEL TICKETS & APPOINTMENTS (MUST BE INCORPORATED ACCURATELY):
+BOOKED TRAVEL TICKETS & APPOINTMENTS:
 ${ticketsList || 'No specific tickets booked.'}
 
-INSTRUCTIONS:
-1. Create a day-wise itinerary covering Day 1 to Day ${totalDays}.
-2. Ensure you respect the exact arrival times, departure times, and Darshan reporting slots mentioned in the tickets!
-3. For each day, include 3 to 5 realistic activities (Sightseeing, Temple visits, Famous local food, Shopping, Hotel check-in/rest, Travel transit).
-4. OUTPUT FORMAT REQUIREMENTS:
+EXACT DESTINATION EXPLORING TIME WINDOWS (EXCLUDES JOURNEY TRANSIT HOURS):
+${exploringWindowsText || 'Plan activities after arrival at the destination.'}
+
+CRITICAL TIMING & PLANNING RULES:
+1. AVOID PLANNING SIGHTSEEING DURING JOURNEY TRANSIT TIME: Do NOT schedule sightseeing, shopping, or temple visits during the hours when travelers are inside a train, flight, or bus traveling between cities! Mark journey travel hours simply as "Travel in Transit to [City]" with category "transit".
+2. PLAN ACTIVITIES ONLY DURING ACTUAL EXPLORING TIME WINDOWS: Schedule activities only after arrival in a city (after train/flight arrival) and before the next transport departure time.
+3. RESPECT DARSHAN SLOTS EXACTLY: For Darshan tickets, schedule temple queue reporting at the exact slot date & time.
+4. For each day, include 3 to 5 realistic activities (Sightseeing, Temple visits, Famous local food, Shopping, Hotel check-in/rest, Travel transit).
+5. OUTPUT FORMAT REQUIREMENTS:
    - Output MUST be ONLY a raw JSON array of objects.
    - Do NOT include any markdown codeblocks (\`\`\`json ... \`\`\`), no text outside the array.
    - Schema for each object:
