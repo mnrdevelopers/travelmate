@@ -6182,6 +6182,7 @@ async function runAiAutoItineraryGeneration() {
 
     const mode = document.getElementById('ai-itinerary-mode').value;
     const pace = document.getElementById('ai-itinerary-pace').value;
+    const userGuidance = document.getElementById('ai-itinerary-user-guidance')?.value.trim() || '';
 
     const statusEl = document.getElementById('ai-itinerary-status');
     const statusText = document.getElementById('ai-itinerary-status-text');
@@ -6197,7 +6198,7 @@ async function runAiAutoItineraryGeneration() {
         const endDate = new Date(currentTrip.endDate);
         const totalDays = Math.max(1, Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1);
 
-        if (statusText) statusText.textContent = `Analyzing tickets & generating Day 1 to Day ${totalDays} schedule for ${currentTrip.destination}...`;
+        if (statusText) statusText.textContent = `Analyzing tickets, custom preferences & generating Day 1 to Day ${totalDays} schedule for ${currentTrip.destination}...`;
 
         const ticketsList = (currentTrip.tickets || []).map((t, idx) => {
             if (t.type === 'darshan') {
@@ -6222,6 +6223,8 @@ Destination: "${currentTrip.destination}"
 Trip Dates: ${currentTrip.startDate} to ${currentTrip.endDate} (${totalDays} total day(s))
 Travel Style / Focus: ${pace}
 
+${userGuidance ? `USER CUSTOM GUIDANCE & INSTRUCTIONS (MUST BE PRIORITIZED & SATISFIED):\n"${userGuidance}"\n` : ''}
+
 BOOKED TRAVEL TICKETS & APPOINTMENTS:
 ${ticketsList || 'No specific tickets booked.'}
 
@@ -6229,11 +6232,12 @@ EXACT DESTINATION EXPLORING TIME WINDOWS (EXCLUDES JOURNEY TRANSIT HOURS):
 ${exploringWindowsText || 'Plan activities after arrival at the destination.'}
 
 CRITICAL TIMING & PLANNING RULES:
-1. AVOID PLANNING SIGHTSEEING DURING JOURNEY TRANSIT TIME: Do NOT schedule sightseeing, shopping, or temple visits during the hours when travelers are inside a train, flight, or bus traveling between cities! Mark journey travel hours simply as "Travel in Transit to [City]" with category "transit".
-2. PLAN ACTIVITIES ONLY DURING ACTUAL EXPLORING TIME WINDOWS: Schedule activities only after arrival in a city (after train/flight arrival) and before the next transport departure time.
-3. RESPECT DARSHAN SLOTS EXACTLY: For Darshan tickets, schedule temple queue reporting at the exact slot date & time.
-4. For each day, include 3 to 5 realistic activities (Sightseeing, Temple visits, Famous local food, Shopping, Hotel check-in/rest, Travel transit).
-5. OUTPUT FORMAT REQUIREMENTS:
+1. PRIORITIZE USER CUSTOM GUIDANCE: Carefully include all specific places, food preferences, family/elderly constraints, or timing requests entered in the User Custom Guidance!
+2. AVOID PLANNING SIGHTSEEING DURING JOURNEY TRANSIT TIME: Do NOT schedule sightseeing, shopping, or temple visits during the hours when travelers are inside a train, flight, or bus traveling between cities! Mark journey travel hours simply as "Travel in Transit to [City]" with category "transit".
+3. PLAN ACTIVITIES ONLY DURING ACTUAL EXPLORING TIME WINDOWS: Schedule activities only after arrival in a city (after train/flight arrival) and before the next transport departure time.
+4. RESPECT DARSHAN SLOTS EXACTLY: For Darshan tickets, schedule temple queue reporting at the exact slot date & time.
+5. For each day, include 3 to 5 realistic activities (Sightseeing, Temple visits, Famous local food, Shopping, Hotel check-in/rest, Travel transit).
+6. OUTPUT FORMAT REQUIREMENTS:
    - Output MUST be ONLY a raw JSON array of objects.
    - Do NOT include any markdown codeblocks (\`\`\`json ... \`\`\`), no text outside the array.
    - Schema for each object:
