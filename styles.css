@@ -153,6 +153,77 @@ body {
     }
 }
 
+/* --- Header Network Status Indicator Badge --- */
+.network-status-chip {
+    font-size: 0.72rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 50px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    user-select: none;
+    line-height: 1;
+}
+
+.network-status-chip.online {
+    background-color: rgba(25, 135, 84, 0.12);
+    color: #198754;
+    border: 1px solid rgba(25, 135, 84, 0.25);
+}
+
+body.dark-mode .network-status-chip.online {
+    background-color: rgba(40, 167, 69, 0.2);
+    color: #4cd964;
+    border-color: rgba(40, 167, 69, 0.4);
+}
+
+.network-status-chip.online .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #198754;
+    box-shadow: 0 0 6px rgba(25, 135, 84, 0.6);
+    animation: pulse-online 2s infinite ease-in-out;
+}
+
+body.dark-mode .network-status-chip.online .status-dot {
+    background-color: #4cd964;
+    box-shadow: 0 0 6px rgba(76, 217, 100, 0.8);
+}
+
+.network-status-chip.offline {
+    background-color: rgba(220, 53, 69, 0.12);
+    color: #dc3545;
+    border: 1px solid rgba(220, 53, 69, 0.3);
+}
+
+body.dark-mode .network-status-chip.offline {
+    background-color: rgba(220, 53, 69, 0.25);
+    color: #ff4d4d;
+    border-color: rgba(220, 53, 69, 0.5);
+}
+
+.network-status-chip.offline .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #dc3545;
+    box-shadow: 0 0 6px rgba(220, 53, 69, 0.6);
+}
+
+body.dark-mode .network-status-chip.offline .status-dot {
+    background-color: #ff4d4d;
+    box-shadow: 0 0 6px rgba(255, 77, 77, 0.8);
+}
+
+@keyframes pulse-online {
+    0% { transform: scale(0.9); opacity: 0.8; }
+    50% { transform: scale(1.15); opacity: 1; }
+    100% { transform: scale(0.9); opacity: 0.8; }
+}
+
 /* --- Cards --- */
 
 .card {

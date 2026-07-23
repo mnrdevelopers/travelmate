@@ -46,7 +46,24 @@ class OfflineSyncEngine {
     }
 
     renderNetworkStatusBadge() {
-        if (document.getElementById('offline-sync-banner')) return;
+        // Render header status indicator chip inside .navbar-actions
+        const navActions = document.querySelector('.navbar-actions');
+        if (navActions && !document.getElementById('nav-network-status')) {
+            const chip = document.createElement('div');
+            chip.id = 'nav-network-status';
+            chip.className = `network-status-chip ${this.isOnline ? 'online' : 'offline'}`;
+            chip.title = `Network Status: ${this.isOnline ? 'Online' : 'Offline'}`;
+            chip.innerHTML = `
+                <span class="status-dot"></span>
+                <span class="status-text d-none d-sm-inline">${this.isOnline ? 'Online' : 'Offline'}</span>
+            `;
+            navActions.insertBefore(chip, navActions.firstChild);
+        }
+
+        if (document.getElementById('offline-sync-banner')) {
+            this.updateNetworkUI(this.isOnline);
+            return;
+        }
 
         const banner = document.createElement('div');
         banner.id = 'offline-sync-banner';
@@ -69,12 +86,35 @@ class OfflineSyncEngine {
         `;
         document.body.appendChild(banner);
 
-        if (!this.isOnline) {
-            this.updateNetworkUI(false);
-        }
+        this.updateNetworkUI(this.isOnline);
     }
 
     updateNetworkUI(online) {
+        // Update header navbar status indicator chip
+        let chip = document.getElementById('nav-network-status');
+        if (!chip) {
+            const navActions = document.querySelector('.navbar-actions');
+            if (navActions) {
+                chip = document.createElement('div');
+                chip.id = 'nav-network-status';
+                chip.className = `network-status-chip ${online ? 'online' : 'offline'}`;
+                chip.title = `Network Status: ${online ? 'Online' : 'Offline'}`;
+                chip.innerHTML = `
+                    <span class="status-dot"></span>
+                    <span class="status-text d-none d-sm-inline">${online ? 'Online' : 'Offline'}</span>
+                `;
+                navActions.insertBefore(chip, navActions.firstChild);
+            }
+        } else {
+            chip.className = `network-status-chip ${online ? 'online' : 'offline'}`;
+            chip.title = `Network Status: ${online ? 'Online' : 'Offline'}`;
+            const textEl = chip.querySelector('.status-text');
+            if (textEl) {
+                textEl.textContent = online ? 'Online' : 'Offline';
+            }
+        }
+
+        // Update floating notification banner
         const banner = document.getElementById('offline-sync-banner');
         if (!banner) return;
 
