@@ -6265,8 +6265,16 @@ function updateAiDayPlanAnalysis() {
     textEl.innerHTML = summaryHtml;
 }
 
+function saveCustomGeminiKey(keyVal) {
+    if (keyVal && keyVal.trim()) {
+        localStorage.setItem('gemini_api_key', keyVal.trim());
+        showToast('Gemini API key saved!', 'success');
+    }
+}
+
 function getItineraryGeminiKey() {
-    if (window._geminiApiKey) return window._geminiApiKey.trim();
+    const storedKey = localStorage.getItem('gemini_api_key') || window._geminiApiKey;
+    if (storedKey && storedKey.trim()) return storedKey.trim();
     try {
         return atob('QVEuQWI4Uk42SmpLeW9MblBwV0o5ZmFIX1p4c2xoMHUxSkoyU2RvVlVRV1dtVE82bFI4T2c=');
     } catch(e) {
@@ -6304,6 +6312,9 @@ async function callGeminiAiForItinerary(promptText) {
                     console.log(`✅ Gemini AI (${model}) successfully returned itinerary response!`);
                     return { text, modelName: `Gemini AI (${model})` };
                 }
+            } else if (response.status === 401) {
+                console.warn(`Gemini API key returned 401 (Unauthorized). Switching to City-Aware Real Landmark Generator.`);
+                return null;
             } else {
                 const errText = await response.text();
                 console.warn(`Gemini AI ${model} returned status ${response.status}:`, errText);
@@ -6592,3 +6603,4 @@ window.showAiDayPlanModal = showAiDayPlanModal;
 window.updateAiDayPlanAnalysis = updateAiDayPlanAnalysis;
 window.runAiDayPlanGeneration = runAiDayPlanGeneration;
 window.addAiSuggestionsToItinerary = addAiSuggestionsToItinerary;
+window.saveCustomGeminiKey = saveCustomGeminiKey;
