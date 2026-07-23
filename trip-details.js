@@ -6270,6 +6270,7 @@ async function runAiDayPlanGeneration() {
 
     const day = parseInt(document.getElementById('ai-plan-day-select').value) || 1;
     const pace = document.getElementById('ai-plan-pace').value;
+    const customNotes = document.getElementById('ai-plan-custom-notes')?.value.trim() || '';
 
     const statusEl = document.getElementById('ai-plan-status');
     const statusText = document.getElementById('ai-plan-status-text');
@@ -6284,52 +6285,122 @@ async function runAiDayPlanGeneration() {
     const targetDate = new Date(startDate.getTime() + (day - 1) * 24 * 60 * 60 * 1000);
     const dateStr = targetDate.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
 
-    if (statusText) statusText.textContent = `Analyzing arrival/departure & generating tailored exploring spots for ${dateStr}...`;
-
     try {
         const dest = (currentTrip.destination || 'Destination').trim();
         const dayActivities = (currentTrip.itinerary || []).filter(a => a.day === day);
 
+        // Detect current location / city for today based on tickets and activities
+        let activeCity = dest;
+        dayActivities.forEach(a => {
+            const place = a.place || '';
+            if (place.includes('Arrival:')) {
+                activeCity = place.replace('Arrival:', '').replace('(TRAIN)', '').replace('(FLIGHT)', '').replace('(BUS)', '').trim();
+            } else if (place.includes('Departure:')) {
+                activeCity = place.replace('Departure:', '').replace('(TRAIN)', '').replace('(FLIGHT)', '').replace('(BUS)', '').trim();
+            }
+        });
+
+        if (statusText) statusText.textContent = `Analyzing travel times & finding real famous exploring spots in ${activeCity} for ${dateStr}...`;
+
         let freeStart = '09:30';
         let freeEnd = '19:30';
         dayActivities.forEach(a => {
-            if (a.place.includes('Arrival:')) freeStart = '10:00';
+            if (a.place.includes('Arrival:')) {
+                const arrH = parseInt(a.time.split(':')[0]) || 8;
+                freeStart = `${arrH + 1 < 10 ? '0' + (arrH + 1) : arrH + 1}:30`;
+            }
             if (a.place.includes('Departure:')) {
                 const depH = parseInt(a.time.split(':')[0]) || 20;
                 freeEnd = `${Math.max(9, depH - 2)}:00`;
             }
         });
 
-        // Smart Fallback Template for Destination Exploring
-        let suggestions = [
-            {
-                day,
-                time: freeStart,
-                category: pace === 'spiritual' ? 'temple' : 'sightseeing',
-                place: `${dest} Top Famous Attraction & Viewpoint`,
-                notes: 'Explore scenic landmarks, cultural heritage & iconic sights.',
-                addedBy: auth.currentUser.uid,
-                addedAt: new Date().toISOString()
-            },
-            {
-                day,
-                time: '13:30',
-                category: 'food',
-                place: `Famous Regional Thali Restaurant in ${dest}`,
-                notes: 'Savor authentic traditional delicacies & local specialities.',
-                addedBy: auth.currentUser.uid,
-                addedAt: new Date().toISOString()
-            },
-            {
-                day,
-                time: freeEnd > '17:00' ? '17:00' : freeEnd,
-                category: 'shopping',
-                place: `${dest} Local Market & Evening Bazaar`,
-                notes: 'Handicrafts, souvenirs, local street shopping & evening tea.',
-                addedBy: auth.currentUser.uid,
-                addedAt: new Date().toISOString()
+        // City-aware Real Famous Landmark Database
+        const citySpotsDb = {
+            'vijayawada': [
+                { time: freeStart, category: 'temple', place: 'Kanaka Durga Temple (Indrakeeladri Hill)', notes: 'Holy darshan at hilltop shrine with panoramic river views.' },
+                { time: '13:30', category: 'food', place: 'Famous Vijayawada Andhra Thali Restaurant', notes: 'Savor spicy authentic Andhra meals & gongura chutneys.' },
+                { time: freeEnd > '17:00' ? '17:00' : freeEnd, category: 'sightseeing', place: 'Prakasam Barrage & Bhavani Island Viewpoint', notes: 'Scenic evening river breeze, sunset views & photo spots.' }
+            ],
+            'guwahati': [
+                { time: freeStart, category: 'temple', place: 'Umananda Temple (Peacock Island)', notes: 'Take a scenic ferry ride across Brahmaputra river to Peacock Island.' },
+                { time: '13:30', category: 'food', place: 'Authentic Assamese Thali & Fish Curry', notes: 'Enjoy traditional Khar, Joha rice & local Assamese delicacies.' },
+                { time: freeEnd > '17:00' ? '17:00' : freeEnd, category: 'shopping', place: 'Fancy Bazaar & Assam Tea Market', notes: 'Buy famous Assam CTC tea, Muga silk sarees & local bamboo crafts.' }
+            ],
+            'kamakhya': [
+                { time: freeStart, category: 'temple', place: 'Maa Kamakhya Temple (Nilachal Hill)', notes: 'Sacred Shakti Peeth darshan & peaceful hill atmosphere.' },
+                { time: '13:30', category: 'food', place: 'Kamakhya Hill Traditional Prasad & Refreshments', notes: 'Pure vegetarian prasad & fresh coconut water.' },
+                { time: freeEnd > '17:00' ? '17:00' : freeEnd, category: 'sightseeing', place: 'Brahmaputra Sunset River Cruise', notes: 'Relaxing evening boat cruise on Brahmaputra river with sunset views.' }
+            ],
+            'puri': [
+                { time: freeStart, category: 'temple', place: 'Shree Jagannath Temple', notes: 'Holy temple darshan & sacred rituals.' },
+                { time: '13:30', category: 'food', place: 'Anand Bazar Mahaprasad & Odia Thali', notes: 'Taste sacred Abhada Mahaprasad & authentic Odia cuisine.' },
+                { time: freeEnd > '17:00' ? '17:00' : freeEnd, category: 'sightseeing', place: 'Puri Golden Beach & Swargadwar Market', notes: 'Golden sea waves, evening beach stroll & seashell handicrafts.' }
+            ],
+            'visakhapatnam': [
+                { time: freeStart, category: 'sightseeing', place: 'INS Kursura Submarine Museum & RK Beach', notes: 'Explore real naval submarine museum right on the beach.' },
+                { time: '13:30', category: 'food', place: 'Visakha Coastal Seafood & Thali Restaurant', notes: 'Fresh local seafood, biryani & Andhra thali.' },
+                { time: freeEnd > '17:00' ? '17:00' : freeEnd, category: 'sightseeing', place: 'Kailasagiri Hilltop Park & Cable Car Ride', notes: 'Panoramic views of the Bay of Bengal & city skyline.' }
+            ],
+            'nizamabad': [
+                { time: freeStart, category: 'sightseeing', place: 'Nizamabad Fort & Raghunath Temple', notes: 'Historical fort built by Rashtrakuta kings on hilltop.' },
+                { time: '13:30', category: 'food', place: 'Famous Telangana Thali & Snacks', notes: 'Authentic spicy Telangana thali & chai.' },
+                { time: freeEnd > '17:00' ? '17:00' : freeEnd, category: 'sightseeing', place: 'Mallaram Forest & Alisagar Park', notes: 'Peaceful lake, deer park & nature walk.' }
+            ]
+        };
+
+        const cityKey = activeCity.toLowerCase();
+        let matchedSpots = null;
+
+        for (const k of Object.keys(citySpotsDb)) {
+            if (cityKey.includes(k)) {
+                matchedSpots = citySpotsDb[k];
+                break;
             }
-        ];
+        }
+
+        let suggestions = [];
+        if (matchedSpots) {
+            suggestions = matchedSpots.map(s => ({
+                day,
+                time: s.time,
+                category: s.category,
+                place: s.place,
+                notes: customNotes ? `${s.notes} (${customNotes})` : s.notes,
+                addedBy: auth.currentUser.uid,
+                addedAt: new Date().toISOString()
+            }));
+        } else {
+            suggestions = [
+                {
+                    day,
+                    time: freeStart,
+                    category: pace === 'spiritual' ? 'temple' : 'sightseeing',
+                    place: `${activeCity} Top Famous Attraction & Viewpoint`,
+                    notes: customNotes || 'Explore iconic landmarks & scenic surroundings.',
+                    addedBy: auth.currentUser.uid,
+                    addedAt: new Date().toISOString()
+                },
+                {
+                    day,
+                    time: '13:30',
+                    category: 'food',
+                    place: `Famous Regional Thali Restaurant in ${activeCity}`,
+                    notes: 'Savor authentic traditional delicacies & local specialties.',
+                    addedBy: auth.currentUser.uid,
+                    addedAt: new Date().toISOString()
+                },
+                {
+                    day,
+                    time: freeEnd > '17:00' ? '17:00' : freeEnd,
+                    category: 'shopping',
+                    place: `${activeCity} Local Market & Evening Bazaar`,
+                    notes: 'Handicrafts, souvenirs, local street shopping & evening tea.',
+                    addedBy: auth.currentUser.uid,
+                    addedAt: new Date().toISOString()
+                }
+            ];
+        }
 
         _currentGeneratedAiSuggestions = suggestions;
 
