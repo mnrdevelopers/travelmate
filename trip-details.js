@@ -291,6 +291,36 @@ function setupTripDetailsEventListeners() {
         });
     }
 
+    // Weather Widget Search & Quick Chips listeners
+    const weatherSearchInput = document.getElementById('weather-search-input');
+    const weatherSearchBtn = document.getElementById('btn-weather-search');
+    const weatherQuickChips = document.getElementById('weather-quick-chips');
+
+    const triggerWeatherSearch = () => {
+        const query = weatherSearchInput?.value.trim();
+        if (query && currentTrip) {
+            loadTripWeather(currentTrip, query);
+        }
+    };
+
+    weatherSearchBtn?.addEventListener('click', triggerWeatherSearch);
+    weatherSearchInput?.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            triggerWeatherSearch();
+        }
+    });
+
+    weatherQuickChips?.addEventListener('click', function(e) {
+        const chip = e.target.closest('.weather-chip');
+        if (!chip) return;
+        const locationName = chip.getAttribute('data-location');
+        if (locationName && currentTrip) {
+            if (weatherSearchInput) weatherSearchInput.value = locationName;
+            loadTripWeather(currentTrip, locationName);
+        }
+    });
+
     // Periodically update departure alerts
     setInterval(() => {
         if (currentTrip) {
@@ -4350,22 +4380,63 @@ function loadRecentExpenses(trip) {
 window.shareSettlementPlan = shareSettlementPlan;
 window.showAddManualMemberModal = showAddManualMemberModal;
 
-async function loadTripWeather(trip) {
+async function loadTripWeather(trip, targetLocation = null) {
     const weatherCard = document.getElementById('weather-widget-card');
     const weatherContent = document.getElementById('weather-widget-content');
+    const activeBadge = document.getElementById('weather-active-city-badge');
+    const quickChipsContainer = document.getElementById('weather-quick-chips');
     
-    if (!trip.destination || !weatherCard || !weatherContent) return;
+    if (!weatherCard || !weatherContent) return;
 
-    // Show card with loading state
     weatherCard.style.display = 'block';
 
+    // Determine target location to load
+    const activeCity = targetLocation ? targetLocation.trim() : (window._activeWeatherCity || trip.destination || trip.startLocation || 'Vijayawada');
+    window._activeWeatherCity = activeCity;
+
+    if (activeBadge) {
+        activeBadge.innerHTML = `<i class="fas fa-location-dot me-1"></i>${activeCity}`;
+    }
+
+    // Render quick itinerary location chips
+    if (quickChipsContainer && trip) {
+        const places = new Set();
+        if (trip.destination) places.add(trip.destination.trim());
+        if (trip.startLocation) places.add(trip.startLocation.trim());
+        
+        if (trip.tickets && Array.isArray(trip.tickets)) {
+            trip.tickets.forEach(t => {
+                if (t.departurePlace) places.add(t.departurePlace.trim());
+                if (t.arrivalPlace) places.add(t.arrivalPlace.trim());
+                if (t.templeName) places.add(t.templeName.trim());
+            });
+        }
+
+        const placeList = Array.from(places).filter(p => p.length > 0);
+        if (placeList.length > 0) {
+            quickChipsContainer.innerHTML = placeList.map(place => {
+                const isActive = place.toLowerCase() === activeCity.toLowerCase();
+                const btnClass = isActive ? 'btn-info text-white fw-bold shadow-sm' : 'btn-outline-secondary';
+                return `<button type="button" class="btn btn-xs py-0.5 px-2 rounded-pill weather-chip ${btnClass}" data-location="${place}" style="font-size: 0.7rem;"><i class="fas fa-location-dot me-1"></i>${place}</button>`;
+            }).join('');
+        }
+    }
+
+    // Show loading indicator
+    weatherContent.innerHTML = `
+        <div class="text-center py-3">
+            <div class="spinner-border spinner-border-sm text-info" role="status"></div>
+            <span class="ms-2 small text-muted">Fetching weather for <strong>${activeCity}</strong>...</span>
+        </div>
+    `;
+
     try {
-        // Get coordinates using existing geocode function
-        const coords = await geocodeLocation(trip.destination); // returns [lon, lat]
+        // Geocode location
+        const coords = await geocodeLocation(activeCity); // returns [lon, lat]
         const lat = coords[1];
         const lon = coords[0];
 
-        // Fetch weather from Open-Meteo (Free API, no key required)
+        // Fetch weather from Open-Meteo
         const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto`);
         
         if (!response.ok) throw new Error('Weather API failed');
@@ -4374,7 +4445,6 @@ async function loadTripWeather(trip) {
         const current = data.current_weather;
         const daily = data.daily;
 
-        // Map WMO weather codes to icons and descriptions
         const getWeatherInfo = (code) => {
             const codes = {
                 0: { icon: 'fa-sun', text: 'Clear sky', color: 'text-warning' },
@@ -4405,7 +4475,6 @@ async function loadTripWeather(trip) {
         const currentInfo = getWeatherInfo(current.weathercode);
 
         let forecastHtml = '';
-        // Show next 3 days forecast
         for(let i = 1; i <= 3; i++) {
             if (daily.time[i]) {
                 const dayInfo = getWeatherInfo(daily.weathercode[i]);
@@ -4414,20 +4483,29 @@ async function loadTripWeather(trip) {
                 
                 forecastHtml += `
                     <div class="col-4 text-center border-end">
-                        <small class="d-block text-muted">${dayName}</small>
+                        <small class="d-block text-muted" style="font-size:0.7rem;">${dayName}</small>
                         <i class="fas ${dayInfo.icon} ${dayInfo.color} my-1"></i>
                         <div class="small fw-bold">${Math.round(daily.temperature_2m_max[i])}°</div>
-                        <div class="small text-muted" style="font-size: 0.7rem;">${Math.round(daily.temperature_2m_min[i])}°</div>
+                        <div class="small text-muted" style="font-size: 0.65rem;">${Math.round(daily.temperature_2m_min[i])}°</div>
                     </div>
                 `;
             }
         }
 
         weatherContent.innerHTML = `
+            <div class="d-flex align-items-center justify-content-between mb-2 pb-2 border-bottom">
+                <div>
+                    <span class="text-uppercase text-muted fw-bold" style="font-size:0.6rem;">LOCATION WEATHER</span>
+                    <h6 class="mb-0 fw-bold text-dark text-truncate" style="max-width:170px;" title="${activeCity}">
+                        <i class="fas fa-location-dot text-danger me-1"></i>${activeCity}
+                    </h6>
+                </div>
+                <span class="badge bg-info-subtle text-info py-1 px-2 fw-semibold" style="font-size:0.65rem;"><i class="fas fa-wind me-1"></i>${current.windspeed} km/h</span>
+            </div>
             <div class="d-flex align-items-center justify-content-between mb-3">
                 <div>
-                    <h2 class="mb-0 display-6 fw-bold">${Math.round(current.temperature)}°C</h2>
-                    <div class="text-muted small">${currentInfo.text}</div>
+                    <h2 class="mb-0 display-6 fw-bold text-dark">${Math.round(current.temperature)}°C</h2>
+                    <div class="text-muted small fw-semibold">${currentInfo.text}</div>
                 </div>
                 <div class="text-center">
                     <i class="fas ${currentInfo.icon} ${currentInfo.color} fa-3x"></i>
@@ -4439,11 +4517,12 @@ async function loadTripWeather(trip) {
         `;
 
     } catch (error) {
-        console.error('Error loading weather:', error);
+        console.error('Error loading weather for', activeCity, error);
         weatherContent.innerHTML = `
-            <div class="text-center text-muted py-2">
-                <i class="fas fa-cloud-showers-heavy mb-2"></i>
-                <p class="mb-0 small">Weather data unavailable</p>
+            <div class="text-center text-muted py-3">
+                <i class="fas fa-exclamation-circle text-warning mb-2 fa-2x"></i>
+                <p class="mb-1 small fw-semibold text-dark">Could not find weather for "${activeCity}"</p>
+                <span class="small text-secondary" style="font-size:0.75rem;">Try searching another city or check spelling.</span>
             </div>
         `;
     }
@@ -5769,4 +5848,5 @@ window.showEditTicketModal = showEditTicketModal;
 window.deleteTicket = deleteTicket;
 window.viewTicketReceipt = viewTicketReceipt;
 window.loadTripTickets = loadTripTickets;
+window.loadTripWeather = loadTripWeather;
 window.renderJourneyStayBreakdown = renderJourneyStayBreakdown;
