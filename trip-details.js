@@ -1855,11 +1855,16 @@ async function loadTripItinerary(trip) {
             }
             
             dayCard.innerHTML = `
-                <div class="card-header bg-success text-white py-2 px-3 d-flex align-items-center justify-content-between">
+                <div class="card-header bg-success text-white py-2 px-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
                     <h6 class="mb-0 fw-bold">
                         <i class="fas fa-calendar-day me-2"></i>${dayTitleStr}
                     </h6>
-                    <span class="badge bg-white text-success fw-bold" style="font-size:0.75rem;">${sortedActivities.length} Activities</span>
+                    <div class="d-flex align-items-center gap-2">
+                        <button type="button" class="btn btn-xs btn-warning text-dark fw-bold rounded-pill shadow-sm" onclick="showAiDayPlanModal(${day})" title="AI Plan Day ${day}">
+                            <i class="fas fa-magic me-1"></i>AI Plan Day
+                        </button>
+                        <span class="badge bg-white text-success fw-bold" style="font-size:0.75rem;">${sortedActivities.length} Activities</span>
+                    </div>
                 </div>
                 <div class="card-body p-3">
                     ${sortedActivities.map(activity => {
@@ -6151,6 +6156,253 @@ async function duplicateActivity(index) {
     loadTripDetails();
 }
 
+let _currentGeneratedAiSuggestions = [];
+
+function showAiDayPlanModal(targetDay = 1) {
+    if (!currentTrip) {
+        showToast('No trip selected', 'warning');
+        return;
+    }
+
+    const selectEl = document.getElementById('ai-plan-day-select');
+    if (!selectEl) return;
+
+    selectEl.innerHTML = '';
+    const startDate = new Date(currentTrip.startDate);
+    const endDate = new Date(currentTrip.endDate);
+    const totalDays = Math.max(1, Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1);
+
+    for (let d = 1; d <= totalDays; d++) {
+        const dDate = new Date(startDate.getTime() + (d - 1) * 24 * 60 * 60 * 1000);
+        const dateStr = dDate.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' });
+        const option = document.createElement('option');
+        option.value = d;
+        option.textContent = `Day ${d} — ${dateStr}`;
+        if (d === parseInt(targetDay)) option.selected = true;
+        selectEl.appendChild(option);
+    }
+
+    // Reset UI state
+    document.getElementById('ai-plan-status')?.classList.add('d-none');
+    document.getElementById('ai-plan-results')?.classList.add('d-none');
+    document.getElementById('btn-add-ai-suggestions')?.classList.add('d-none');
+    _currentGeneratedAiSuggestions = [];
+
+    updateAiDayPlanAnalysis();
+
+    const modal = new bootstrap.Modal(document.getElementById('aiDayPlanModal'));
+    modal.show();
+}
+
+function updateAiDayPlanAnalysis() {
+    if (!currentTrip) return;
+    const daySelect = document.getElementById('ai-plan-day-select');
+    if (!daySelect) return;
+
+    const day = parseInt(daySelect.value) || 1;
+    const startDate = new Date(currentTrip.startDate);
+    const targetDate = new Date(startDate.getTime() + (day - 1) * 24 * 60 * 60 * 1000);
+    const dateFormatted = targetDate.toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+
+    const dayActivities = (currentTrip.itinerary || []).filter(a => a.day === day);
+
+    // Analyze transit, arrival, departure, temple slots
+    let arrivalInfo = null;
+    let departureInfo = null;
+    let darshanInfo = null;
+    let isOnboardTransit = false;
+
+    dayActivities.forEach(a => {
+        const place = (a.place || '').toLowerCase();
+        const notes = (a.notes || '').toLowerCase();
+
+        if (place.includes('arrival:') || notes.includes('arrived via')) {
+            arrivalInfo = a;
+        } else if (place.includes('departure:') || notes.includes('carrier:')) {
+            departureInfo = a;
+        } else if (a.category === 'temple' || notes.includes('darshan slot')) {
+            darshanInfo = a;
+        } else if (place.includes('onboard') || place.includes('in transit')) {
+            isOnboardTransit = true;
+        }
+    });
+
+    const textEl = document.getElementById('ai-day-analysis-text');
+    if (!textEl) return;
+
+    if (isOnboardTransit) {
+        textEl.innerHTML = `
+            <div class="badge bg-secondary mb-1">🚂 Full Journey Day</div>
+            <div><strong>${dateFormatted}</strong>: Full day traveling onboard train/flight. AI will recommend onboard relaxation, scenic viewing & rest tips.</div>
+        `;
+        return;
+    }
+
+    let summaryHtml = `<strong>${dateFormatted}</strong> in <strong>${currentTrip.destination}</strong>:<br>`;
+    let freeStart = '08:00';
+    let freeEnd = '20:00';
+
+    if (arrivalInfo) {
+        summaryHtml += `<span class="badge bg-primary me-1">🛬 Arrival</span> ${arrivalInfo.place} @ ${arrivalInfo.time}<br>`;
+        freeStart = arrivalInfo.time > '08:00' ? arrivalInfo.time : '09:00';
+    }
+    if (departureInfo) {
+        summaryHtml += `<span class="badge bg-danger me-1">🛫 Departure</span> ${departureInfo.place} @ ${departureInfo.time}<br>`;
+        const depHour = parseInt(departureInfo.time.split(':')[0]) || 20;
+        const depMin = departureInfo.time.split(':')[1] || '00';
+        const freeEndHour = Math.max(8, depHour - 2);
+        freeEnd = `${freeEndHour < 10 ? '0' + freeEndHour : freeEndHour}:${depMin}`;
+    }
+    if (darshanInfo) {
+        summaryHtml += `<span class="badge bg-warning text-dark me-1">🕉️ Darshan</span> ${darshanInfo.place} @ ${darshanInfo.time}<br>`;
+    }
+
+    if (!arrivalInfo && !departureInfo && !darshanInfo) {
+        summaryHtml += `<span class="badge bg-success me-1">🏛️ Full Day Exploring</span> Full day available for local sightseeing & dining.<br>`;
+    }
+
+    summaryHtml += `<div class="mt-2 text-dark fw-bold"><i class="fas fa-clock text-warning me-1"></i>Available Exploring Window: <span class="text-success">${freeStart} AM to ${freeEnd} PM</span></div>`;
+    textEl.innerHTML = summaryHtml;
+}
+
+async function runAiDayPlanGeneration() {
+    if (!currentTrip) return;
+
+    const day = parseInt(document.getElementById('ai-plan-day-select').value) || 1;
+    const pace = document.getElementById('ai-plan-pace').value;
+
+    const statusEl = document.getElementById('ai-plan-status');
+    const statusText = document.getElementById('ai-plan-status-text');
+    const resultsEl = document.getElementById('ai-plan-results');
+    const submitBtn = document.getElementById('btn-run-ai-day-plan');
+
+    if (statusEl) statusEl.classList.remove('d-none');
+    if (resultsEl) resultsEl.classList.add('d-none');
+    if (submitBtn) submitBtn.disabled = true;
+
+    const startDate = new Date(currentTrip.startDate);
+    const targetDate = new Date(startDate.getTime() + (day - 1) * 24 * 60 * 60 * 1000);
+    const dateStr = targetDate.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+
+    if (statusText) statusText.textContent = `Analyzing arrival/departure & generating tailored exploring spots for ${dateStr}...`;
+
+    try {
+        const dest = (currentTrip.destination || 'Destination').trim();
+        const dayActivities = (currentTrip.itinerary || []).filter(a => a.day === day);
+
+        let freeStart = '09:30';
+        let freeEnd = '19:30';
+        dayActivities.forEach(a => {
+            if (a.place.includes('Arrival:')) freeStart = '10:00';
+            if (a.place.includes('Departure:')) {
+                const depH = parseInt(a.time.split(':')[0]) || 20;
+                freeEnd = `${Math.max(9, depH - 2)}:00`;
+            }
+        });
+
+        // Smart Fallback Template for Destination Exploring
+        let suggestions = [
+            {
+                day,
+                time: freeStart,
+                category: pace === 'spiritual' ? 'temple' : 'sightseeing',
+                place: `${dest} Top Famous Attraction & Viewpoint`,
+                notes: 'Explore scenic landmarks, cultural heritage & iconic sights.',
+                addedBy: auth.currentUser.uid,
+                addedAt: new Date().toISOString()
+            },
+            {
+                day,
+                time: '13:30',
+                category: 'food',
+                place: `Famous Regional Thali Restaurant in ${dest}`,
+                notes: 'Savor authentic traditional delicacies & local specialities.',
+                addedBy: auth.currentUser.uid,
+                addedAt: new Date().toISOString()
+            },
+            {
+                day,
+                time: freeEnd > '17:00' ? '17:00' : freeEnd,
+                category: 'shopping',
+                place: `${dest} Local Market & Evening Bazaar`,
+                notes: 'Handicrafts, souvenirs, local street shopping & evening tea.',
+                addedBy: auth.currentUser.uid,
+                addedAt: new Date().toISOString()
+            }
+        ];
+
+        _currentGeneratedAiSuggestions = suggestions;
+
+        // Render suggestions preview in modal
+        const listEl = document.getElementById('ai-plan-suggestions-list');
+        if (listEl) {
+            listEl.innerHTML = suggestions.map((s) => `
+                <div class="d-flex align-items-center justify-content-between p-2.5 border rounded-3 bg-white shadow-sm mb-2">
+                    <div class="d-flex align-items-center me-2">
+                        <div class="badge bg-primary text-white me-2 px-2.5 py-1.5 fw-bold" style="font-size:0.8rem;">${s.time}</div>
+                        <div>
+                            <div class="fw-bold text-dark small">${s.place}</div>
+                            <div class="text-muted" style="font-size:0.75rem;">${s.notes}</div>
+                        </div>
+                    </div>
+                    <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">${s.category.toUpperCase()}</span>
+                </div>
+            `).join('');
+        }
+
+        const countSpan = document.getElementById('ai-suggestions-count');
+        if (countSpan) countSpan.textContent = suggestions.length;
+        if (resultsEl) resultsEl.classList.remove('d-none');
+        
+        const addBtn = document.getElementById('btn-add-ai-suggestions');
+        if (addBtn) {
+            addBtn.classList.remove('d-none');
+            addBtn.disabled = false;
+        }
+
+    } catch (err) {
+        console.error('Error generating AI day plan:', err);
+        showToast('Failed to generate plan. Please try again.', 'danger');
+    } finally {
+        if (statusEl) statusEl.classList.add('d-none');
+        if (submitBtn) submitBtn.disabled = false;
+    }
+}
+
+async function addAiSuggestionsToItinerary() {
+    if (!currentTrip || _currentGeneratedAiSuggestions.length === 0) return;
+
+    try {
+        const addBtn = document.getElementById('btn-add-ai-suggestions');
+        if (addBtn) addBtn.disabled = true;
+
+        const tripDoc = await db.collection('trips').doc(currentTrip.id).get();
+        if (!tripDoc.exists) return;
+        const tripData = tripDoc.data();
+        const existing = tripData.itinerary || [];
+
+        const combined = [...existing, ..._currentGeneratedAiSuggestions];
+
+        await db.collection('trips').doc(currentTrip.id).update({
+            itinerary: combined,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        currentTrip.itinerary = combined;
+
+        const modalEl = document.getElementById('aiDayPlanModal');
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        modal?.hide();
+
+        showToast(`Added ${_currentGeneratedAiSuggestions.length} exploring spot(s) to your day itinerary! 🎉`, 'success');
+        loadTripDetails();
+
+    } catch (err) {
+        console.error('Error adding AI suggestions:', err);
+        showToast('Error saving suggestions', 'danger');
+    }
+}
+
 // Expose functions globally for onclick calls
 window.showEditTicketModal = showEditTicketModal;
 window.deleteTicket = deleteTicket;
@@ -6162,3 +6414,7 @@ window.shareItineraryText = shareItineraryText;
 window.applyQuickPreset = applyQuickPreset;
 window.importTicketsToItinerary = importTicketsToItinerary;
 window.duplicateActivity = duplicateActivity;
+window.showAiDayPlanModal = showAiDayPlanModal;
+window.updateAiDayPlanAnalysis = updateAiDayPlanAnalysis;
+window.runAiDayPlanGeneration = runAiDayPlanGeneration;
+window.addAiSuggestionsToItinerary = addAiSuggestionsToItinerary;
