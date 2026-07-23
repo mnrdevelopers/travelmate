@@ -568,14 +568,22 @@
             </div>
         </div>
 
-        <!-- ImageKit Config Alert if not set -->
-        <div id="imagekit-config-warning" class="alert alert-warning d-none py-2 px-3 mb-3">
-            <small><i class="fas fa-exclamation-triangle me-1"></i> ImageKit is not configured. Ticket uploads will be disabled. Click <strong>ImageKit Settings</strong> to configure.</small>
+        <!-- ImageKit Config Alert (Optional notice) -->
+        <div id="imagekit-config-warning" class="alert alert-info d-none py-2 px-3 mb-3">
+            <small><i class="fas fa-info-circle me-1"></i> ImageKit is optional. Ticket images &amp; PDFs will be saved directly into your trip!</small>
         </div>
 
         <!-- Journey & Location Stay Breakdown Container -->
         <div id="journey-stay-breakdown-card" class="mb-4 d-none">
             <!-- Dynamic Stay vs Transit Breakdown loaded here -->
+        </div>
+
+        <!-- Ticket Category Filter Tabs -->
+        <div class="d-flex align-items-center gap-2 mb-3 overflow-x-auto pb-1" id="ticket-filter-tabs">
+            <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 active" data-ticket-filter="all">All Tickets</button>
+            <button type="button" class="btn btn-sm btn-outline-warning rounded-pill px-3" data-ticket-filter="darshan"><i class="fas fa-gopuram me-1"></i>Darshan &amp; Temple</button>
+            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" data-ticket-filter="transport"><i class="fas fa-plane me-1"></i>Transport</button>
+            <button type="button" class="btn btn-sm btn-outline-info rounded-pill px-3" data-ticket-filter="event"><i class="fas fa-ticket-alt me-1"></i>Events &amp; Other</button>
         </div>
 
         <!-- Tickets List -->
@@ -735,7 +743,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="ticketModalTitle">Add Ticket</h5>
+                <h5 class="modal-title" id="ticketModalTitle">Add Ticket / Darshan Pass</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -743,110 +751,154 @@
                     <input type="hidden" id="edit-ticket-id">
                     <input type="hidden" id="edit-ticket-expense-index">
                     
-                    <div class="row">
-                        <div class="col-md-6 mb-2">
-                            <label for="ticket-type" class="form-label fw-semibold">Primary Transport Type</label>
-                            <select class="form-select form-select-sm" id="ticket-type" required>
-                                <option value="flight">Flight</option>
-                                <option value="train">Train</option>
-                                <option value="bus">Bus</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6 mb-2">
-                            <label for="ticket-operator" class="form-label fw-semibold">Operator / Provider (e.g., IRCTC, Indigo, Redbus)</label>
-                            <input type="text" class="form-control form-control-sm" id="ticket-operator" required placeholder="e.g. IRCTC">
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-2">
-                            <label for="ticket-service-name" class="form-label fw-semibold">Train / Flight / Bus Name</label>
-                            <input type="text" class="form-control form-control-sm" id="ticket-service-name" placeholder="e.g. NSL NS SF EXP">
-                        </div>
-                        <div class="col-md-6 mb-2">
-                            <label for="ticket-service-no" class="form-label fw-semibold">Train / Flight / Bus Number</label>
-                            <input type="text" class="form-control form-control-sm" id="ticket-service-no" placeholder="e.g. 12788">
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-2">
-                            <label for="ticket-no" class="form-label fw-semibold">PNR / Ticket / Booking Number</label>
-                            <input type="text" class="form-control form-control-sm" id="ticket-no" required placeholder="e.g. 4341714699">
-                        </div>
-                        <div class="col-md-6 mb-2">
-                            <label for="ticket-seat" class="form-label fw-semibold">Seat / Berth / Coach Number</label>
-                            <input type="text" class="form-control form-control-sm" id="ticket-seat" placeholder="e.g. Coach S3, Berth 4">
-                        </div>
+                    <div class="mb-3">
+                        <label for="ticket-type" class="form-label fw-bold text-primary">
+                            <i class="fas fa-ticket-alt me-1"></i>Ticket Category / Type
+                        </label>
+                        <select class="form-select form-select-sm fw-semibold" id="ticket-type" required>
+                            <option value="darshan">🙏 Darshan / Temple Ticket</option>
+                            <option value="train" selected>🚆 Train Ticket</option>
+                            <option value="flight">✈️ Flight Ticket</option>
+                            <option value="bus">🚌 Bus Ticket</option>
+                            <option value="event">🎟️ Event / Entry Pass</option>
+                            <option value="other">📄 Other Document / Ticket</option>
+                        </select>
                     </div>
 
-                    <div class="row bg-light p-2 rounded mb-2 border mx-0">
-                        <div class="col-12 px-1"><small class="text-uppercase text-secondary fw-bold">Departure Details</small></div>
-                        <div class="col-md-4 mb-2 px-1">
-                            <label for="ticket-dep-place" class="form-label small mb-1">Station/Airport Name</label>
-                            <input type="text" class="form-control form-control-sm" id="ticket-dep-place" required placeholder="e.g. NIZAMABAD JN">
+                    <!-- DARSHAN / TEMPLE SPECIFIC FIELDS -->
+                    <div id="darshan-fields-container" class="p-3 border border-warning rounded mb-3" style="background: rgba(217, 119, 6, 0.08); display: none;">
+                        <div class="fw-bold text-warning-emphasis mb-2 small text-uppercase">
+                            <i class="fas fa-gopuram me-1"></i>Darshan &amp; Temple Pass Details
                         </div>
-                        <div class="col-md-4 mb-2 px-1">
-                            <label for="ticket-dep-code" class="form-label small mb-1">Station Code (Optional)</label>
-                            <input type="text" class="form-control form-control-sm" id="ticket-dep-code" placeholder="e.g. NZB" style="text-transform: uppercase;">
+                        <div class="row">
+                            <div class="col-md-6 mb-2">
+                                <label for="ticket-temple-name" class="form-label small fw-semibold">Temple / Devasthanam Name</label>
+                                <input type="text" class="form-control form-control-sm" id="ticket-temple-name" placeholder="e.g. Tirumala Tirupati Devasthanams (TTD)">
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <label for="ticket-darshan-category" class="form-label small fw-semibold">Darshan / Pass Category</label>
+                                <input type="text" class="form-control form-control-sm" id="ticket-darshan-category" placeholder="e.g. Special Entry Darshan (₹300) / VIP Break / Arjitha Seva">
+                            </div>
                         </div>
-                        <div class="col-md-4 mb-2 px-1">
-                            <label for="ticket-dep-time" class="form-label small mb-1">Departure Date & Time</label>
-                            <input type="datetime-local" class="form-control form-control-sm" id="ticket-dep-time" required>
+                        <div class="row">
+                            <div class="col-md-6 mb-2">
+                                <label for="ticket-reporting-venue" class="form-label small fw-semibold">Reporting Gate / Line / Venue</label>
+                                <input type="text" class="form-control form-control-sm" id="ticket-reporting-venue" placeholder="e.g. Supatham Gate / VQC-1 / ATC Parking">
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <label for="ticket-devotees-count" class="form-label small fw-semibold">Devotees / Persons Count</label>
+                                <input type="number" class="form-control form-control-sm" id="ticket-devotees-count" min="1" placeholder="e.g. 2">
+                            </div>
                         </div>
-                    </div>
-
-                    <div class="row bg-light p-2 rounded mb-2 border mx-0">
-                        <div class="col-12 px-1"><small class="text-uppercase text-secondary fw-bold">Arrival Details</small></div>
-                        <div class="col-md-4 mb-2 px-1">
-                            <label for="ticket-arr-place" class="form-label small mb-1">Station/Airport Name</label>
-                            <input type="text" class="form-control form-control-sm" id="ticket-arr-place" required placeholder="e.g. VIJAYAWADA JN">
-                        </div>
-                        <div class="col-md-4 mb-2 px-1">
-                            <label for="ticket-arr-code" class="form-label small mb-1">Station Code (Optional)</label>
-                            <input type="text" class="form-control form-control-sm" id="ticket-arr-code" placeholder="e.g. BZA" style="text-transform: uppercase;">
-                        </div>
-                        <div class="col-md-4 mb-2 px-1">
-                            <label for="ticket-arr-time" class="form-label small mb-1">Arrival Date & Time (Optional)</label>
-                            <input type="datetime-local" class="form-control form-control-sm" id="ticket-arr-time">
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6 mb-2">
-                            <label for="ticket-passenger-name" class="form-label fw-semibold">Passenger Name</label>
-                            <input type="text" class="form-control form-control-sm" id="ticket-passenger-name" placeholder="e.g. AUSULA MANITEJA">
-                        </div>
-                        <div class="col-md-6 mb-2">
-                            <label for="ticket-booking-status" class="form-label fw-semibold">Booking / Current Status</label>
-                            <input type="text" class="form-control form-control-sm" id="ticket-booking-status" placeholder="e.g. CNF/S3/4/LB">
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6 mb-2">
-                            <label for="ticket-cost" class="form-label fw-semibold">Ticket Cost (Amount in <span class="rupee-symbol">₹</span>)</label>
-                            <input type="number" class="form-control form-control-sm" id="ticket-cost" min="0" step="0.01" placeholder="e.g. 2500">
-                        </div>
-                        <div class="col-md-6 mb-2 d-flex align-items-center">
-                            <div class="form-check mt-3">
-                                <input class="form-check-input" type="checkbox" id="ticket-track-expense" checked>
-                                <label class="form-check-label" for="ticket-track-expense">
-                                    Track as Trip Expense
-                                </label>
+                        <div class="row">
+                            <div class="col-md-6 mb-2">
+                                <label for="ticket-prasadam-info" class="form-label small fw-semibold">Prasadam / Laddu Tokens Info (Optional)</label>
+                                <input type="text" class="form-control form-control-sm" id="ticket-prasadam-info" placeholder="e.g. 4 Laddus included">
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <label for="ticket-darshan-slot" class="form-label small fw-semibold">Reporting / Darshan Slot Date &amp; Time</label>
+                                <input type="datetime-local" class="form-control form-control-sm" id="ticket-darshan-slot">
                             </div>
                         </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label for="ticket-image" class="form-label">Ticket Receipt Image (PDF / Image upload to ImageKit)</label>
+                    <!-- TRANSPORT FIELDS (Train, Flight, Bus, Event) -->
+                    <div id="transport-fields-container">
+                        <div class="row">
+                            <div class="col-md-6 mb-2">
+                                <label for="ticket-operator" class="form-label fw-semibold" id="label-operator">Operator / Provider (e.g. IRCTC, Indigo, Redbus)</label>
+                                <input type="text" class="form-control form-control-sm" id="ticket-operator" placeholder="e.g. IRCTC">
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <label for="ticket-service-name" class="form-label fw-semibold" id="label-service-name">Service / Train / Flight / Event Name</label>
+                                <input type="text" class="form-control form-control-sm" id="ticket-service-name" placeholder="e.g. NSL NS SF EXP">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-2">
+                                <label for="ticket-service-no" class="form-label fw-semibold" id="label-service-no">Number (Train / Flight / Bus)</label>
+                                <input type="text" class="form-control form-control-sm" id="ticket-service-no" placeholder="e.g. 12788">
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <label for="ticket-seat" class="form-label fw-semibold" id="label-seat">Seat / Coach / Berth / Gate Number</label>
+                                <input type="text" class="form-control form-control-sm" id="ticket-seat" placeholder="e.g. Coach S3, Berth 4">
+                            </div>
+                        </div>
+
+                        <div class="row bg-light p-2 rounded mb-2 border mx-0">
+                            <div class="col-12 px-1"><small class="text-uppercase text-secondary fw-bold" id="label-dep-title">Departure Details</small></div>
+                            <div class="col-md-4 mb-2 px-1">
+                                <label for="ticket-dep-place" class="form-label small mb-1" id="label-dep-place">Boarding Station / Airport / Venue</label>
+                                <input type="text" class="form-control form-control-sm" id="ticket-dep-place" placeholder="e.g. NIZAMABAD JN">
+                            </div>
+                            <div class="col-md-4 mb-2 px-1">
+                                <label for="ticket-dep-code" class="form-label small mb-1">Code (Optional)</label>
+                                <input type="text" class="form-control form-control-sm" id="ticket-dep-code" placeholder="e.g. NZB" style="text-transform: uppercase;">
+                            </div>
+                            <div class="col-md-4 mb-2 px-1">
+                                <label for="ticket-dep-time" class="form-label small mb-1" id="label-dep-time">Departure Date &amp; Time</label>
+                                <input type="datetime-local" class="form-control form-control-sm" id="ticket-dep-time">
+                            </div>
+                        </div>
+
+                        <div class="row bg-light p-2 rounded mb-2 border mx-0" id="arr-details-block">
+                            <div class="col-12 px-1"><small class="text-uppercase text-secondary fw-bold">Arrival Details</small></div>
+                            <div class="col-md-4 mb-2 px-1">
+                                <label for="ticket-arr-place" class="form-label small mb-1">Destination Station / Airport</label>
+                                <input type="text" class="form-control form-control-sm" id="ticket-arr-place" placeholder="e.g. VIJAYAWADA JN">
+                            </div>
+                            <div class="col-md-4 mb-2 px-1">
+                                <label for="ticket-arr-code" class="form-label small mb-1">Code (Optional)</label>
+                                <input type="text" class="form-control form-control-sm" id="ticket-arr-code" placeholder="e.g. BZA" style="text-transform: uppercase;">
+                            </div>
+                            <div class="col-md-4 mb-2 px-1">
+                                <label for="ticket-arr-time" class="form-label small mb-1">Arrival Date &amp; Time (Optional)</label>
+                                <input type="datetime-local" class="form-control form-control-sm" id="ticket-arr-time">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- GENERAL FIELDS FOR ALL TICKETS -->
+                    <div class="row">
+                        <div class="col-md-6 mb-2">
+                            <label for="ticket-no" class="form-label fw-semibold" id="label-ticket-no">Token / PNR / Booking Number</label>
+                            <input type="text" class="form-control form-control-sm" id="ticket-no" required placeholder="e.g. TTD123456789 or 4341714699">
+                        </div>
+                        <div class="col-md-6 mb-2">
+                            <label for="ticket-passenger-name" class="form-label fw-semibold" id="label-passenger-name">Primary Person / Devotee Name</label>
+                            <input type="text" class="form-control form-control-sm" id="ticket-passenger-name" placeholder="e.g. AUSULA MANITEJA">
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-2">
+                            <label for="ticket-booking-status" class="form-label fw-semibold">Booking / Current Status</label>
+                            <input type="text" class="form-control form-control-sm" id="ticket-booking-status" placeholder="e.g. Confirmed / Slot Allocated">
+                        </div>
+                        <div class="col-md-6 mb-2">
+                            <label for="ticket-cost" class="form-label fw-semibold">Ticket Cost (Amount in <span class="rupee-symbol">₹</span>)</label>
+                            <input type="number" class="form-control form-control-sm" id="ticket-cost" min="0" step="0.01" placeholder="e.g. 300">
+                        </div>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="ticket-track-expense" checked>
+                        <label class="form-check-label" for="ticket-track-expense">
+                            Track as Trip Expense
+                        </label>
+                    </div>
+
+                    <div class="mb-3 border p-3 rounded bg-light">
+                        <label for="ticket-image" class="form-label fw-semibold text-primary">
+                            <i class="fas fa-file-upload me-1"></i>Ticket Pass File (Image, PDF, QR Code)
+                        </label>
                         <input type="file" class="form-control form-control-sm" id="ticket-image" accept="image/*,application/pdf">
-                        <div class="form-text" id="ticket-image-info">Max size 5MB. Select a new file to upload/replace.</div>
+                        <div class="form-text" id="ticket-image-info">Upload receipt, QR pass, or PDF file. Saved directly to your trip.</div>
                     </div>
 
                     <div class="mb-3">
-                        <label for="ticket-notes" class="form-label">Notes & Instructions</label>
-                        <textarea class="form-control form-control-sm" id="ticket-notes" rows="2" placeholder="Gate instructions, terminal details, luggage limits..."></textarea>
+                        <label for="ticket-notes" class="form-label">Notes &amp; Guidelines</label>
+                        <textarea class="form-control form-control-sm" id="ticket-notes" rows="2" placeholder="Dress code guidelines, ID proof required (Aadhaar), parking notes..."></textarea>
                     </div>
                 </form>
             </div>

@@ -260,6 +260,28 @@ function setupTripDetailsEventListeners() {
     document.getElementById('btn-add-ticket')?.addEventListener('click', showAddTicketModal);
     document.getElementById('save-ticket-btn')?.addEventListener('click', saveTicket);
 
+    const ticketTypeSelect = document.getElementById('ticket-type');
+    if (ticketTypeSelect) {
+        ticketTypeSelect.addEventListener('change', function() {
+            toggleTicketFormFields(this.value);
+        });
+    }
+
+    const ticketFilterTabs = document.getElementById('ticket-filter-tabs');
+    if (ticketFilterTabs) {
+        ticketFilterTabs.addEventListener('click', function(e) {
+            const btn = e.target.closest('button[data-ticket-filter]');
+            if (!btn) return;
+            ticketFilterTabs.querySelectorAll('button').forEach(b => {
+                b.classList.remove('active', 'btn-primary');
+                b.classList.add('btn-outline-primary', 'btn-outline-warning', 'btn-outline-info');
+            });
+            btn.classList.add('active', 'btn-primary');
+            window._currentTicketFilter = btn.getAttribute('data-ticket-filter');
+            if (currentTrip) renderTicketsList(currentTrip);
+        });
+    }
+
     const ticketsTab = document.querySelector('a[href="#tickets-tab"]');
     if (ticketsTab) {
         ticketsTab.addEventListener('shown.bs.tab', function (e) {
@@ -4722,12 +4744,47 @@ function loadTripTickets(trip) {
     }
 }
 
+function readAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = err => reject(err);
+        reader.readAsDataURL(file);
+    });
+}
+
+function toggleTicketFormFields(ticketType) {
+    const darshanContainer = document.getElementById('darshan-fields-container');
+    const transportContainer = document.getElementById('transport-fields-container');
+    
+    const labelTicketNo = document.getElementById('label-ticket-no');
+    const labelPassengerName = document.getElementById('label-passenger-name');
+    
+    if (ticketType === 'darshan') {
+        if (darshanContainer) darshanContainer.style.display = 'block';
+        if (transportContainer) transportContainer.style.display = 'none';
+        if (labelTicketNo) labelTicketNo.textContent = 'Token / Ticket / Booking Number';
+        if (labelPassengerName) labelPassengerName.textContent = 'Primary Devotee Name';
+    } else {
+        if (darshanContainer) darshanContainer.style.display = 'none';
+        if (transportContainer) transportContainer.style.display = 'block';
+        if (labelTicketNo) labelTicketNo.textContent = 'PNR / Ticket / Booking Number';
+        if (labelPassengerName) labelPassengerName.textContent = 'Passenger Name';
+    }
+}
+
 function showAddTicketModal() {
     document.getElementById('add-ticket-form').reset();
     document.getElementById('edit-ticket-id').value = '';
     document.getElementById('edit-ticket-expense-index').value = '';
-    document.getElementById('ticketModalTitle').textContent = 'Add Ticket';
-    document.getElementById('ticket-image-info').textContent = 'Max size 5MB. Select a file to upload to ImageKit.';
+    document.getElementById('ticketModalTitle').textContent = 'Add Ticket / Darshan Pass';
+    document.getElementById('ticket-image-info').textContent = 'Upload receipt, QR pass, or PDF file. Saved directly to your trip.';
+    
+    const typeSelect = document.getElementById('ticket-type');
+    if (typeSelect) {
+        typeSelect.value = 'darshan';
+        toggleTicketFormFields('darshan');
+    }
     
     const modal = new bootstrap.Modal(document.getElementById('addTicketModal'));
     modal.show();
@@ -4740,20 +4797,33 @@ async function showEditTicketModal(ticketId) {
     
     document.getElementById('edit-ticket-id').value = ticket.id;
     document.getElementById('edit-ticket-expense-index').value = ticket.expenseIndex !== undefined ? ticket.expenseIndex : '';
-    document.getElementById('ticketModalTitle').textContent = 'Edit Ticket';
+    document.getElementById('ticketModalTitle').textContent = 'Edit Ticket / Darshan Pass';
     
-    document.getElementById('ticket-type').value = ticket.type;
-    document.getElementById('ticket-operator').value = ticket.operator;
-    document.getElementById('ticket-service-name').value = ticket.serviceName || '';
-    document.getElementById('ticket-service-no').value = ticket.serviceNo || '';
-    document.getElementById('ticket-no').value = ticket.ticketNo;
-    document.getElementById('ticket-seat').value = ticket.seatNo || '';
-    document.getElementById('ticket-dep-place').value = ticket.departurePlace;
-    document.getElementById('ticket-dep-code').value = ticket.depCode || '';
-    document.getElementById('ticket-dep-time').value = ticket.departureTime;
-    document.getElementById('ticket-arr-place').value = ticket.arrivalPlace;
-    document.getElementById('ticket-arr-code').value = ticket.arrCode || '';
-    document.getElementById('ticket-arr-time').value = ticket.arrivalTime || '';
+    const tType = ticket.type || 'darshan';
+    document.getElementById('ticket-type').value = tType;
+    toggleTicketFormFields(tType);
+    
+    if (tType === 'darshan') {
+        document.getElementById('ticket-temple-name').value = ticket.templeName || ticket.operator || '';
+        document.getElementById('ticket-darshan-category').value = ticket.darshanCategory || ticket.serviceName || '';
+        document.getElementById('ticket-reporting-venue').value = ticket.reportingVenue || ticket.departurePlace || '';
+        document.getElementById('ticket-devotees-count').value = ticket.devoteesCount || 1;
+        document.getElementById('ticket-prasadam-info').value = ticket.prasadamInfo || '';
+        document.getElementById('ticket-darshan-slot').value = ticket.darshanSlot || ticket.departureTime || '';
+    } else {
+        document.getElementById('ticket-operator').value = ticket.operator || '';
+        document.getElementById('ticket-service-name').value = ticket.serviceName || '';
+        document.getElementById('ticket-service-no').value = ticket.serviceNo || '';
+        document.getElementById('ticket-seat').value = ticket.seatNo || '';
+        document.getElementById('ticket-dep-place').value = ticket.departurePlace || '';
+        document.getElementById('ticket-dep-code').value = ticket.depCode || '';
+        document.getElementById('ticket-dep-time').value = ticket.departureTime || '';
+        document.getElementById('ticket-arr-place').value = ticket.arrivalPlace || '';
+        document.getElementById('ticket-arr-code').value = ticket.arrCode || '';
+        document.getElementById('ticket-arr-time').value = ticket.arrivalTime || '';
+    }
+    
+    document.getElementById('ticket-no').value = ticket.ticketNo || '';
     document.getElementById('ticket-passenger-name').value = ticket.passengerName || '';
     document.getElementById('ticket-booking-status').value = ticket.bookingStatus || '';
     document.getElementById('ticket-cost').value = ticket.cost !== undefined ? ticket.cost : '';
@@ -4761,9 +4831,9 @@ async function showEditTicketModal(ticketId) {
     document.getElementById('ticket-notes').value = ticket.notes || '';
     
     if (ticket.imageUrl) {
-        document.getElementById('ticket-image-info').innerHTML = `Current receipt: <a href="${ticket.imageUrl}" target="_blank" class="text-primary fw-semibold">View Receipt</a>. Select a new file to replace it.`;
+        document.getElementById('ticket-image-info').innerHTML = `Current file: <a href="${ticket.imageUrl}" target="_blank" class="text-primary fw-semibold">View Receipt/QR Pass</a>. Select a new file to replace it.`;
     } else {
-        document.getElementById('ticket-image-info').textContent = 'No receipt uploaded. Select a file to upload to ImageKit.';
+        document.getElementById('ticket-image-info').textContent = 'No receipt uploaded. Select a file to upload.';
     }
     
     const modal = new bootstrap.Modal(document.getElementById('addTicketModal'));
@@ -4772,20 +4842,53 @@ async function showEditTicketModal(ticketId) {
 
 async function saveTicket() {
     const ticketId = document.getElementById('edit-ticket-id').value;
-    const expenseIndexStr = document.getElementById('edit-ticket-expense-index').value;
-    
     const type = document.getElementById('ticket-type').value;
-    const operator = document.getElementById('ticket-operator').value.trim();
-    const serviceName = document.getElementById('ticket-service-name').value.trim();
-    const serviceNo = document.getElementById('ticket-service-no').value.trim();
+    
+    let operator = '';
+    let serviceName = '';
+    let serviceNo = '';
+    let seatNo = '';
+    let departurePlace = '';
+    let depCode = '';
+    let departureTime = '';
+    let arrivalPlace = '';
+    let arrCode = '';
+    let arrivalTime = '';
+    
+    let templeName = '';
+    let darshanCategory = '';
+    let reportingVenue = '';
+    let devoteesCount = 1;
+    let prasadamInfo = '';
+    let darshanSlot = '';
+    
+    if (type === 'darshan') {
+        templeName = document.getElementById('ticket-temple-name').value.trim();
+        darshanCategory = document.getElementById('ticket-darshan-category').value.trim();
+        reportingVenue = document.getElementById('ticket-reporting-venue').value.trim();
+        devoteesCount = parseInt(document.getElementById('ticket-devotees-count').value) || 1;
+        prasadamInfo = document.getElementById('ticket-prasadam-info').value.trim();
+        darshanSlot = document.getElementById('ticket-darshan-slot').value;
+        
+        operator = templeName || 'Temple Devasthanam';
+        serviceName = darshanCategory || 'Darshan Pass';
+        departurePlace = reportingVenue || templeName || 'Temple Gate';
+        departureTime = darshanSlot || new Date().toISOString().slice(0,16);
+        arrivalPlace = templeName || 'Main Shrine';
+    } else {
+        operator = document.getElementById('ticket-operator').value.trim();
+        serviceName = document.getElementById('ticket-service-name').value.trim();
+        serviceNo = document.getElementById('ticket-service-no').value.trim();
+        seatNo = document.getElementById('ticket-seat').value.trim();
+        departurePlace = document.getElementById('ticket-dep-place').value.trim();
+        depCode = document.getElementById('ticket-dep-code').value.trim().toUpperCase();
+        departureTime = document.getElementById('ticket-dep-time').value;
+        arrivalPlace = document.getElementById('ticket-arr-place').value.trim();
+        arrCode = document.getElementById('ticket-arr-code').value.trim().toUpperCase();
+        arrivalTime = document.getElementById('ticket-arr-time').value;
+    }
+    
     const ticketNo = document.getElementById('ticket-no').value.trim();
-    const seatNo = document.getElementById('ticket-seat').value.trim();
-    const departurePlace = document.getElementById('ticket-dep-place').value.trim();
-    const depCode = document.getElementById('ticket-dep-code').value.trim().toUpperCase();
-    const departureTime = document.getElementById('ticket-dep-time').value;
-    const arrivalPlace = document.getElementById('ticket-arr-place').value.trim();
-    const arrCode = document.getElementById('ticket-arr-code').value.trim().toUpperCase();
-    const arrivalTime = document.getElementById('ticket-arr-time').value;
     const passengerName = document.getElementById('ticket-passenger-name').value.trim();
     const bookingStatus = document.getElementById('ticket-booking-status').value.trim();
     const costVal = document.getElementById('ticket-cost').value;
@@ -4795,8 +4898,8 @@ async function saveTicket() {
     
     const imageFileInput = document.getElementById('ticket-image');
     
-    if (!operator || !ticketNo || !departurePlace || !departureTime || !arrivalPlace) {
-        showToast('Please fill in all required fields', 'warning');
+    if (!ticketNo || !departureTime || (type !== 'darshan' && (!operator || !departurePlace))) {
+        showToast('Please fill in all required ticket fields', 'warning');
         return;
     }
     
@@ -4816,22 +4919,41 @@ async function saveTicket() {
         }
         
         if (imageFileInput.files.length > 0) {
-            const settings = getImageKitSettings();
-            if (!settings || !settings.publicKey || !settings.privateKey || !settings.urlEndpoint) {
-                throw new Error('ImageKit is not configured. Please open ImageKit Settings to configure upload credentials first.');
+            const file = imageFileInput.files[0];
+            const settings = typeof getImageKitSettings === 'function' ? getImageKitSettings() : null;
+            
+            // Try ImageKit first if credentials configured
+            if (settings && settings.publicKey && settings.privateKey && settings.urlEndpoint && typeof uploadToImageKit === 'function') {
+                try {
+                    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Uploading to ImageKit...';
+                    const fileExt = file.name.split('.').pop();
+                    const fileName = `ticket_${Date.now()}.${fileExt}`;
+                    imageUrl = await uploadToImageKit(file, fileName, settings);
+                } catch (ikErr) {
+                    console.warn('ImageKit upload failed, fallback to local file encoding:', ikErr);
+                }
             }
             
-            const file = imageFileInput.files[0];
-            const fileExt = file.name.split('.').pop();
-            const fileName = `ticket_${Date.now()}.${fileExt}`;
-            
-            saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Uploading image...';
-            imageUrl = await uploadToImageKit(file, fileName, settings);
+            // Fallback to local DataURL so upload NEVER throws error
+            if (!imageUrl) {
+                saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Processing ticket file...';
+                if (file.type.startsWith('image/')) {
+                    imageUrl = await compressImageToDataUrl(file, 1200, 0.8);
+                } else {
+                    imageUrl = await readAsDataUrl(file);
+                }
+            }
         }
         
         const ticketObj = {
             id: ticketId || `tkt_${Date.now()}`,
             type,
+            templeName,
+            darshanCategory,
+            reportingVenue,
+            devoteesCount,
+            prasadamInfo,
+            darshanSlot,
             operator,
             serviceName,
             serviceNo,
@@ -4860,10 +4982,15 @@ async function saveTicket() {
         let newExpenseIndex = existingTicket ? existingTicket.expenseIndex : undefined;
         
         if (trackExpense && cost > 0) {
+            const expCat = type === 'darshan' ? 'Activities' : 'Transport';
+            const expDesc = type === 'darshan' 
+                ? `[Darshan Ticket] ${templeName || operator}: ${darshanCategory || serviceName} (Token: ${ticketNo})`
+                : `[Ticket] ${type.toUpperCase()}: ${serviceNo ? serviceNo + ' - ' : ''}${serviceName || operator} (${depCode || departurePlace} → ${arrCode || arrivalPlace})`;
+
             const expenseObj = {
-                description: `[Ticket] ${type.toUpperCase()}: ${serviceNo ? serviceNo + ' - ' : ''}${serviceName || operator} (${depCode || departurePlace} → ${arrCode || arrivalPlace})`,
+                description: expDesc,
                 amount: cost,
-                category: 'Transport',
+                category: expCat,
                 date: departureTime.split('T')[0],
                 paymentMode: 'Card',
                 addedBy: auth.currentUser.uid,
@@ -4914,7 +5041,7 @@ async function saveTicket() {
         const modal = bootstrap.Modal.getInstance(document.getElementById('addTicketModal'));
         modal?.hide();
         
-        showToast('Ticket saved successfully!', 'success');
+        showToast(type === 'darshan' ? 'Darshan ticket saved successfully! 🙏' : 'Ticket saved successfully!', 'success');
         loadTripDetails();
         
     } catch (e) {
@@ -4981,7 +5108,21 @@ function renderTicketsList(trip) {
     
     container.innerHTML = '';
     
-    const tickets = trip.tickets || [];
+    let tickets = trip.tickets || [];
+    if (tickets.length === 0) {
+        emptyState.classList.remove('d-none');
+        return;
+    }
+
+    const currentFilter = window._currentTicketFilter || 'all';
+    if (currentFilter === 'darshan') {
+        tickets = tickets.filter(t => t.type === 'darshan');
+    } else if (currentFilter === 'transport') {
+        tickets = tickets.filter(t => ['train', 'flight', 'bus'].includes(t.type));
+    } else if (currentFilter === 'event') {
+        tickets = tickets.filter(t => ['event', 'other'].includes(t.type));
+    }
+    
     if (tickets.length === 0) {
         emptyState.classList.remove('d-none');
         return;
@@ -4989,25 +5130,16 @@ function renderTicketsList(trip) {
     
     emptyState.classList.add('d-none');
     
-    const sortedTickets = [...tickets].sort((a, b) => a.departureTime.localeCompare(b.departureTime));
+    const sortedTickets = [...tickets].sort((a, b) => (a.departureTime || '').localeCompare(b.departureTime || ''));
     
     sortedTickets.forEach(ticket => {
         const card = document.createElement('div');
         card.className = 'col-md-6';
         
-        let typeIcon = 'fa-plane';
-        let headerBgClass = 'bg-primary';
-        let headerTextClass = 'text-white';
-        
-        if (ticket.type === 'train') {
-            typeIcon = 'fa-train-subway';
-            headerBgClass = 'bg-success';
-        } else if (ticket.type === 'bus') {
-            typeIcon = 'fa-bus';
-            headerBgClass = 'bg-danger';
-        }
-        
-        const depD = new Date(ticket.departureTime);
+        const isDarshan = ticket.type === 'darshan';
+        const isExpensed = ticket.expenseIndex !== undefined;
+
+        const depD = new Date(ticket.departureTime || Date.now());
         const arrD = ticket.arrivalTime ? new Date(ticket.arrivalTime) : null;
         
         const depTime24 = depD.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -5017,127 +5149,234 @@ function renderTicketsList(trip) {
         const arrDateFormatted = arrD ? arrD.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: '2-digit' }) : '';
         
         const bookedOnDate = ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: '2-digit' }) : '--';
-        
-        let durationText = '';
-        if (arrD) {
-            const diffMs = arrD - depD;
-            if (diffMs > 0) {
-                const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
-                const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-                durationText = `${diffHrs}h ${diffMins}m`;
-            }
-        }
-        
-        const isExpensed = ticket.expenseIndex !== undefined;
-        
-        card.innerHTML = `
-            <div class="card h-100 border border-light shadow-sm rounded-3 overflow-hidden">
-                <!-- Top Colored Header Bar -->
-                <div class="${headerBgClass} ${headerTextClass} px-3 py-2 d-flex justify-content-between align-items-center">
-                    <div class="d-flex align-items-center">
-                        <i class="fas ${typeIcon} me-2" style="font-size: 0.9rem;"></i>
-                        <span class="fw-bold small text-uppercase" style="letter-spacing: 0.5px;">${ticket.type} Ticket</span>
-                    </div>
-                    <div>
-                        <button type="button" class="btn btn-link text-white p-0 me-2 btn-xs" onclick="showEditTicketModal('${ticket.id}')" title="Edit Ticket">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button type="button" class="btn btn-link text-white p-0 btn-xs" onclick="deleteTicket('${ticket.id}')" title="Delete Ticket">
-                            <i class="fas fa-trash text-white-50"></i>
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="card-body pt-3 pb-3 px-3">
-                    <!-- Train/Service Info Header -->
-                    <div class="d-flex justify-content-between align-items-start border-bottom pb-2 mb-3">
-                        <div class="text-start">
-                            <span class="small text-muted d-block" style="font-size:0.6rem; text-transform:uppercase;">Service / Carrier</span>
-                            <div class="fw-bold text-dark" style="font-size:0.95rem;">${ticket.serviceNo || '---'}</div>
-                            <div class="text-secondary small fw-semibold">${ticket.serviceName || ticket.operator}</div>
-                        </div>
-                        <div class="text-end">
-                            <span class="small text-muted d-block" style="font-size:0.6rem; text-transform:uppercase;">PNR / Booking ID</span>
-                            <div class="d-flex align-items-center justify-content-end">
-                                <strong class="text-primary ticket-pnr-box" style="font-size:0.95rem;">${ticket.ticketNo}</strong>
-                                <button class="btn btn-link text-secondary p-0 ms-1" onclick="navigator.clipboard.writeText('${ticket.ticketNo}'); showToast('PNR Copied!', 'success');" style="font-size:0.8rem;" title="Copy PNR">
-                                    <i class="far fa-copy"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Timings Row -->
-                    <div class="row align-items-center mb-3">
-                        <div class="col-4 text-start">
-                            <div class="h5 mb-0 fw-bold text-dark">${depTime24}</div>
-                            <div class="small text-muted" style="font-size: 0.7rem;">${depDateFormatted}</div>
-                            <div class="fw-bold text-dark mt-2 text-uppercase text-truncate" style="font-size: 0.8rem;" title="${ticket.departurePlace}">${ticket.departurePlace}</div>
-                            <div class="small text-secondary fw-bold" style="font-size: 0.7rem;">${ticket.depCode || '--'}</div>
-                        </div>
-                        <div class="col-4 text-center">
-                            <div class="text-muted small" style="font-size:0.65rem;">${durationText ? `${durationText}` : '—'}</div>
-                            <div class="my-1 d-flex align-items-center justify-content-center">
-                                <div class="flex-grow-1" style="height: 1px; background-color: #dee2e6;"></div>
-                                <i class="fas ${typeIcon} text-muted mx-2" style="font-size: 0.75rem;"></i>
-                                <div class="flex-grow-1" style="height: 1px; background-color: #dee2e6;"></div>
-                            </div>
-                            <span class="badge rounded-pill bg-light text-secondary border px-2 py-1" style="font-size:0.6rem; text-transform:uppercase;">${ticket.operator}</span>
-                        </div>
-                        <div class="col-4 text-end">
-                            <div class="h5 mb-0 fw-bold text-dark">${arrTime24}</div>
-                            <div class="small text-muted" style="font-size: 0.7rem;">${arrDateFormatted || '--'}</div>
-                            <div class="fw-bold text-dark mt-2 text-uppercase text-truncate" style="font-size: 0.8rem;" title="${ticket.arrivalPlace}">${ticket.arrivalPlace}</div>
-                            <div class="small text-secondary fw-bold" style="font-size: 0.7rem;">${ticket.arrCode || '--'}</div>
-                        </div>
-                    </div>
-                    
-                    <!-- Coach / Seat info -->
-                    <div class="bg-light bg-opacity-75 p-2 rounded small mb-2 border d-flex justify-content-between align-items-center" style="font-size: 0.75rem;">
-                        <span>Seat/Berth: <strong class="text-dark">${ticket.seatNo || '--'}</strong></span>
-                        <span>Booked on: <strong class="text-dark">${bookedOnDate}</strong></span>
-                    </div>
-                    
-                    <!-- Passenger details & Booking status -->
-                    <div class="border-top pt-2 mt-2">
-                        <div class="row align-items-center" style="font-size: 0.75rem;">
-                            <div class="col-6 text-start">
-                                <span class="text-muted d-block" style="font-size:0.6rem; text-transform:uppercase;">Passenger</span>
-                                <strong class="text-dark text-truncate d-block">${ticket.passengerName || '--'}</strong>
-                            </div>
-                            <div class="col-6 text-end">
-                                <span class="text-muted d-block" style="font-size:0.6rem; text-transform:uppercase;">Booking Status</span>
-                                <strong class="text-success text-truncate d-block">${ticket.bookingStatus || '--'}</strong>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Actions Footer (Receipt and Cost) -->
-                    <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top">
-                        <div class="small">
-                            ${ticket.cost > 0 ? `
-                                <span class="fw-bold text-success" style="font-size:0.85rem;"><span class="rupee-symbol">₹</span>${ticket.cost.toFixed(2)}</span>
-                                ${isExpensed ? `<span class="badge bg-success-subtle text-success ms-1" style="font-size: 0.55rem;"><i class="fas fa-check me-1"></i>Expensed</span>` : ''}
-                            ` : '<span class="text-muted small">No cost tracked</span>'}
+
+        if (isDarshan) {
+            // Saffron & Gold Devotional Card layout for Darshan Passes
+            card.innerHTML = `
+                <div class="card h-100 border border-warning border-opacity-50 shadow-sm rounded-3 overflow-hidden">
+                    <div class="px-3 py-2 text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #d97706 0%, #b45309 100%);">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-gopuram me-2 text-warning-light" style="font-size: 1.05rem;"></i>
+                            <span class="fw-bold small text-uppercase" style="letter-spacing: 0.5px;">🙏 Darshan / Temple Pass</span>
                         </div>
                         <div>
-                            ${ticket.imageUrl ? `
-                                <button type="button" class="btn btn-outline-primary btn-xs py-1 px-2 fw-semibold" style="font-size: 0.65rem;" onclick="viewTicketReceipt('${ticket.imageUrl}', '${ticket.operator}')">
-                                    <i class="fas fa-image me-1"></i>View Ticket
-                                </button>
-                            ` : '<span class="text-muted small"><i class="fas fa-image-slash me-1"></i>No Image</span>'}
+                            <button type="button" class="btn btn-link text-white p-0 me-2 btn-xs" onclick="showEditTicketModal('${ticket.id}')" title="Edit Pass">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button type="button" class="btn btn-link text-white p-0 btn-xs" onclick="deleteTicket('${ticket.id}')" title="Delete Pass">
+                                <i class="fas fa-trash text-white-50"></i>
+                            </button>
                         </div>
                     </div>
                     
-                    <!-- Notes section -->
-                    ${ticket.notes ? `
-                        <div class="mt-2 p-2 border-start border-3 border-secondary bg-light bg-opacity-50 rounded-end" style="font-size: 0.7rem;">
-                            <span class="text-secondary text-break">${ticket.notes}</span>
+                    <div class="card-body pt-3 pb-3 px-3">
+                        <div class="d-flex justify-content-between align-items-start border-bottom pb-2 mb-3">
+                            <div class="text-start">
+                                <span class="small text-muted d-block text-uppercase" style="font-size:0.6rem;">Temple / Devasthanam</span>
+                                <div class="fw-bold text-dark fs-6">${ticket.templeName || ticket.operator || 'Devasthanam'}</div>
+                                <span class="badge bg-warning bg-opacity-25 text-warning-emphasis border border-warning border-opacity-50 mt-1" style="font-size:0.7rem;">
+                                    ${ticket.darshanCategory || ticket.serviceName || 'Special Entry Darshan'}
+                                </span>
+                            </div>
+                            <div class="text-end">
+                                <span class="small text-muted d-block text-uppercase" style="font-size:0.6rem;">Token / Booking ID</span>
+                                <div class="d-flex align-items-center justify-content-end">
+                                    <strong class="text-primary ticket-pnr-box" style="font-size:0.95rem;">${ticket.ticketNo}</strong>
+                                    <button class="btn btn-link text-secondary p-0 ms-1" onclick="navigator.clipboard.writeText('${ticket.ticketNo}'); showToast('Token Number Copied!', 'success');" style="font-size:0.8rem;" title="Copy Token">
+                                        <i class="far fa-copy"></i>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                    ` : ''}
+                        
+                        <div class="p-2.5 rounded mb-3 border border-warning border-opacity-25" style="background: rgba(217, 119, 6, 0.06);">
+                            <div class="row align-items-center">
+                                <div class="col-7 text-start">
+                                    <small class="text-muted d-block text-uppercase" style="font-size:0.6rem;">Reporting / Slot Time</small>
+                                    <div class="fw-bold text-dark" style="font-size:0.9rem;">
+                                        <i class="far fa-calendar-alt text-warning me-1"></i>${depDateFormatted} at ${depTime24}
+                                    </div>
+                                </div>
+                                <div class="col-5 text-end">
+                                    <small class="text-muted d-block text-uppercase" style="font-size:0.6rem;">Gate / Line</small>
+                                    <div class="fw-bold text-dark text-truncate" style="font-size:0.82rem;" title="${ticket.reportingVenue || ticket.departurePlace}">
+                                        <i class="fas fa-location-dot text-danger me-1"></i>${ticket.reportingVenue || ticket.departurePlace || 'Main Entrance'}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="border-top pt-2 mt-2">
+                            <div class="row align-items-center" style="font-size: 0.75rem;">
+                                <div class="col-6 text-start">
+                                    <span class="text-muted d-block" style="font-size:0.6rem; text-transform:uppercase;">Primary Devotee</span>
+                                    <strong class="text-dark text-truncate d-block">${ticket.passengerName || '--'} (${ticket.devoteesCount || 1} Person${(ticket.devoteesCount || 1) > 1 ? 's' : ''})</strong>
+                                </div>
+                                <div class="col-6 text-end">
+                                    <span class="text-muted d-block" style="font-size:0.6rem; text-transform:uppercase;">Pass Status</span>
+                                    <strong class="text-success text-truncate d-block">${ticket.bookingStatus || 'Confirmed'}</strong>
+                                </div>
+                            </div>
+                            ${ticket.prasadamInfo ? `
+                                <div class="mt-2 pt-1 text-success fw-semibold small" style="font-size:0.72rem;">
+                                    <i class="fas fa-gift me-1"></i>Prasadam: ${ticket.prasadamInfo}
+                                </div>
+                            ` : ''}
+                        </div>
+                        
+                        <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top">
+                            <div class="small">
+                                ${ticket.cost > 0 ? `
+                                    <span class="fw-bold text-success" style="font-size:0.85rem;"><span class="rupee-symbol">₹</span>${ticket.cost.toFixed(2)}</span>
+                                    ${isExpensed ? `<span class="badge bg-success-subtle text-success ms-1" style="font-size: 0.55rem;"><i class="fas fa-check me-1"></i>Expensed</span>` : ''}
+                                ` : `<span class="badge bg-secondary-subtle text-secondary" style="font-size:0.7rem;">Free Entry Pass</span>`}
+                            </div>
+                            <div>
+                                ${ticket.imageUrl ? `
+                                    <button class="btn btn-outline-warning btn-sm py-1 px-2.5 rounded-pill shadow-sm" onclick="viewTicketReceipt('${ticket.imageUrl}', 'Darshan Pass - ${ticket.templeName || ticket.operator}')" style="font-size:0.75rem;">
+                                        <i class="fas fa-qrcode me-1"></i>View Pass / QR
+                                    </button>
+                                ` : '<span class="text-muted small"><i class="fas fa-image-slash me-1"></i>No File</span>'}
+                            </div>
+                        </div>
+                        
+                        ${ticket.notes ? `
+                            <div class="mt-2 p-2 border-start border-3 border-warning bg-warning bg-opacity-10 rounded-end" style="font-size: 0.7rem;">
+                                <span class="text-dark text-break"><i class="fas fa-info-circle me-1 text-warning"></i>${ticket.notes}</span>
+                            </div>
+                        ` : ''}
+                    </div>
                 </div>
-            </div>
-        `;
+            `;
+        } else {
+            // Transport / Event Ticket Layout
+            let typeIcon = 'fa-plane';
+            let headerBgClass = 'bg-primary';
+            let headerTextClass = 'text-white';
+            
+            if (ticket.type === 'train') {
+                typeIcon = 'fa-train-subway';
+                headerBgClass = 'bg-success';
+            } else if (ticket.type === 'bus') {
+                typeIcon = 'fa-bus';
+                headerBgClass = 'bg-danger';
+            } else if (ticket.type === 'event' || ticket.type === 'other') {
+                typeIcon = 'fa-ticket-alt';
+                headerBgClass = 'bg-info';
+            }
+            
+            let durationText = '';
+            if (arrD) {
+                const diffMs = arrD - depD;
+                if (diffMs > 0) {
+                    const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+                    const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                    durationText = `${diffHrs}h ${diffMins}m`;
+                }
+            }
+            
+            card.innerHTML = `
+                <div class="card h-100 border border-light shadow-sm rounded-3 overflow-hidden">
+                    <div class="${headerBgClass} ${headerTextClass} px-3 py-2 d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center">
+                            <i class="fas ${typeIcon} me-2" style="font-size: 0.9rem;"></i>
+                            <span class="fw-bold small text-uppercase" style="letter-spacing: 0.5px;">${ticket.type} Ticket</span>
+                        </div>
+                        <div>
+                            <button type="button" class="btn btn-link text-white p-0 me-2 btn-xs" onclick="showEditTicketModal('${ticket.id}')" title="Edit Ticket">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button type="button" class="btn btn-link text-white p-0 btn-xs" onclick="deleteTicket('${ticket.id}')" title="Delete Ticket">
+                                <i class="fas fa-trash text-white-50"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="card-body pt-3 pb-3 px-3">
+                        <div class="d-flex justify-content-between align-items-start border-bottom pb-2 mb-3">
+                            <div class="text-start">
+                                <span class="small text-muted d-block" style="font-size:0.6rem; text-transform:uppercase;">Service / Carrier</span>
+                                <div class="fw-bold text-dark" style="font-size:0.95rem;">${ticket.serviceNo || '---'}</div>
+                                <div class="text-secondary small fw-semibold">${ticket.serviceName || ticket.operator}</div>
+                            </div>
+                            <div class="text-end">
+                                <span class="small text-muted d-block" style="font-size:0.6rem; text-transform:uppercase;">PNR / Booking ID</span>
+                                <div class="d-flex align-items-center justify-content-end">
+                                    <strong class="text-primary ticket-pnr-box" style="font-size:0.95rem;">${ticket.ticketNo}</strong>
+                                    <button class="btn btn-link text-secondary p-0 ms-1" onclick="navigator.clipboard.writeText('${ticket.ticketNo}'); showToast('PNR Copied!', 'success');" style="font-size:0.8rem;" title="Copy PNR">
+                                        <i class="far fa-copy"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row align-items-center mb-3">
+                            <div class="col-4 text-start">
+                                <div class="h5 mb-0 fw-bold text-dark">${depTime24}</div>
+                                <div class="small text-muted" style="font-size: 0.7rem;">${depDateFormatted}</div>
+                                <div class="fw-bold text-dark mt-2 text-uppercase text-truncate" style="font-size: 0.8rem;" title="${ticket.departurePlace}">${ticket.departurePlace}</div>
+                                <div class="small text-secondary fw-bold" style="font-size: 0.7rem;">${ticket.depCode || '--'}</div>
+                            </div>
+                            <div class="col-4 text-center">
+                                <div class="text-muted small" style="font-size:0.65rem;">${durationText ? `${durationText}` : '—'}</div>
+                                <div class="my-1 d-flex align-items-center justify-content-center">
+                                    <div class="flex-grow-1" style="height: 1px; background-color: #dee2e6;"></div>
+                                    <i class="fas ${typeIcon} text-muted mx-2" style="font-size: 0.75rem;"></i>
+                                    <div class="flex-grow-1" style="height: 1px; background-color: #dee2e6;"></div>
+                                </div>
+                                <span class="badge rounded-pill bg-light text-secondary border px-2 py-1" style="font-size:0.6rem; text-transform:uppercase;">${ticket.operator}</span>
+                            </div>
+                            <div class="col-4 text-end">
+                                <div class="h5 mb-0 fw-bold text-dark">${arrTime24}</div>
+                                <div class="small text-muted" style="font-size: 0.7rem;">${arrDateFormatted || '--'}</div>
+                                <div class="fw-bold text-dark mt-2 text-uppercase text-truncate" style="font-size: 0.8rem;" title="${ticket.arrivalPlace}">${ticket.arrivalPlace}</div>
+                                <div class="small text-secondary fw-bold" style="font-size: 0.7rem;">${ticket.arrCode || '--'}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-light bg-opacity-75 p-2 rounded small mb-2 border d-flex justify-content-between align-items-center" style="font-size: 0.75rem;">
+                            <span>Seat/Berth: <strong class="text-dark">${ticket.seatNo || '--'}</strong></span>
+                            <span>Booked on: <strong class="text-dark">${bookedOnDate}</strong></span>
+                        </div>
+                        
+                        <div class="border-top pt-2 mt-2">
+                            <div class="row align-items-center" style="font-size: 0.75rem;">
+                                <div class="col-6 text-start">
+                                    <span class="text-muted d-block" style="font-size:0.6rem; text-transform:uppercase;">Passenger</span>
+                                    <strong class="text-dark text-truncate d-block">${ticket.passengerName || '--'}</strong>
+                                </div>
+                                <div class="col-6 text-end">
+                                    <span class="text-muted d-block" style="font-size:0.6rem; text-transform:uppercase;">Booking Status</span>
+                                    <strong class="text-success text-truncate d-block">${ticket.bookingStatus || '--'}</strong>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top">
+                            <div class="small">
+                                ${ticket.cost > 0 ? `
+                                    <span class="fw-bold text-success" style="font-size:0.85rem;"><span class="rupee-symbol">₹</span>${ticket.cost.toFixed(2)}</span>
+                                    ${isExpensed ? `<span class="badge bg-success-subtle text-success ms-1" style="font-size: 0.55rem;"><i class="fas fa-check me-1"></i>Expensed</span>` : ''}
+                                ` : '<span class="text-muted small">No cost tracked</span>'}
+                            </div>
+                            <div>
+                                ${ticket.imageUrl ? `
+                                    <button type="button" class="btn btn-outline-primary btn-xs py-1 px-2 fw-semibold" style="font-size: 0.65rem;" onclick="viewTicketReceipt('${ticket.imageUrl}', '${ticket.operator}')">
+                                        <i class="fas fa-image me-1"></i>View Ticket
+                                    </button>
+                                ` : '<span class="text-muted small"><i class="fas fa-image-slash me-1"></i>No Image</span>'}
+                            </div>
+                        </div>
+                        
+                        ${ticket.notes ? `
+                            <div class="mt-2 p-2 border-start border-3 border-secondary bg-light bg-opacity-50 rounded-end" style="font-size: 0.7rem;">
+                                <span class="text-secondary text-break">${ticket.notes}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
         
         container.appendChild(card);
     });

@@ -3085,6 +3085,9 @@ function buildTripContext() {
             .sort((a, b) => new Date(a.departureTime) - new Date(b.departureTime));
             
         ticketsSection = sortedTickets.map((t, idx) => {
+            if (t.type === 'darshan') {
+                return `  ${idx + 1}. [DARSHAN / TEMPLE PASS] ${t.templeName || t.operator} | Category: ${t.darshanCategory || 'Special Entry'} | Token: ${t.ticketNo} | Reporting Slot: ${t.departureTime.replace('T', ' ')} | Gate: ${t.reportingVenue || t.departurePlace} | Devotees: ${t.devoteesCount || 1} Person(s) (${t.passengerName || ''}) | Status: ${t.bookingStatus || 'Confirmed'} | Cost: ₹${t.cost || 0}`;
+            }
             const depStr = `${t.departurePlace}${t.depCode ? ' (' + t.depCode + ')' : ''} at ${t.departureTime.replace('T', ' ')}`;
             const arrStr = t.arrivalTime ? `${t.arrivalPlace}${t.arrCode ? ' (' + t.arrCode + ')' : ''} at ${t.arrivalTime.replace('T', ' ')}` : t.arrivalPlace;
             return `  ${idx + 1}. [${t.type.toUpperCase()}] ${t.serviceNo || ''} ${t.serviceName || t.operator || ''} | PNR: ${t.ticketNo} | Departs: ${depStr} | Arrives: ${arrStr} | Seat: ${t.seatNo || 'N/A'} | Status: ${t.bookingStatus || 'CNF'} | Cost: ₹${t.cost || 0}`;
