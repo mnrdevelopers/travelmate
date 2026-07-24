@@ -121,6 +121,11 @@
                     <i class="fas fa-ticket-alt me-1"></i>Tickets
                 </a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="tab" href="#tasks-tracker-tab">
+                    <i class="fas fa-tasks me-1"></i>Task & Delay Tracker
+                </a>
+            </li>
         </ul>
         
       <div class="tab-content" id="trip-tab-content">
@@ -662,6 +667,110 @@
             <p>Add your train, flight, or bus tickets to track departure times and expenses.</p>
             <button class="btn btn-primary btn-sm mt-2" onclick="document.getElementById('btn-add-ticket').click()">
                 <i class="fas fa-plus me-1"></i>Add Your First Ticket
+            </button>
+        </div>
+    </div>
+
+    <!-- Task & Delay Tracker Tab -->
+    <div class="tab-pane fade" id="tasks-tracker-tab">
+        <div class="section-guide-card mb-4" 
+             data-guide-en="Welcome to Task & Delay Tracker! Here you can checkmark completed tasks (e.g. Departed from NZB, Kanakadurgamma Darshanam), log travelling delays for Train/Bus/Flight/Cab, track live journey status, and share updates via WhatsApp."
+             data-guide-hi="टास्क और देरी ट्रैकर में आपका स्वागत है! यहाँ आप पूरे किए गए कार्यों पर टिक लगा सकते हैं (जैसे NZB से रवाना, कनकदुर्गा दर्शन), ट्रेन/बस/फ्लाइट के लिए देरी दर्ज कर सकते हैं, और व्हाट्सएप पर अपडेट साझा कर सकते हैं।"
+             data-guide-te="టాస్క్ & డిలే ట్రాకర్‌కి స్వాగతం! ఇక్కడ మీరు పూర్తయిన టాస్క్‌లను చెక్‌మార్క్ చేయవచ్చు (ఉదా. NZB నుండి బయలుదేరడం, కనకదుర్గమ్మ దర్శనం), రైలు/బస్సు/ఫ్లైట్ ఆలస్యాలను నమోదు చేయవచ్చు మరియు వాట్సాప్ ద్వారా సమాచారం పంచుకోవచ్చు.">
+        </div>
+
+        <!-- Task & Delay Dashboard Metrics Cards -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-4 col-sm-6">
+                <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 position-relative overflow-hidden border-start border-4 border-success">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <span class="text-muted small fw-semibold text-uppercase">Completion Status</span>
+                            <h3 class="mb-0 fw-bold text-dark mt-1" id="task-metric-progress-percent">0%</h3>
+                            <small class="text-success fw-semibold" id="task-metric-completed-count">0 of 0 completed</small>
+                        </div>
+                        <div class="stat-icon bg-success-subtle text-success rounded-circle p-3 d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+                            <i class="fas fa-check-double fs-4"></i>
+                        </div>
+                    </div>
+                    <div class="progress mt-3" style="height: 6px;">
+                        <div class="progress-bar bg-success" id="task-metric-progress-bar" role="progressbar" style="width: 0%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4 col-sm-6">
+                <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 position-relative overflow-hidden border-start border-4 border-info">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <span class="text-muted small fw-semibold text-uppercase">Transit Status</span>
+                            <h3 class="mb-0 fw-bold text-dark mt-1" id="task-metric-transit-ontime">0 On Time</h3>
+                            <small class="text-info fw-semibold" id="task-metric-transit-total">0 Transport legs</small>
+                        </div>
+                        <div class="stat-icon bg-info-subtle text-info rounded-circle p-3 d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+                            <i class="fas fa-route fs-4"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4 col-sm-12">
+                <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 position-relative overflow-hidden border-start border-4 border-warning">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <span class="text-muted small fw-semibold text-uppercase">Delay Summary</span>
+                            <h3 class="mb-0 fw-bold text-dark mt-1" id="task-metric-delay-total">0 mins</h3>
+                            <small class="text-warning fw-bold" id="task-metric-delayed-count">0 Delayed</small>
+                        </div>
+                        <div class="stat-icon bg-warning-subtle text-warning rounded-circle p-3 d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+                            <i class="fas fa-clock fs-4"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter Chips & Action Controls -->
+        <div class="card border-0 shadow-sm rounded-3 p-3 mb-4 bg-white">
+            <div class="row g-2 align-items-center justify-content-between">
+                <div class="col-lg-7 col-md-12">
+                    <div class="d-flex align-items-center gap-1.5 overflow-x-auto pb-1" id="task-tracker-filter-chips">
+                        <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 active task-filter-chip" data-filter="all"><i class="fas fa-list me-1"></i>All Tasks</button>
+                        <button type="button" class="btn btn-sm btn-outline-success rounded-pill px-3 task-filter-chip" data-filter="completed"><i class="fas fa-check-circle me-1"></i>Completed</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 task-filter-chip" data-filter="pending"><i class="fas fa-hourglass-half me-1"></i>Pending</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 task-filter-chip" data-filter="transit"><i class="fas fa-train me-1"></i>Transit / Delay</button>
+                        <button type="button" class="btn btn-sm btn-outline-warning rounded-pill px-3 task-filter-chip" data-filter="darshan"><i class="fas fa-gopuram me-1"></i>Darshan &amp; Visit</button>
+                    </div>
+                </div>
+                <div class="col-lg-5 col-md-12 d-flex align-items-center gap-2 justify-content-lg-end">
+                    <div class="input-group input-group-sm flex-grow-1" style="max-width: 220px;">
+                        <span class="input-group-text bg-light border-end-0"><i class="fas fa-search text-muted"></i></span>
+                        <input type="text" class="form-control bg-light border-start-0" id="task-tracker-search-input" placeholder="Search tasks...">
+                    </div>
+                    <button type="button" class="btn btn-sm btn-success rounded-pill px-3 text-nowrap fw-semibold" id="btn-add-custom-task">
+                        <i class="fas fa-plus me-1"></i>Add Task
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-success rounded-pill px-2.5 text-nowrap" id="btn-share-tasks-whatsapp" title="Share Status on WhatsApp">
+                        <i class="fab fa-whatsapp me-1"></i>Share
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Task Tracker Items List Container -->
+        <div id="task-tracker-container" class="d-flex flex-column gap-3">
+            <!-- Dynamically loaded task & transit items -->
+        </div>
+
+        <!-- Empty State Container -->
+        <div id="empty-task-tracker" class="empty-state d-none text-center py-5">
+            <div class="empty-icon mb-3 text-muted">
+                <i class="fas fa-tasks fa-3x"></i>
+            </div>
+            <h5 class="fw-bold text-dark mb-1">No Tasks Found</h5>
+            <p class="text-muted small">Start adding tasks or import itinerary activities to track completed items &amp; delays.</p>
+            <button class="btn btn-primary btn-sm rounded-pill mt-2" onclick="document.getElementById('btn-add-custom-task').click()">
+                <i class="fas fa-plus me-1"></i>Add Your First Task
             </button>
         </div>
     </div>
@@ -1271,6 +1380,120 @@
                     <button type="button" class="btn btn-sm btn-warning rounded-pill fw-bold text-dark shadow-sm" onclick="aiPlannerUi.openPlannerModal(currentTrip)">
                         <i class="fas fa-sync-alt me-1"></i>Re-Optimize Itinerary
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Custom Task Modal -->
+    <div class="modal fade" id="addCustomTaskModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content rounded-4 border-0 shadow">
+                <div class="modal-header bg-success text-white py-3 px-4">
+                    <h5 class="modal-title fw-bold">
+                        <i class="fas fa-tasks me-2"></i>Add Custom Trip Task
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <form id="custom-task-form">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Task Title / Milestone *</label>
+                            <input type="text" class="form-control rounded-3" id="task-title-input" placeholder="e.g. Departed from NZB, Kanakadurgamma Darshanam" required>
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label fw-bold">Category</label>
+                                <select class="form-select rounded-3" id="task-category-input">
+                                    <option value="activity">General Activity</option>
+                                    <option value="darshan">Darshan / Temple 🛕</option>
+                                    <option value="transit">Transit / Travelling 🚆</option>
+                                    <option value="hotel">Hotel &amp; Stay 🏨</option>
+                                    <option value="food">Food &amp; Dining 🍴</option>
+                                    <option value="shopping">Shopping &amp; Packing 🛍️</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-bold">Trip Day</label>
+                                <input type="number" class="form-control rounded-3" id="task-day-input" value="1" min="1" max="30" required>
+                            </div>
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label fw-bold">Scheduled Time</label>
+                                <input type="time" class="form-control rounded-3" id="task-time-input">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-bold">Location (Optional)</label>
+                                <input type="text" class="form-control rounded-3" id="task-location-input" placeholder="e.g. NZB Railway Stn">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Notes / Guidelines</label>
+                            <textarea class="form-control rounded-3" id="task-notes-input" rows="2" placeholder="e.g. Keep ticket copy ready, dress code for temple..."></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer bg-light py-2.5 px-4 border-top">
+                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-sm btn-success rounded-pill fw-bold px-4" id="btn-save-custom-task">Save Task</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Update Transit Delay Modal -->
+    <div class="modal fade" id="updateDelayModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4 border-0 shadow">
+                <div class="modal-header bg-warning text-dark py-3 px-4">
+                    <h5 class="modal-title fw-bold">
+                        <i class="fas fa-clock me-2"></i>Update Travel Status &amp; Delay
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <input type="hidden" id="delay-item-source">
+                    <input type="hidden" id="delay-item-id">
+                    
+                    <div class="mb-3">
+                        <h6 class="fw-bold text-primary mb-1" id="delay-item-title-display">Train / Transport Leg</h6>
+                        <small class="text-muted" id="delay-item-subtitle-display">Scheduled Departure/Arrival</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Travelling Status</label>
+                        <select class="form-select rounded-3" id="delay-status-select">
+                            <option value="on_time">🟢 On Time (On Schedule)</option>
+                            <option value="delayed">⚠️ Delayed / Running Late</option>
+                            <option value="departed">🚀 Departed / En Route</option>
+                            <option value="arrived">✅ Arrived / Completed</option>
+                        </select>
+                    </div>
+
+                    <div id="delay-inputs-container" class="mb-3">
+                        <label class="form-label fw-bold">Delay Duration (Minutes)</label>
+                        <div class="input-group mb-2">
+                            <input type="number" class="form-control rounded-start-3" id="delay-minutes-input" placeholder="e.g. 45" min="0">
+                            <span class="input-group-text rounded-end-3">Minutes</span>
+                        </div>
+                        
+                        <!-- Quick Preset Delay Chips -->
+                        <div class="d-flex flex-wrap gap-1 mb-3">
+                            <button type="button" class="btn btn-xs btn-outline-warning rounded-pill delay-preset-chip" data-mins="15">+15 mins</button>
+                            <button type="button" class="btn btn-xs btn-outline-warning rounded-pill delay-preset-chip" data-mins="30">+30 mins</button>
+                            <button type="button" class="btn btn-xs btn-outline-warning rounded-pill delay-preset-chip" data-mins="45">+45 mins</button>
+                            <button type="button" class="btn btn-xs btn-outline-warning rounded-pill delay-preset-chip" data-mins="60">+1 hour</button>
+                            <button type="button" class="btn btn-xs btn-outline-warning rounded-pill delay-preset-chip" data-mins="120">+2 hours</button>
+                        </div>
+
+                        <label class="form-label fw-bold">Delay Reason / Live Status Note</label>
+                        <input type="text" class="form-control rounded-3" id="delay-reason-input" placeholder="e.g. Signal delay near Nizamabad, Traffic on highway...">
+                    </div>
+                </div>
+                <div class="modal-footer bg-light py-2.5 px-4 border-top">
+                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-sm btn-warning rounded-pill fw-bold px-4 text-dark" id="btn-save-transit-delay">Update Status</button>
                 </div>
             </div>
         </div>

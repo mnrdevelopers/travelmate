@@ -2268,3 +2268,102 @@ body.dark-mode .btn-close {
     animation: fadeInDown 0.25s ease-out;
 }
 
+/* ==========================================================================
+   Task & Delay Tracker Custom Styles
+   ========================================================================== */
+
+.task-tracker-card {
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.task-tracker-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08) !important;
+}
+
+.task-tracker-card.is-completed {
+    background-color: rgba(240, 253, 244, 0.7) !important;
+    border-left: 5px solid #16a34a !important;
+}
+
+.task-tracker-card.is-completed .task-title-text {
+    text-decoration: line-through;
+    color: #475569;
+}
+
+.task-checkbox-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 2px solid #cbd5e1;
+    background: #ffffff;
+    color: transparent;
+}
+
+.task-checkbox-btn:hover {
+    border-color: #16a34a;
+    transform: scale(1.1);
+}
+
+.task-checkbox-btn.checked {
+    background: #16a34a;
+    border-color: #16a34a;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(22, 163, 74, 0.35);
+}
+
+.transit-status-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.65rem;
+    border-radius: 50rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.transit-status-pill.ontime {
+    background-color: #dcfce7;
+    color: #15803d;
+    border: 1px solid #bbf7d0;
+}
+
+.transit-status-pill.delayed {
+    background-color: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+    animation: pulseDelay 2s infinite ease-in-out;
+}
+
+.transit-status-pill.departed {
+    background-color: #e0f2fe;
+    color: #0369a1;
+    border: 1px solid #bae6fd;
+}
+
+.transit-status-pill.arrived {
+    background-color: #f0fdf4;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+}
+
+@keyframes pulseDelay {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.75; }
+}
+
+.delay-preset-chip {
+    transition: all 0.15s ease;
+}
+
+.delay-preset-chip:hover {
+    background-color: #ffc107;
+    color: #000;
+}
+
+

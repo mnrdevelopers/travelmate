@@ -291,6 +291,61 @@ function setupTripDetailsEventListeners() {
         });
     }
 
+    // Task & Delay Tracker tab event listeners
+    const tasksTrackerTab = document.querySelector('a[href="#tasks-tracker-tab"]');
+    if (tasksTrackerTab) {
+        tasksTrackerTab.addEventListener('shown.bs.tab', function (e) {
+            if (currentTrip) {
+                loadTaskTrackerTab(currentTrip);
+            }
+        });
+    }
+
+    document.getElementById('btn-add-custom-task')?.addEventListener('click', () => {
+        const modal = new bootstrap.Modal(document.getElementById('addCustomTaskModal'));
+        modal.show();
+    });
+
+    document.getElementById('btn-save-custom-task')?.addEventListener('click', saveCustomTripTask);
+    document.getElementById('btn-save-transit-delay')?.addEventListener('click', saveTransitDelayFromModal);
+    document.getElementById('btn-share-tasks-whatsapp')?.addEventListener('click', shareTaskTrackerWhatsApp);
+
+    // Preset delay chips inside update delay modal
+    document.querySelectorAll('.delay-preset-chip').forEach(chip => {
+        chip.addEventListener('click', function() {
+            const mins = this.getAttribute('data-mins');
+            const input = document.getElementById('delay-minutes-input');
+            const statusSelect = document.getElementById('delay-status-select');
+            if (input) input.value = mins;
+            if (statusSelect) statusSelect.value = 'delayed';
+        });
+    });
+
+    // Task Tracker filter chips listener
+    const taskFilterChipsContainer = document.getElementById('task-tracker-filter-chips');
+    if (taskFilterChipsContainer) {
+        taskFilterChipsContainer.addEventListener('click', function(e) {
+            const btn = e.target.closest('.task-filter-chip');
+            if (!btn) return;
+            taskFilterChipsContainer.querySelectorAll('.task-filter-chip').forEach(b => {
+                b.classList.remove('active', 'btn-primary');
+                b.classList.add('btn-outline-primary', 'btn-outline-success', 'btn-outline-secondary', 'btn-outline-warning');
+            });
+            btn.classList.add('active', 'btn-primary');
+            _activeTaskTrackerFilter = btn.getAttribute('data-filter');
+            if (currentTrip) loadTaskTrackerTab(currentTrip);
+        });
+    }
+
+    // Task Tracker Search Input listener
+    const taskSearchInput = document.getElementById('task-tracker-search-input');
+    if (taskSearchInput) {
+        taskSearchInput.addEventListener('input', function() {
+            _activeTaskTrackerSearch = this.value.trim();
+            if (currentTrip) loadTaskTrackerTab(currentTrip);
+        });
+    }
+
     // Weather Widget Search & Quick Chips listeners
     const weatherSearchInput = document.getElementById('weather-search-input');
     const weatherSearchBtn = document.getElementById('btn-weather-search');
@@ -477,7 +532,8 @@ async function loadTripDetails() {
             loadTripItinerary(currentTrip),
             loadTripRoute(currentTrip),
             loadTripWeather(currentTrip),
-            loadTripTickets(currentTrip)
+            loadTripTickets(currentTrip),
+            loadTaskTrackerTab(currentTrip)
         ]);
         
         // Add leave trip button if user is not the creator
@@ -1878,9 +1934,11 @@ async function loadTripItinerary(trip) {
                                     </div>
                                 </div>
                                 <div class="flex-grow-1">
-                                    <div class="d-flex align-items-center flex-wrap mb-1">
+                                    <div class="d-flex align-items-center flex-wrap mb-1 gap-1">
                                         ${categoryBadge}
-                                        <h6 class="mb-0 text-dark fw-bold">${activity.place}</h6>
+                                        <h6 class="mb-0 text-dark fw-bold me-1">${activity.place}</h6>
+                                        ${activity.completed ? `<span class="badge bg-success ms-1"><i class="fas fa-check-circle me-1"></i>Completed</span>` : ''}
+                                        ${(activity.transitStatus === 'delayed' || activity.delayMinutes) ? `<span class="badge bg-danger ms-1"><i class="fas fa-exclamation-triangle me-1"></i>Delayed (${activity.delayMinutes || 0}m)</span>` : ''}
                                     </div>
                                     ${activity.notes ? `<p class="mb-2 text-secondary small" style="font-size:0.8rem;"><i class="fas fa-info-circle text-info me-1"></i>${activity.notes}</p>` : ''}
                                     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 pt-2 border-top mt-2" style="font-size:0.75rem;">
@@ -6230,6 +6288,748 @@ async function duplicateActivity(index) {
     loadTripDetails();
 }
 
+/* ==========================================================================
+   Task & Delay Tracker Implementation
+   ========================================================================== */
+
+let _activeTaskTrackerFilter = 'all';
+let _activeTaskTrackerSearch = '';
+
+/**
+ * Main entry point to load Task Tracker tab
+ */
+async function loadTaskTrackerTab(trip) {
+    if (!trip) return;
+    
+    const allTasks = getAggregatedTripTasks(trip);
+    updateTaskTrackerMetrics(allTasks);
+    renderTaskTrackerList(trip, allTasks);
+}
+
+/**
+ * Helper to parse day number and time string from ISO datetime string or raw values
+ */
+function parseDayAndTime(dateOrIsoStr, fallbackDay, tripStartDateStr) {
+    let day = parseInt(fallbackDay) || 1;
+    let timeStr = '';
+
+    if (!dateOrIsoStr) {
+        return { day, time: timeStr };
+    }
+
+    if (typeof dateOrIsoStr === 'string') {
+        let datePart = '';
+        if (dateOrIsoStr.includes('T')) {
+            const parts = dateOrIsoStr.split('T');
+            datePart = parts[0];
+            timeStr = parts[1].substring(0, 5);
+        } else if (dateOrIsoStr.includes('-') && dateOrIsoStr.length >= 10) {
+            datePart = dateOrIsoStr.substring(0, 10);
+        } else if (dateOrIsoStr.includes(':')) {
+            timeStr = dateOrIsoStr.substring(0, 5);
+        }
+
+        if (datePart && tripStartDateStr) {
+            const tripStartOnlyStr = tripStartDateStr.split('T')[0];
+            const tripStartMidnight = new Date(tripStartOnlyStr + 'T00:00:00');
+            const itemDateMidnight = new Date(datePart + 'T00:00:00');
+            if (!isNaN(tripStartMidnight.getTime()) && !isNaN(itemDateMidnight.getTime())) {
+                const diffMs = itemDateMidnight - tripStartMidnight;
+                const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+                day = Math.max(1, diffDays + 1);
+            }
+        }
+    }
+
+    return { day, time: timeStr };
+}
+
+/**
+ * Combines trip.itinerary, trip.tickets, and trip.tasks into a unified task list without duplicates
+ */
+function getAggregatedTripTasks(trip) {
+    const aggregated = [];
+    const tripStartDateStr = trip.startDate || '';
+    const ticketSignatures = new Set();
+
+    // 1. Process trip.tickets first (Transport legs & Darshans)
+    if (trip.tickets && Array.isArray(trip.tickets)) {
+        trip.tickets.forEach((ticket, idx) => {
+            if (!ticket) return;
+            const isTransport = ['train', 'flight', 'bus'].includes(ticket.type);
+            const isDarshan = ticket.type === 'darshan';
+
+            const rawTime = ticket.departureTime || ticket.time || '';
+            const { day, time } = parseDayAndTime(rawTime, ticket.day, tripStartDateStr);
+            
+            let title = ticket.title || ticket.operator || ticket.name || (isDarshan ? 'Darshan Ticket' : 'Transport Booking');
+            if (ticket.number) title += ` (${ticket.number})`;
+            
+            let subtitle = '';
+            if (ticket.from && ticket.to) {
+                subtitle = `${ticket.from} ➔ ${ticket.to}`;
+            } else if (ticket.departurePlace && ticket.arrivalPlace) {
+                subtitle = `${ticket.departurePlace} ➔ ${ticket.arrivalPlace}`;
+            } else if (ticket.place) {
+                subtitle = ticket.place;
+            }
+
+            if (ticket.departurePlace) ticketSignatures.add(ticket.departurePlace.toLowerCase());
+            if (ticket.arrivalPlace) ticketSignatures.add(ticket.arrivalPlace.toLowerCase());
+            if (ticket.from) ticketSignatures.add(ticket.from.toLowerCase());
+            if (ticket.to) ticketSignatures.add(ticket.to.toLowerCase());
+            if (ticket.templeName) ticketSignatures.add(ticket.templeName.toLowerCase());
+            if (title) ticketSignatures.add(title.toLowerCase());
+
+            aggregated.push({
+                id: `ticket_${ticket.id || idx}`,
+                source: 'ticket',
+                ticketId: ticket.id,
+                originalIndex: idx,
+                title: title,
+                subtitle: subtitle,
+                day: day,
+                time: time || (ticket.time ? ticket.time.substring(0, 5) : ''),
+                location: ticket.to || ticket.arrivalPlace || ticket.place || ticket.from || ticket.departurePlace || '',
+                notes: ticket.notes || (ticket.pnr ? `PNR: ${ticket.pnr}` : ''),
+                category: isDarshan ? 'darshan' : (isTransport ? 'transit' : 'activity'),
+                completed: !!ticket.completed,
+                completedAt: ticket.completedAt || null,
+                completedBy: ticket.completedBy || null,
+                transitStatus: ticket.transitStatus || 'on_time',
+                delayMinutes: ticket.delayMinutes || 0,
+                delayReason: ticket.delayReason || '',
+                ticketType: ticket.type
+            });
+        });
+    }
+
+    // 2. Process trip.itinerary items (Filtering out ticket-imported duplicate activities)
+    if (trip.itinerary && Array.isArray(trip.itinerary)) {
+        trip.itinerary.forEach((item, idx) => {
+            if (!item) return;
+
+            const placeStr = (item.place || item.activity || '').trim();
+            const placeLower = placeStr.toLowerCase();
+            const notesLower = (item.notes || '').toLowerCase();
+
+            const isTicketImportedCard = 
+                placeStr.startsWith('Departure:') || 
+                placeStr.startsWith('Arrival:') || 
+                placeStr.startsWith('Transit:') || 
+                placeStr.startsWith('Onboard ') || 
+                notesLower.includes('carrier:') || 
+                notesLower.includes('darshan slot');
+
+            if (isTicketImportedCard && trip.tickets && trip.tickets.length > 0) {
+                const matchesTicket = Array.from(ticketSignatures).some(sig => sig && (placeLower.includes(sig) || notesLower.includes(sig)));
+                if (matchesTicket || isTicketImportedCard) {
+                    return; // Skip duplicate ticket card!
+                }
+            }
+
+            const rawTime = item.time || item.date || '';
+            const { day, time } = parseDayAndTime(rawTime, item.day, tripStartDateStr);
+
+            let category = 'activity';
+            if (placeLower.includes('darshan') || placeLower.includes('temple') || notesLower.includes('darshan') || notesLower.includes('temple')) {
+                category = 'darshan';
+            } else if (placeLower.includes('train') || placeLower.includes('flight') || placeLower.includes('bus') || notesLower.includes('train') || notesLower.includes('flight') || notesLower.includes('bus')) {
+                category = 'transit';
+            } else if (placeLower.includes('hotel') || placeLower.includes('resort') || placeLower.includes('check-in')) {
+                category = 'hotel';
+            } else if (placeLower.includes('food') || placeLower.includes('lunch') || placeLower.includes('dinner') || placeLower.includes('breakfast')) {
+                category = 'food';
+            }
+
+            aggregated.push({
+                id: `itinerary_${idx}`,
+                source: 'itinerary',
+                originalIndex: idx,
+                title: item.activity || item.place || `Day ${day} Activity`,
+                subtitle: item.place && item.place !== item.activity ? item.place : '',
+                day: day,
+                time: time || (item.time ? item.time.substring(0, 5) : ''),
+                location: item.location || item.place || '',
+                notes: item.notes || '',
+                category: category,
+                completed: !!item.completed,
+                completedAt: item.completedAt || null,
+                completedBy: item.completedBy || null,
+                transitStatus: item.transitStatus || 'on_time',
+                delayMinutes: item.delayMinutes || 0,
+                delayReason: item.delayReason || ''
+            });
+        });
+    }
+
+    // 3. Process trip.tasks items (Custom user tasks)
+    if (trip.tasks && Array.isArray(trip.tasks)) {
+        trip.tasks.forEach((task, idx) => {
+            if (!task) return;
+            const rawTime = task.time || task.createdAt || '';
+            const { day, time } = parseDayAndTime(rawTime, task.day, tripStartDateStr);
+
+            aggregated.push({
+                id: `custom_${task.id || idx}`,
+                source: 'custom',
+                taskId: task.id,
+                originalIndex: idx,
+                title: task.title,
+                subtitle: task.subtitle || '',
+                day: day,
+                time: time || (task.time ? task.time.substring(0, 5) : ''),
+                location: task.location || '',
+                notes: task.notes || '',
+                category: task.category || 'activity',
+                completed: !!task.completed,
+                completedAt: task.completedAt || null,
+                completedBy: task.completedBy || null,
+                transitStatus: task.transitStatus || 'on_time',
+                delayMinutes: task.delayMinutes || 0,
+                delayReason: task.delayReason || ''
+            });
+        });
+    }
+
+    // Deduplicate exact duplicate titles on same day & time
+    const finalTasks = [];
+    const seenMap = new Set();
+
+    aggregated.forEach(t => {
+        const normKey = `day${t.day}_time${t.time}_${t.title.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+        if (!seenMap.has(normKey)) {
+            seenMap.add(normKey);
+            finalTasks.push(t);
+        }
+    });
+
+    finalTasks.sort((a, b) => {
+        if (a.day !== b.day) return a.day - b.day;
+        if (a.time && b.time) return a.time.localeCompare(b.time);
+        return a.title.localeCompare(b.title);
+    });
+
+    return finalTasks;
+}
+
+/**
+ * Updates top metrics counters
+ */
+function updateTaskTrackerMetrics(tasks) {
+    const totalCount = tasks.length;
+    const completedCount = tasks.filter(t => t.completed).length;
+    const percent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+    const transitTasks = tasks.filter(t => t.category === 'transit' || t.source === 'ticket');
+    const delayedTasks = transitTasks.filter(t => t.transitStatus === 'delayed' || (t.delayMinutes && t.delayMinutes > 0));
+    const onTimeCount = transitTasks.length - delayedTasks.length;
+    const totalDelayMins = tasks.reduce((sum, t) => sum + (parseInt(t.delayMinutes) || 0), 0);
+
+    const progressPercentEl = document.getElementById('task-metric-progress-percent');
+    const completedCountEl = document.getElementById('task-metric-completed-count');
+    const progressBarEl = document.getElementById('task-metric-progress-bar');
+
+    if (progressPercentEl) progressPercentEl.textContent = `${percent}%`;
+    if (completedCountEl) completedCountEl.textContent = `${completedCount} of ${totalCount} completed`;
+    if (progressBarEl) progressBarEl.style.width = `${percent}%`;
+
+    const transitOnTimeEl = document.getElementById('task-metric-transit-ontime');
+    const transitTotalEl = document.getElementById('task-metric-transit-total');
+    if (transitOnTimeEl) transitOnTimeEl.textContent = `${onTimeCount} On Time`;
+    if (transitTotalEl) transitTotalEl.textContent = `${transitTasks.length} Transport leg${transitTasks.length === 1 ? '' : 's'}`;
+
+    const delayTotalEl = document.getElementById('task-metric-delay-total');
+    const delayedCountEl = document.getElementById('task-metric-delayed-count');
+
+    let delayDisplayStr = `${totalDelayMins} mins`;
+    if (totalDelayMins >= 60) {
+        const hrs = Math.floor(totalDelayMins / 60);
+        const mins = totalDelayMins % 60;
+        delayDisplayStr = mins > 0 ? `${hrs}h ${mins}m` : `${hrs} hrs`;
+    }
+
+    if (delayTotalEl) delayTotalEl.textContent = delayDisplayStr;
+    if (delayedCountEl) delayedCountEl.textContent = `${delayedTasks.length} Delayed`;
+}
+
+/**
+ * Renders task cards list into DOM
+ */
+function renderTaskTrackerList(trip, tasks) {
+    const container = document.getElementById('task-tracker-container');
+    const emptyState = document.getElementById('empty-task-tracker');
+    if (!container) return;
+
+    let filtered = tasks;
+    
+    if (_activeTaskTrackerFilter === 'completed') {
+        filtered = filtered.filter(t => t.completed);
+    } else if (_activeTaskTrackerFilter === 'pending') {
+        filtered = filtered.filter(t => !t.completed);
+    } else if (_activeTaskTrackerFilter === 'transit') {
+        filtered = filtered.filter(t => t.category === 'transit' || t.source === 'ticket');
+    } else if (_activeTaskTrackerFilter === 'darshan') {
+        filtered = filtered.filter(t => t.category === 'darshan');
+    }
+
+    if (_activeTaskTrackerSearch) {
+        const q = _activeTaskTrackerSearch.toLowerCase();
+        filtered = filtered.filter(t => 
+            t.title.toLowerCase().includes(q) || 
+            (t.subtitle && t.subtitle.toLowerCase().includes(q)) || 
+            (t.location && t.location.toLowerCase().includes(q)) || 
+            (t.notes && t.notes.toLowerCase().includes(q))
+        );
+    }
+
+    if (filtered.length === 0) {
+        container.innerHTML = '';
+        emptyState?.classList.remove('d-none');
+        return;
+    }
+
+    emptyState?.classList.add('d-none');
+
+    const tripStartDate = trip.startDate ? new Date(trip.startDate) : null;
+
+    let html = '';
+
+    filtered.forEach(item => {
+        const isCompleted = item.completed;
+        const isTransit = item.category === 'transit' || item.source === 'ticket';
+        
+        let categoryIcon = 'fa-tasks';
+        let categoryBadgeBg = 'bg-secondary';
+        let categoryLabel = 'Task';
+
+        if (item.category === 'darshan') {
+            categoryIcon = 'fa-gopuram';
+            categoryBadgeBg = 'bg-warning text-dark';
+            categoryLabel = 'Darshan & Temple';
+        } else if (item.category === 'transit') {
+            categoryIcon = item.ticketType === 'flight' ? 'fa-plane' : (item.ticketType === 'bus' ? 'fa-bus' : 'fa-train');
+            categoryBadgeBg = 'bg-primary';
+            categoryLabel = 'Travel & Transit';
+        } else if (item.category === 'hotel') {
+            categoryIcon = 'fa-hotel';
+            categoryBadgeBg = 'bg-info text-dark';
+            categoryLabel = 'Hotel & Stay';
+        } else if (item.category === 'food') {
+            categoryIcon = 'fa-utensils';
+            categoryBadgeBg = 'bg-danger';
+            categoryLabel = 'Food & Dining';
+        }
+
+        let dayLabel = `Day ${item.day}`;
+        if (tripStartDate && !isNaN(tripStartDate.getTime())) {
+            const dDate = new Date(tripStartDate.getTime() + (item.day - 1) * 24 * 60 * 60 * 1000);
+            dayLabel = dDate.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' });
+        }
+
+        let transitStatusHtml = '';
+        if (isTransit) {
+            if (item.transitStatus === 'delayed' || (item.delayMinutes && item.delayMinutes > 0)) {
+                const delayMins = item.delayMinutes || 0;
+                let delayTxt = `${delayMins} mins late`;
+                if (delayMins >= 60) {
+                    const h = Math.floor(delayMins / 60);
+                    const m = delayMins % 60;
+                    delayTxt = m > 0 ? `${h}h ${m}m late` : `${h} hrs late`;
+                }
+                transitStatusHtml = `
+                    <span class="transit-status-pill delayed me-2">
+                        <i class="fas fa-exclamation-triangle me-1"></i>Delayed (${delayTxt})
+                    </span>
+                `;
+            } else if (item.transitStatus === 'departed') {
+                transitStatusHtml = `
+                    <span class="transit-status-pill departed me-2">
+                        <i class="fas fa-plane-departure me-1"></i>Departed / En Route
+                    </span>
+                `;
+            } else if (item.transitStatus === 'arrived') {
+                transitStatusHtml = `
+                    <span class="transit-status-pill arrived me-2">
+                        <i class="fas fa-check-circle me-1"></i>Arrived
+                    </span>
+                `;
+            } else {
+                transitStatusHtml = `
+                    <span class="transit-status-pill ontime me-2">
+                        <i class="fas fa-check-circle me-1"></i>On Time
+                    </span>
+                `;
+            }
+        }
+
+        let completedTimestampHtml = '';
+        if (isCompleted && item.completedAt) {
+            const compDate = new Date(item.completedAt);
+            const timeStr = !isNaN(compDate.getTime()) ? compDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '';
+            completedTimestampHtml = `
+                <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2 py-1 small">
+                    <i class="fas fa-check me-1"></i>Completed ${timeStr ? 'at ' + timeStr : ''}
+                </span>
+            `;
+        }
+
+        html += `
+            <div class="card task-tracker-card ${isCompleted ? 'is-completed' : ''} rounded-3 shadow-sm p-3 bg-white">
+                <div class="d-flex align-items-start gap-3">
+                    <button type="button" 
+                            class="task-checkbox-btn ${isCompleted ? 'checked' : ''} mt-1 flex-shrink-0"
+                            onclick="toggleTaskTrackerItemCompletion('${item.source}', '${item.id}', ${!isCompleted})"
+                            title="${isCompleted ? 'Mark as Pending' : 'Mark as Completed'}">
+                        <i class="fas fa-check"></i>
+                    </button>
+
+                    <div class="flex-grow-1 min-w-0">
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-1">
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <span class="badge ${categoryBadgeBg} rounded-pill px-2.5 py-1">
+                                    <i class="fas ${categoryIcon} me-1"></i>${categoryLabel}
+                                </span>
+                                <span class="badge bg-light text-dark border rounded-pill px-2.5 py-1 fw-normal">
+                                    <i class="fas fa-calendar-day me-1 text-muted"></i>${dayLabel}
+                                </span>
+                                ${item.time ? `<span class="small fw-bold text-primary"><i class="far fa-clock me-1"></i>${item.time}</span>` : ''}
+                            </div>
+                            <div class="d-flex align-items-center gap-1">
+                                ${transitStatusHtml}
+                                ${completedTimestampHtml}
+                                ${isTransit ? `
+                                    <button type="button" class="btn btn-xs btn-outline-warning rounded-pill px-2 ms-1" 
+                                            onclick="openUpdateDelayModal('${item.source}', '${item.id}')" title="Log Travel Delay / Status">
+                                        <i class="fas fa-edit me-1"></i>Delay / Status
+                                    </button>
+                                ` : ''}
+                                ${item.source === 'custom' ? `
+                                    <button type="button" class="btn btn-xs btn-outline-danger rounded-circle p-1 ms-1" 
+                                            onclick="deleteCustomTripTask('${item.taskId}')" title="Delete Custom Task">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+
+                        <h6 class="task-title-text fw-bold text-dark mb-1 fs-6">
+                            ${item.title}
+                        </h6>
+
+                        ${item.subtitle ? `<div class="small text-muted mb-1"><i class="fas fa-map-marker-alt me-1 text-danger"></i>${item.subtitle}</div>` : ''}
+                        
+                        ${item.delayReason ? `
+                            <div class="alert alert-warning py-1 px-2.5 my-1.5 small rounded-3 d-inline-block">
+                                <i class="fas fa-bullhorn me-1 text-dark"></i><strong>Delay Note:</strong> ${item.delayReason}
+                            </div>
+                        ` : ''}
+
+                        ${item.notes ? `<p class="small text-secondary mb-0 mt-1">${item.notes}</p>` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
+/**
+ * Toggles task item completion status and persists to Firebase & LocalStorage
+ */
+async function toggleTaskTrackerItemCompletion(source, itemId, newCompletedState) {
+    if (!currentTrip) return;
+
+    try {
+        const completedAtIso = newCompletedState ? new Date().toISOString() : null;
+
+        if (source === 'itinerary') {
+            const originalIndex = parseInt(itemId.replace('itinerary_', ''));
+            if (currentTrip.itinerary && currentTrip.itinerary[originalIndex]) {
+                currentTrip.itinerary[originalIndex].completed = newCompletedState;
+                currentTrip.itinerary[originalIndex].completedAt = completedAtIso;
+            }
+            await db.collection('trips').doc(currentTrip.id).update({
+                itinerary: currentTrip.itinerary,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        } else if (source === 'ticket') {
+            const ticketIdStr = itemId.replace('ticket_', '');
+            let ticketObj = null;
+            if (currentTrip.tickets && Array.isArray(currentTrip.tickets)) {
+                ticketObj = currentTrip.tickets.find(t => t.id === ticketIdStr || `ticket_${t.id}` === itemId);
+                if (ticketObj) {
+                    ticketObj.completed = newCompletedState;
+                    ticketObj.completedAt = completedAtIso;
+                }
+            }
+
+            if (ticketObj && currentTrip.itinerary && Array.isArray(currentTrip.itinerary)) {
+                const depLoc = (ticketObj.departurePlace || ticketObj.from || '').toLowerCase();
+                const arrLoc = (ticketObj.arrivalPlace || ticketObj.to || '').toLowerCase();
+                const temple = (ticketObj.templeName || '').toLowerCase();
+                
+                currentTrip.itinerary.forEach(act => {
+                    if (!act || !act.place) return;
+                    const pLower = act.place.toLowerCase();
+                    if ((depLoc && pLower.includes(depLoc)) || (arrLoc && pLower.includes(arrLoc)) || (temple && pLower.includes(temple))) {
+                        act.completed = newCompletedState;
+                        act.completedAt = completedAtIso;
+                    }
+                });
+            }
+
+            await db.collection('trips').doc(currentTrip.id).update({
+                tickets: currentTrip.tickets,
+                itinerary: currentTrip.itinerary || [],
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        } else if (source === 'custom') {
+            const taskIdStr = itemId.replace('custom_', '');
+            if (currentTrip.tasks && Array.isArray(currentTrip.tasks)) {
+                const taskObj = currentTrip.tasks.find(t => t.id === taskIdStr || `custom_${t.id}` === itemId);
+                if (taskObj) {
+                    taskObj.completed = newCompletedState;
+                    taskObj.completedAt = completedAtIso;
+                }
+            }
+            await db.collection('trips').doc(currentTrip.id).update({
+                tasks: currentTrip.tasks,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+
+        setCurrentTrip(currentTrip);
+
+        showToast(newCompletedState ? 'Task marked as Completed! ✔' : 'Task marked as Pending', 'success');
+
+        loadTaskTrackerTab(currentTrip);
+        if (typeof loadTripItinerary === 'function') loadTripItinerary(currentTrip);
+
+    } catch (e) {
+        console.error('Error toggling completion:', e);
+        showToast('Failed to update task status', 'danger');
+    }
+}
+
+/**
+ * Opens modal to configure transport delay and status
+ */
+function openUpdateDelayModal(source, itemId) {
+    const allTasks = getAggregatedTripTasks(currentTrip);
+    const item = allTasks.find(t => t.id === itemId);
+    if (!item) return;
+
+    document.getElementById('delay-item-source').value = source;
+    document.getElementById('delay-item-id').value = itemId;
+
+    document.getElementById('delay-item-title-display').textContent = item.title;
+    document.getElementById('delay-item-subtitle-display').textContent = item.subtitle || `Day ${item.day} ${item.time}`;
+
+    document.getElementById('delay-status-select').value = item.transitStatus || 'on_time';
+    document.getElementById('delay-minutes-input').value = item.delayMinutes || '';
+    document.getElementById('delay-reason-input').value = item.delayReason || '';
+
+    const modal = new bootstrap.Modal(document.getElementById('updateDelayModal'));
+    modal.show();
+}
+
+/**
+ * Saves delay status to Firestore & LocalStorage
+ */
+async function saveTransitDelayFromModal() {
+    if (!currentTrip) return;
+
+    const source = document.getElementById('delay-item-source').value;
+    const itemId = document.getElementById('delay-item-id').value;
+    const status = document.getElementById('delay-status-select').value;
+    const minutes = parseInt(document.getElementById('delay-minutes-input').value) || 0;
+    const reason = document.getElementById('delay-reason-input').value.trim();
+
+    try {
+        if (source === 'ticket') {
+            const ticketIdStr = itemId.replace('ticket_', '');
+            if (currentTrip.tickets && Array.isArray(currentTrip.tickets)) {
+                const t = currentTrip.tickets.find(tk => tk.id === ticketIdStr || `ticket_${tk.id}` === itemId);
+                if (t) {
+                    t.transitStatus = status;
+                    t.delayMinutes = minutes;
+                    t.delayReason = reason;
+                }
+            }
+            await db.collection('trips').doc(currentTrip.id).update({
+                tickets: currentTrip.tickets,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        } else if (source === 'itinerary') {
+            const idx = parseInt(itemId.replace('itinerary_', ''));
+            if (currentTrip.itinerary && currentTrip.itinerary[idx]) {
+                currentTrip.itinerary[idx].transitStatus = status;
+                currentTrip.itinerary[idx].delayMinutes = minutes;
+                currentTrip.itinerary[idx].delayReason = reason;
+            }
+            await db.collection('trips').doc(currentTrip.id).update({
+                itinerary: currentTrip.itinerary,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        } else if (source === 'custom') {
+            const taskIdStr = itemId.replace('custom_', '');
+            if (currentTrip.tasks && Array.isArray(currentTrip.tasks)) {
+                const taskObj = currentTrip.tasks.find(t => t.id === taskIdStr || `custom_${t.id}` === itemId);
+                if (taskObj) {
+                    taskObj.transitStatus = status;
+                    taskObj.delayMinutes = minutes;
+                    taskObj.delayReason = reason;
+                }
+            }
+            await db.collection('trips').doc(currentTrip.id).update({
+                tasks: currentTrip.tasks,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+
+        setCurrentTrip(currentTrip);
+
+        const modalEl = document.getElementById('updateDelayModal');
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        modal?.hide();
+
+        showToast('Transit delay & status updated!', 'success');
+
+        if (status === 'delayed' && window.travelNotifications) {
+            window.travelNotifications.addNotification({
+                title: `⚠️ Travel Delay Reported (${minutes} mins)`,
+                body: `Transit for ${currentTrip.name} is running ${minutes} mins late. Reason: ${reason || 'Traffic/Signal Delay'}`
+            });
+        }
+
+        loadTaskTrackerTab(currentTrip);
+
+    } catch (e) {
+        console.error('Error saving transit delay:', e);
+        showToast('Failed to update delay status', 'danger');
+    }
+}
+
+/**
+ * Saves a new custom trip task to trip.tasks array
+ */
+async function saveCustomTripTask() {
+    if (!currentTrip) return;
+
+    const title = document.getElementById('task-title-input').value.trim();
+    if (!title) {
+        showToast('Please enter a task title', 'warning');
+        return;
+    }
+
+    const category = document.getElementById('task-category-input').value;
+    const day = parseInt(document.getElementById('task-day-input').value) || 1;
+    const time = document.getElementById('task-time-input').value || '';
+    const location = document.getElementById('task-location-input').value.trim();
+    const notes = document.getElementById('task-notes-input').value.trim();
+
+    const newTask = {
+        id: 'task_' + Date.now(),
+        title: title,
+        category: category,
+        day: day,
+        time: time,
+        location: location,
+        notes: notes,
+        completed: false,
+        completedAt: null,
+        transitStatus: 'on_time',
+        delayMinutes: 0,
+        delayReason: '',
+        createdAt: new Date().toISOString()
+    };
+
+    try {
+        if (!currentTrip.tasks || !Array.isArray(currentTrip.tasks)) {
+            currentTrip.tasks = [];
+        }
+        currentTrip.tasks.push(newTask);
+
+        await db.collection('trips').doc(currentTrip.id).update({
+            tasks: currentTrip.tasks,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        setCurrentTrip(currentTrip);
+
+        document.getElementById('custom-task-form').reset();
+        const modalEl = document.getElementById('addCustomTaskModal');
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        modal?.hide();
+
+        showToast('Custom task added successfully! 📋', 'success');
+        loadTaskTrackerTab(currentTrip);
+
+    } catch (e) {
+        console.error('Error saving custom task:', e);
+        showToast('Failed to save task', 'danger');
+    }
+}
+
+/**
+ * Deletes a custom task from trip.tasks
+ */
+async function deleteCustomTripTask(taskId) {
+    if (!currentTrip || !currentTrip.tasks) return;
+    if (!confirm('Are you sure you want to delete this custom task?')) return;
+
+    try {
+        currentTrip.tasks = currentTrip.tasks.filter(t => t.id !== taskId);
+
+        await db.collection('trips').doc(currentTrip.id).update({
+            tasks: currentTrip.tasks,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        setCurrentTrip(currentTrip);
+
+        showToast('Task deleted', 'info');
+        loadTaskTrackerTab(currentTrip);
+    } catch (e) {
+        console.error('Error deleting task:', e);
+        showToast('Failed to delete task', 'danger');
+    }
+}
+
+/**
+ * Shares trip task completion status & delays on WhatsApp
+ */
+function shareTaskTrackerWhatsApp() {
+    if (!currentTrip) return;
+    const tasks = getAggregatedTripTasks(currentTrip);
+    if (tasks.length === 0) {
+        showToast('No tasks available to share', 'info');
+        return;
+    }
+
+    const completedCount = tasks.filter(t => t.completed).length;
+    const percent = Math.round((completedCount / tasks.length) * 100);
+
+    let text = `📋 *Trip Progress & Status Report: ${currentTrip.name}*\n`;
+    text += `Progress: ${completedCount}/${tasks.length} Completed (${percent}%)\n\n`;
+
+    tasks.forEach(t => {
+        const checkMark = t.completed ? '✅' : '⏳';
+        let statusStr = '';
+        if (t.transitStatus === 'delayed' || (t.delayMinutes && t.delayMinutes > 0)) {
+            statusStr = ` (⚠️ Delayed by ${t.delayMinutes} mins)`;
+        }
+        text += `${checkMark} *Day ${t.day}*: ${t.title}${statusStr}\n`;
+    });
+
+    text += `\nShared via TravelMate ✈️`;
+
+    const encodedText = encodeURIComponent(text);
+    window.open(`https://wa.me/?text=${encodedText}`, '_blank');
+}
+
 // Expose functions globally for onclick calls
 window.showEditTicketModal = showEditTicketModal;
 window.deleteTicket = deleteTicket;
@@ -6241,3 +7041,11 @@ window.shareItineraryText = shareItineraryText;
 window.applyQuickPreset = applyQuickPreset;
 window.importTicketsToItinerary = importTicketsToItinerary;
 window.duplicateActivity = duplicateActivity;
+window.loadTaskTrackerTab = loadTaskTrackerTab;
+window.toggleTaskTrackerItemCompletion = toggleTaskTrackerItemCompletion;
+window.openUpdateDelayModal = openUpdateDelayModal;
+window.saveTransitDelayFromModal = saveTransitDelayFromModal;
+window.saveCustomTripTask = saveCustomTripTask;
+window.deleteCustomTripTask = deleteCustomTripTask;
+window.shareTaskTrackerWhatsApp = shareTaskTrackerWhatsApp;
+
