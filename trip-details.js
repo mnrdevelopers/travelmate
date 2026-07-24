@@ -541,6 +541,11 @@ async function loadTripDetails() {
             addLeaveTripButton();
         }
         
+        // Handle URL tab deep-linking (e.g. ?tab=tickets&ticketId=...)
+        if (typeof handleUrlTabDeepLink === 'function') {
+            handleUrlTabDeepLink();
+        }
+        
     } catch (error) {
         console.error('Error loading trip details:', error);
         showToast('Error loading trip details', 'danger');
@@ -5473,6 +5478,10 @@ function renderTicketsList(trip) {
     sortedTickets.forEach(ticket => {
         const card = document.createElement('div');
         card.className = 'col-md-6';
+        if (ticket.id) {
+            card.setAttribute('data-ticket-id', ticket.id);
+            card.id = `ticket-${ticket.id}`;
+        }
         
         const isDarshan = ticket.type === 'darshan';
         const isExpensed = ticket.expenseIndex !== undefined;
@@ -7048,4 +7057,48 @@ window.saveTransitDelayFromModal = saveTransitDelayFromModal;
 window.saveCustomTripTask = saveCustomTripTask;
 window.deleteCustomTripTask = deleteCustomTripTask;
 window.shareTaskTrackerWhatsApp = shareTaskTrackerWhatsApp;
+
+/* ==========================================================================
+   URL DEEP-LINKING HANDLER (Tabs, Tickets, Expenses, Itinerary)
+   ========================================================================== */
+function handleUrlTabDeepLink() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tab = urlParams.get('tab');
+    const ticketId = urlParams.get('ticketId');
+
+    if (tab) {
+        let tabEl = null;
+        if (tab === 'tickets') tabEl = document.querySelector('a[href="#tickets-tab"]');
+        else if (tab === 'expenses') tabEl = document.querySelector('a[href="#expenses-tab"]');
+        else if (tab === 'itinerary') tabEl = document.querySelector('a[href="#itinerary-tab"]');
+        else if (tab === 'tasks') tabEl = document.querySelector('a[href="#task-tracker-tab"]');
+
+        if (tabEl) {
+            try {
+                const bsTab = new bootstrap.Tab(tabEl);
+                bsTab.show();
+            } catch (e) {
+                tabEl.click();
+            }
+        }
+    }
+
+    if (ticketId && (tab === 'tickets' || !tab)) {
+        setTimeout(() => {
+            const ticketCard = document.querySelector(`[data-ticket-id="${ticketId}"]`) || document.getElementById(`ticket-${ticketId}`);
+            if (ticketCard) {
+                ticketCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                const innerCard = ticketCard.querySelector('.card') || ticketCard;
+                innerCard.style.transition = 'all 0.5s ease';
+                innerCard.style.boxShadow = '0 0 25px rgba(230, 81, 0, 0.7)';
+                innerCard.style.borderColor = 'var(--primary-color)';
+                setTimeout(() => {
+                    innerCard.style.boxShadow = '';
+                }, 4000);
+            }
+        }, 600);
+    }
+}
+window.handleUrlTabDeepLink = handleUrlTabDeepLink;
+
 

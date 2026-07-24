@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', function () {
         checkAuthState();
         setupTheme();
         initializeApp();
+        initGlobalSearch();
     } else {
         // On non-dashboard pages (like trip-details.html), only setup Theme & AI Chatbot
         setupTheme();
@@ -2777,10 +2778,12 @@ function updateNavigationBasedOnAuth(isLoggedIn) {
         // User is logged in
         const avatarUrl = localStorage.getItem('user_avatar_' + currentUser.uid) || currentUser.photoURL;
         navAuthSection.innerHTML = `
-            <img id="user-avatar" class="user-avatar me-2" src="${getSafeAvatarUrl(avatarUrl, currentUser.displayName || 'User')}" alt="User Avatar">
-            <span class="me-3" id="user-name">${currentUser.displayName || 'User'}</span>
-            <button class="btn btn-outline-primary btn-sm" id="logout-btn">
-                <i class="fas fa-sign-out-alt me-1"></i>Logout
+            <div class="d-flex align-items-center me-2 pe-1 cursor-pointer" id="nav-profile" title="View Profile" style="cursor: pointer;">
+                <img id="user-avatar" class="user-avatar me-1.5 shadow-2xs" src="${getSafeAvatarUrl(avatarUrl, currentUser.displayName || 'User')}" alt="User Avatar" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:2px solid var(--primary-color);">
+                <span class="fw-semibold text-dark small d-none d-md-inline me-1" id="user-name">${currentUser.displayName || 'User'}</span>
+            </div>
+            <button class="btn btn-outline-danger btn-sm rounded-pill px-2.5 py-1" id="logout-btn" title="Logout">
+                <i class="fas fa-sign-out-alt"></i><span class="d-none d-md-inline ms-1">Logout</span>
             </button>
         `;
         
@@ -2789,11 +2792,15 @@ function updateNavigationBasedOnAuth(isLoggedIn) {
             setupAvatarFallback(userAvatar, currentUser.displayName || 'User');
         }
         
-        // Re-attach logout event listener
+        // Re-attach event listeners
         setTimeout(() => {
             const logoutBtn = document.getElementById('logout-btn');
             if (logoutBtn) {
                 logoutBtn.addEventListener('click', handleLogout);
+            }
+            const navProfile = document.getElementById('nav-profile');
+            if (navProfile) {
+                navProfile.addEventListener('click', showProfileModal);
             }
         }, 100);
         
@@ -4316,6 +4323,638 @@ function initAIChatbot() {
     });
 }
 
-// Initialize chatbot when auth state confirms the user is logged in
-// (called inside the onAuthStateChanged listener)
+/* ==========================================================================
+   GLOBAL SEARCH ENGINE (TICKETS, TRIPS, EXPENSES, ITINERARY, DESTINATIONS & TOOLS)
+   ========================================================================== */
+
+let _currentSearchFilter = 'all';
+let _activeSearchIndex = -1;
+let _currentSearchResults = [];
+
+function initGlobalSearch() {
+    console.log('Initializing Global Search Engine...');
+    const overlay = document.getElementById('global-search-overlay');
+    const backdrop = document.getElementById('global-search-backdrop');
+    const closeBtn = document.getElementById('close-search-overlay-btn');
+    const overlayInput = document.getElementById('overlay-search-input');
+    const heroInput = document.getElementById('hero-global-search-input');
+    const heroBtn = document.getElementById('hero-global-search-btn');
+    const categoryTabs = document.getElementById('search-category-tabs');
+
+    if (!overlay || !overlayInput) {
+        console.warn('Global Search DOM elements missing.');
+        return;
+    }
+
+    const allSearchInputs = [overlayInput, heroInput].filter(Boolean);
+
+    // Live typing & focus handler across Hero & Overlay search inputs
+    allSearchInputs.forEach(inputEl => {
+        inputEl.addEventListener('input', (e) => {
+            const query = e.target.value;
+            // Sync typed query to the other input field
+            allSearchInputs.forEach(el => {
+                if (el !== e.target) el.value = query;
+            });
+            if (overlay.style.display === 'none' || !overlay.style.display) {
+                overlay.style.display = 'flex';
+            }
+            performGlobalSearch(query);
+        });
+
+        inputEl.addEventListener('focus', (e) => {
+            if (e.target !== overlayInput && (overlay.style.display === 'none' || !overlay.style.display)) {
+                openGlobalSearchOverlay(e.target.value || '');
+            }
+        });
+    });
+
+    if (heroBtn) {
+        heroBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const val = heroInput ? heroInput.value.trim() : '';
+            performGlobalSearch(val);
+            let filtered = _currentSearchResults;
+            if (_currentSearchFilter !== 'all') {
+                filtered = _currentSearchResults.filter(r => r.category === _currentSearchFilter);
+            }
+            if (filtered.length > 0) {
+                handleSearchResultClick(filtered[0]);
+            } else {
+                openGlobalSearchOverlay(val);
+            }
+        });
+    }
+
+    // Close overlay handlers
+    if (backdrop) backdrop.addEventListener('click', closeGlobalSearchOverlay);
+    if (closeBtn) closeBtn.addEventListener('click', closeGlobalSearchOverlay);
+
+    // Category Filter Tabs
+    if (categoryTabs) {
+        categoryTabs.addEventListener('click', (e) => {
+            const btn = e.target.closest('button[data-search-filter]');
+            if (!btn) return;
+            categoryTabs.querySelectorAll('button').forEach(b => {
+                b.classList.remove('btn-primary', 'active', 'shadow-2xs');
+                b.classList.add('btn-outline-secondary');
+                const badge = b.querySelector('.badge');
+                if (badge) {
+                    badge.classList.remove('bg-white', 'text-primary');
+                    badge.classList.add('bg-secondary-subtle', 'text-dark');
+                }
+            });
+            btn.classList.remove('btn-outline-secondary');
+            btn.classList.add('btn-primary', 'active', 'shadow-2xs');
+            const activeBadge = btn.querySelector('.badge');
+            if (activeBadge) {
+                activeBadge.classList.remove('bg-secondary-subtle', 'text-dark');
+                activeBadge.classList.add('bg-white', 'text-primary');
+            }
+            _currentSearchFilter = btn.getAttribute('data-search-filter') || 'all';
+            renderGlobalSearchResults(overlayInput.value);
+        });
+    }
+
+    // Hotkey Listener: Ctrl+K / Cmd+K or / key
+    document.addEventListener('keydown', (e) => {
+        const isEditingText = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName) 
+                              && !allSearchInputs.includes(document.activeElement);
+
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+            e.preventDefault();
+            if (overlay.style.display === 'none' || !overlay.style.display) {
+                openGlobalSearchOverlay('');
+            } else {
+                closeGlobalSearchOverlay();
+            }
+        } else if (e.key === 'Escape' && overlay.style.display !== 'none') {
+            closeGlobalSearchOverlay();
+        } else if (!isEditingText && e.key === '/' && (overlay.style.display === 'none' || !overlay.style.display)) {
+            e.preventDefault();
+            openGlobalSearchOverlay('');
+        } else if (overlay.style.display !== 'none' && ['ArrowDown', 'ArrowUp', 'Enter'].includes(e.key)) {
+            handleSearchKeyboardNav(e);
+        }
+    });
+}
+
+function openGlobalSearchOverlay(initialQuery = '') {
+    const overlay = document.getElementById('global-search-overlay');
+    const overlayInput = document.getElementById('overlay-search-input');
+    if (!overlay || !overlayInput) return;
+
+    overlay.style.display = 'flex';
+    overlayInput.value = initialQuery;
+
+    setTimeout(() => {
+        overlayInput.focus();
+    }, 50);
+
+    performGlobalSearch(initialQuery);
+}
+
+function closeGlobalSearchOverlay() {
+    const overlay = document.getElementById('global-search-overlay');
+    if (!overlay) return;
+    overlay.style.display = 'none';
+}
+
+function performGlobalSearch(query) {
+    try {
+        const q = (query || '').trim().toLowerCase();
+        const results = [];
+        const trips = window.userTrips || userTrips || [];
+
+        // 1. TICKETS & DARSHAN PASSES
+        trips.forEach(trip => {
+            const tripTickets = trip.tickets || [];
+            tripTickets.forEach(ticket => {
+                const textToSearch = [
+                    ticket.title || '',
+                    ticket.type || '',
+                    ticket.pnr || '',
+                    ticket.bookingNo || '',
+                    ticket.ticketNo || '',
+                    ticket.passNo || '',
+                    ticket.holderName || '',
+                    ticket.passengerName || '',
+                    ticket.origin || '',
+                    ticket.destination || '',
+                    ticket.venue || '',
+                    ticket.seatNo || '',
+                    ticket.notes || '',
+                    ticket.price ? '₹' + ticket.price : '',
+                    trip.name || '',
+                    trip.destination || ''
+                ].join(' ').toLowerCase();
+
+                if (!q || textToSearch.includes(q)) {
+                    let iconClass = 'fas fa-ticket-alt';
+                    let iconBg = 'bg-warning-subtle text-warning-emphasis';
+                    const type = (ticket.type || 'ticket').toLowerCase();
+
+                    if (type === 'darshan') { iconClass = 'fas fa-gopuram'; iconBg = 'bg-danger-subtle text-danger'; }
+                    else if (type === 'flight') { iconClass = 'fas fa-plane'; iconBg = 'bg-primary-subtle text-primary'; }
+                    else if (type === 'train') { iconClass = 'fas fa-train'; iconBg = 'bg-success-subtle text-success'; }
+                    else if (type === 'bus') { iconClass = 'fas fa-bus'; iconBg = 'bg-info-subtle text-info'; }
+                    else if (type === 'event' || type === 'movie') { iconClass = 'fas fa-film'; iconBg = 'bg-purple-subtle text-purple'; }
+                    else if (type === 'hotel') { iconClass = 'fas fa-hotel'; iconBg = 'bg-warning-subtle text-warning'; }
+
+                    const pnrCode = ticket.pnr || ticket.bookingNo || ticket.ticketNo || ticket.passNo || '';
+
+                    results.push({
+                        category: 'tickets',
+                        title: ticket.title || `${ticket.type ? ticket.type.toUpperCase() : 'TICKET'} PASS`,
+                        subtitle: `Trip: ${trip.name || trip.destination}${pnrCode ? ' • PNR: ' + pnrCode : ''}${ticket.date ? ' • Date: ' + ticket.date : ''}`,
+                        badge: ticket.type ? ticket.type.toUpperCase() : 'TICKET',
+                        badgeClass: 'bg-warning text-dark',
+                        iconClass: iconClass,
+                        iconBg: iconBg,
+                        data: {
+                            tripId: trip.id,
+                            ticketId: ticket.id,
+                            action: 'open_ticket',
+                            trip: trip,
+                            ticket: ticket
+                        }
+                    });
+                }
+            });
+        });
+
+        // 2. TRIPS
+        trips.forEach(trip => {
+            const textToSearch = [
+                trip.name || '',
+                trip.destination || '',
+                trip.startLocation || '',
+                trip.code || '',
+                trip.transportMode || '',
+                trip.notes || '',
+                trip.status || '',
+                trip.budget ? '₹' + trip.budget : ''
+            ].join(' ').toLowerCase();
+
+            if (!q || textToSearch.includes(q)) {
+                const startDate = trip.startDate ? new Date(trip.startDate).toLocaleDateString() : '';
+                const endDate = trip.endDate ? new Date(trip.endDate).toLocaleDateString() : '';
+
+                results.push({
+                    category: 'trips',
+                    title: trip.name || trip.destination,
+                    subtitle: `Destination: ${trip.destination || 'N/A'} • ${startDate ? startDate + ' - ' + endDate : 'Code: ' + (trip.code || '-')}`,
+                    badge: trip.transportMode ? trip.transportMode.toUpperCase() : 'TRIP',
+                    badgeClass: 'bg-primary text-white',
+                    iconClass: 'fas fa-suitcase-rolling',
+                    iconBg: 'bg-primary-subtle text-primary',
+                    data: {
+                        tripId: trip.id,
+                        action: 'open_trip',
+                        trip: trip
+                    }
+                });
+            }
+        });
+
+        // 3. EXPENSES
+        trips.forEach(trip => {
+            const expenses = trip.expenses || [];
+            expenses.forEach((expense, index) => {
+                const textToSearch = [
+                    expense.title || expense.name || '',
+                    expense.category || '',
+                    expense.paidBy || '',
+                    expense.amount ? '₹' + expense.amount : '',
+                    expense.notes || '',
+                    trip.name || ''
+                ].join(' ').toLowerCase();
+
+                if (!q || textToSearch.includes(q)) {
+                    results.push({
+                        category: 'expenses',
+                        title: `${expense.title || expense.name || 'Expense'} - ₹${expense.amount || 0}`,
+                        subtitle: `Trip: ${trip.name || trip.destination} • Category: ${expense.category || 'General'} • Paid by: ${expense.paidBy || 'Member'}`,
+                        badge: `₹${expense.amount || 0}`,
+                        badgeClass: 'bg-success text-white',
+                        iconClass: 'fas fa-receipt',
+                        iconBg: 'bg-success-subtle text-success',
+                        data: {
+                            tripId: trip.id,
+                            expenseId: expense.id || index,
+                            action: 'open_expense',
+                            trip: trip
+                        }
+                    });
+                }
+            });
+        });
+
+        // 4. ITINERARY & ACTIVITIES
+        trips.forEach(trip => {
+            const itinerary = trip.itinerary || [];
+            itinerary.forEach((act, index) => {
+                const textToSearch = [
+                    act.title || act.activity || '',
+                    act.place || act.location || '',
+                    act.notes || '',
+                    act.date || '',
+                    act.time || '',
+                    trip.name || ''
+                ].join(' ').toLowerCase();
+
+                if (!q || textToSearch.includes(q)) {
+                    results.push({
+                        category: 'itinerary',
+                        title: act.title || act.activity || act.place || 'Activity',
+                        subtitle: `Trip: ${trip.name || trip.destination}${act.place ? ' • Location: ' + act.place : ''}${act.time ? ' • Time: ' + act.time : ''}`,
+                        badge: 'ACTIVITY',
+                        badgeClass: 'bg-danger text-white',
+                        iconClass: 'fas fa-map-pin',
+                        iconBg: 'bg-danger-subtle text-danger',
+                        data: {
+                            tripId: trip.id,
+                            activityId: act.id || index,
+                            action: 'open_itinerary',
+                            trip: trip
+                        }
+                    });
+                }
+            });
+        });
+
+        // 5. DESTINATIONS & ATTRACTIONS (DESTINATION_KNOWLEDGE_DB)
+        if (typeof DESTINATION_KNOWLEDGE_DB !== 'undefined' && DESTINATION_KNOWLEDGE_DB) {
+            Object.keys(DESTINATION_KNOWLEDGE_DB).forEach(key => {
+                const dest = DESTINATION_KNOWLEDGE_DB[key];
+                if (!dest) return;
+                const attractions = Array.isArray(dest.attractions) ? dest.attractions : [];
+                const attText = attractions.map(a => `${a.name || ''} ${a.category || ''} ${a.highlights || ''}`).join(' ');
+                const textToSearch = `${dest.city || ''} ${dest.state || ''} ${dest.country || ''} ${dest.description || ''} ${attText}`.toLowerCase();
+
+                if (q && textToSearch.includes(q)) {
+                    results.push({
+                        category: 'destinations',
+                        title: `${dest.city || 'City'}, ${dest.state || ''}`,
+                        subtitle: dest.description || `Best season: ${dest.bestSeason || 'All year'}`,
+                        badge: 'DESTINATION',
+                        badgeClass: 'bg-info text-white',
+                        iconClass: 'fas fa-city',
+                        iconBg: 'bg-info-subtle text-info',
+                        data: {
+                            destinationName: dest.city,
+                            action: 'create_trip_dest',
+                            dest: dest
+                        }
+                    });
+
+                    attractions.forEach(att => {
+                        if (att && `${att.name || ''} ${att.category || ''} ${att.highlights || ''}`.toLowerCase().includes(q)) {
+                            results.push({
+                                category: 'destinations',
+                                title: `${att.name} (${dest.city})`,
+                                subtitle: att.highlights || att.category || 'Popular attraction',
+                                badge: att.category ? att.category.toUpperCase() : 'ATTRACTION',
+                                badgeClass: 'bg-secondary text-white',
+                                iconClass: 'fas fa-landmark',
+                                iconBg: 'bg-secondary-subtle text-secondary',
+                                data: {
+                                    destinationName: dest.city,
+                                    attractionName: att.name,
+                                    action: 'create_trip_dest',
+                                    dest: dest
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+        }
+
+        // 6. QUICK TOOLS & APP ACTIONS
+        const tools = [
+            {
+                name: 'Car Expense & Fuel Calculator',
+                keywords: 'car fuel expense calculator vehicle distance petrol diesel mileage cost',
+                subtitle: 'Calculate trip fuel cost, mileage & per-head expense splits',
+                badge: 'TOOL',
+                badgeClass: 'bg-dark text-white',
+                iconClass: 'fas fa-calculator',
+                iconBg: 'bg-dark-subtle text-dark',
+                url: 'car-calculations.html'
+            },
+            {
+                name: 'Create New Trip',
+                keywords: 'create new trip plan journey add route budget stops',
+                subtitle: 'Start planning a new trip with custom itinerary and budget',
+                badge: 'ACTION',
+                badgeClass: 'bg-primary text-white',
+                iconClass: 'fas fa-plus-circle',
+                iconBg: 'bg-primary-subtle text-primary',
+                action: 'modal_create_trip'
+            },
+            {
+                name: 'Join Trip with Share Code',
+                keywords: 'join trip code share invite friend group collaborate',
+                subtitle: 'Enter a 6-digit code to join a friend\'s travel plan',
+                badge: 'ACTION',
+                badgeClass: 'bg-info text-white',
+                iconClass: 'fas fa-user-plus',
+                iconBg: 'bg-info-subtle text-info',
+                action: 'modal_join_trip'
+            },
+            {
+                name: 'AI Travel Companion Chatbot',
+                keywords: 'ai chatbot assistant companion route optimization tips sightseeing',
+                subtitle: 'Ask AI for route stop optimization, mileage tips & sightseeing',
+                badge: 'AI FEATURE',
+                badgeClass: 'bg-success text-white',
+                iconClass: 'fas fa-robot',
+                iconBg: 'bg-success-subtle text-success',
+                action: 'toggle_ai_chat'
+            },
+            {
+                name: 'Eco Carbon Tracker',
+                keywords: 'eco carbon footprint green co2 emissions train ev bus savings',
+                subtitle: 'View environmental impact and CO2 savings for your journeys',
+                badge: 'ECO',
+                badgeClass: 'bg-success text-white',
+                iconClass: 'fas fa-leaf',
+                iconBg: 'bg-success-subtle text-success',
+                action: 'scroll_to_eco'
+            }
+        ];
+
+        tools.forEach(tool => {
+            if (!q || tool.name.toLowerCase().includes(q) || tool.keywords.includes(q)) {
+                results.push({
+                    category: 'tools',
+                    title: tool.name,
+                    subtitle: tool.subtitle,
+                    badge: tool.badge,
+                    badgeClass: tool.badgeClass,
+                    iconClass: tool.iconClass,
+                    iconBg: tool.iconBg,
+                    data: {
+                        action: tool.action || 'open_url',
+                        url: tool.url
+                    }
+                });
+            }
+        });
+
+        _currentSearchResults = results;
+        _activeSearchIndex = -1;
+
+        updateSearchCategoryCounters(results);
+        renderGlobalSearchResults(q);
+
+    } catch (err) {
+        console.error('Error during performGlobalSearch:', err);
+    }
+}
+
+function updateSearchCategoryCounters(results) {
+    const counts = {
+        all: results.length,
+        tickets: results.filter(r => r.category === 'tickets').length,
+        trips: results.filter(r => r.category === 'trips').length,
+        expenses: results.filter(r => r.category === 'expenses').length,
+        itinerary: results.filter(r => r.category === 'itinerary').length,
+        destinations: results.filter(r => r.category === 'destinations').length,
+        tools: results.filter(r => r.category === 'tools').length
+    };
+
+    Object.keys(counts).forEach(cat => {
+        const badge = document.getElementById(`cnt-${cat}`);
+        if (badge) badge.textContent = counts[cat];
+    });
+}
+
+function renderGlobalSearchResults(highlightQuery = '') {
+    const container = document.getElementById('global-search-results-list');
+    const summary = document.getElementById('search-results-summary');
+    if (!container) return;
+
+    let filtered = _currentSearchResults;
+    if (_currentSearchFilter !== 'all') {
+        filtered = _currentSearchResults.filter(r => r.category === _currentSearchFilter);
+    }
+
+    if (summary) {
+        summary.textContent = `${filtered.length} result${filtered.length === 1 ? '' : 's'} found`;
+    }
+
+    if (filtered.length === 0) {
+        container.innerHTML = `
+            <div class="search-empty-state">
+                <i class="fas fa-search-minus fa-3x mb-3 text-muted"></i>
+                <h6 class="fw-bold">No matching results found</h6>
+                <p class="text-muted small mb-0">Try searching for ticket PNRs, trip names, expenses like "Fuel", or cities like "Hyderabad"</p>
+            </div>
+        `;
+        return;
+    }
+
+    const highlightText = (text, q) => {
+        if (!q || !text) return text || '';
+        const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`(${escaped})`, 'gi');
+        return text.replace(regex, '<span class="search-highlight">$1</span>');
+    };
+
+    let html = '';
+    const categories = ['tickets', 'trips', 'expenses', 'itinerary', 'destinations', 'tools'];
+    const categoryLabels = {
+        tickets: '🎟️ Tickets & Darshan Passes',
+        trips: '✈️ Trips',
+        expenses: '💰 Expenses',
+        itinerary: '📍 Itinerary & Activities',
+        destinations: '🌍 Popular Destinations & Places',
+        tools: '⚡ Quick Tools & Features'
+    };
+
+    categories.forEach(cat => {
+        const catItems = filtered.filter(item => item.category === cat);
+        if (catItems.length > 0) {
+            if (_currentSearchFilter === 'all') {
+                html += `<div class="search-result-group-header">${categoryLabels[cat]} (${catItems.length})</div>`;
+            }
+
+            catItems.forEach(item => {
+                const itemIdx = filtered.indexOf(item);
+                const isSelected = itemIdx === _activeSearchIndex;
+                html += `
+                    <div class="search-result-item ${isSelected ? 'selected' : ''}" data-result-index="${itemIdx}">
+                        <div class="d-flex align-items-center gap-3 overflow-hidden">
+                            <div class="search-result-icon ${item.iconBg}">
+                                <i class="${item.iconClass}"></i>
+                            </div>
+                            <div class="overflow-hidden">
+                                <div class="fw-bold text-dark text-truncate" style="font-size: 0.95rem;">
+                                    ${highlightText(item.title, highlightQuery)}
+                                </div>
+                                <div class="text-muted small text-truncate" style="font-size: 0.8rem;">
+                                    ${highlightText(item.subtitle, highlightQuery)}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="ms-2 flex-shrink-0">
+                            <span class="badge ${item.badgeClass} rounded-pill px-2.5 py-1 small">${item.badge}</span>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+    });
+
+    container.innerHTML = html;
+
+    // Attach click and pointer listeners to result cards
+    container.querySelectorAll('.search-result-item').forEach(el => {
+        const selectHandler = (e) => {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            const idx = parseInt(el.getAttribute('data-result-index'), 10);
+            if (!isNaN(idx) && filtered[idx]) {
+                handleSearchResultClick(filtered[idx]);
+            }
+        };
+        el.addEventListener('click', selectHandler);
+        el.addEventListener('mousedown', selectHandler);
+    });
+}
+
+function handleSearchKeyboardNav(e) {
+    let filtered = _currentSearchResults;
+    if (_currentSearchFilter !== 'all') {
+        filtered = _currentSearchResults.filter(r => r.category === _currentSearchFilter);
+    }
+    if (filtered.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        _activeSearchIndex = (_activeSearchIndex + 1) % filtered.length;
+        renderGlobalSearchResults(document.getElementById('overlay-search-input')?.value || '');
+        scrollToActiveSearchResult();
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        _activeSearchIndex = (_activeSearchIndex - 1 + filtered.length) % filtered.length;
+        renderGlobalSearchResults(document.getElementById('overlay-search-input')?.value || '');
+        scrollToActiveSearchResult();
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (_activeSearchIndex >= 0 && filtered[_activeSearchIndex]) {
+            handleSearchResultClick(filtered[_activeSearchIndex]);
+        } else if (filtered.length > 0) {
+            handleSearchResultClick(filtered[0]);
+        }
+    }
+}
+
+function scrollToActiveSearchResult() {
+    const container = document.getElementById('global-search-results-list');
+    const selected = container?.querySelector('.search-result-item.selected');
+    if (selected && container) {
+        selected.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+}
+
+function handleSearchResultClick(result) {
+    if (!result || !result.data) return;
+    const data = result.data;
+    closeGlobalSearchOverlay();
+
+    if (data.action === 'open_ticket') {
+        if (data.trip && typeof setCurrentTrip === 'function') {
+            setCurrentTrip(data.trip);
+        }
+        window.location.href = `trip-details.html?id=${data.tripId}&tab=tickets&ticketId=${data.ticketId}`;
+    } else if (data.action === 'open_trip') {
+        if (data.trip && typeof setCurrentTrip === 'function') {
+            setCurrentTrip(data.trip);
+        }
+        window.location.href = `trip-details.html?id=${data.tripId}`;
+    } else if (data.action === 'open_expense') {
+        if (data.trip && typeof setCurrentTrip === 'function') {
+            setCurrentTrip(data.trip);
+        }
+        window.location.href = `trip-details.html?id=${data.tripId}&tab=expenses&expenseId=${data.expenseId}`;
+    } else if (data.action === 'open_itinerary') {
+        if (data.trip && typeof setCurrentTrip === 'function') {
+            setCurrentTrip(data.trip);
+        }
+        window.location.href = `trip-details.html?id=${data.tripId}&tab=itinerary`;
+    } else if (data.action === 'create_trip_dest') {
+        if (typeof showCreateTripModal === 'function') {
+            showCreateTripModal();
+            setTimeout(() => {
+                const tripNameInput = document.getElementById('trip-name');
+                if (tripNameInput && data.destinationName) {
+                    tripNameInput.value = `Trip to ${data.destinationName}`;
+                }
+            }, 300);
+        }
+    } else if (data.action === 'open_url' && data.url) {
+        window.location.href = data.url;
+    } else if (data.action === 'modal_create_trip') {
+        if (typeof showCreateTripModal === 'function') showCreateTripModal();
+    } else if (data.action === 'modal_join_trip') {
+        if (typeof showJoinTripModal === 'function') showJoinTripModal();
+    } else if (data.action === 'toggle_ai_chat') {
+        const toggleBtn = document.getElementById('ai-chat-toggle');
+        const container = document.getElementById('ai-chat-container');
+        if (container && container.style.display !== 'flex') {
+            if (toggleBtn) toggleBtn.click();
+        }
+    } else if (data.action === 'scroll_to_eco') {
+        const ecoCard = document.getElementById('dashboard-eco-card');
+        if (ecoCard) {
+            ecoCard.scrollIntoView({ behavior: 'smooth' });
+        }
+    }
+}
+
 

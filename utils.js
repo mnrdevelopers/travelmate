@@ -71,8 +71,17 @@ function setCurrentTrip(trip) {
 }
 
 function getCurrentTrip() {
-    const trip = sessionStorage.getItem('currentTrip');
-    return trip ? JSON.parse(trip) : null;
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlTripId = urlParams.get('id');
+    const storedTrip = sessionStorage.getItem('currentTrip');
+    let trip = storedTrip ? JSON.parse(storedTrip) : null;
+    
+    if (urlTripId) {
+        if (!trip || trip.id !== urlTripId) {
+            trip = { id: urlTripId, name: 'Loading...' };
+        }
+    }
+    return trip;
 }
 
 function clearCurrentTrip() {

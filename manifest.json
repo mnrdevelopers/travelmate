@@ -1,6 +1,7 @@
 {
   "name": "TravelMate - AI Travel Planner",
   "short_name": "TravelMate",
+  "version": "2.5.0",
   "description": "Plan and manage your trips, expenses, itineraries, and routes with AI.",
   "id": "travelmate-pwa",
   "start_url": "./dashboard.html",
