@@ -5183,6 +5183,18 @@ async function showEditTicketModal(ticketId) {
     modal.show();
 }
 
+function removeUndefinedFields(obj) {
+    if (obj === null || typeof obj !== 'object') return obj;
+    if (Array.isArray(obj)) return obj.map(removeUndefinedFields);
+    const cleaned = {};
+    for (const key of Object.keys(obj)) {
+        if (obj[key] !== undefined) {
+            cleaned[key] = removeUndefinedFields(obj[key]);
+        }
+    }
+    return cleaned;
+}
+
 async function saveTicket() {
     const ticketId = document.getElementById('edit-ticket-id').value;
     const type = document.getElementById('ticket-type').value;
@@ -5360,7 +5372,11 @@ async function saveTicket() {
             }
         }
         
-        ticketObj.expenseIndex = newExpenseIndex;
+        if (newExpenseIndex !== undefined) {
+            ticketObj.expenseIndex = newExpenseIndex;
+        } else {
+            delete ticketObj.expenseIndex;
+        }
         
         if (ticketId) {
             const idx = tickets.findIndex(t => t.id === ticketId);
@@ -5371,14 +5387,17 @@ async function saveTicket() {
             tickets.push(ticketObj);
         }
         
+        const cleanedTickets = removeUndefinedFields(tickets);
+        const cleanedExpenses = removeUndefinedFields(expenses);
+        
         await db.collection('trips').doc(currentTrip.id).update({
-            tickets,
-            expenses,
+            tickets: cleanedTickets,
+            expenses: cleanedExpenses,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         
-        currentTrip.tickets = tickets;
-        currentTrip.expenses = expenses;
+        currentTrip.tickets = cleanedTickets;
+        currentTrip.expenses = cleanedExpenses;
         setCurrentTrip(currentTrip);
         
         const modal = bootstrap.Modal.getInstance(document.getElementById('addTicketModal'));
@@ -5424,14 +5443,17 @@ async function deleteTicket(ticketId) {
         
         tickets.splice(idx, 1);
         
+        const cleanedTickets = removeUndefinedFields(tickets);
+        const cleanedExpenses = removeUndefinedFields(expenses);
+        
         await db.collection('trips').doc(currentTrip.id).update({
-            tickets,
-            expenses,
+            tickets: cleanedTickets,
+            expenses: cleanedExpenses,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         
-        currentTrip.tickets = tickets;
-        currentTrip.expenses = expenses;
+        currentTrip.tickets = cleanedTickets;
+        currentTrip.expenses = cleanedExpenses;
         setCurrentTrip(currentTrip);
         
         showToast('Ticket deleted successfully!', 'success');
