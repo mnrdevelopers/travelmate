@@ -21,61 +21,66 @@
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-light sticky-top">
+    <nav class="navbar navbar-expand-lg navbar-light sticky-top bg-white border-bottom shadow-2xs">
         <div class="container">
-            <!-- Brand & Mobile Toggler Group (Left) -->
-            <div class="d-flex align-items-center gap-2 order-0">
-                <button class="navbar-toggler p-1 border-0 shadow-none" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <a class="navbar-brand fw-bold m-0 p-0 me-lg-4" href="dashboard.html">
-                    <i class="fas fa-map-marked-alt me-1.5 text-primary"></i>TravelMate
-                </a>
-            </div>
+            <!-- 1. Brand Logo (Left) -->
+            <a class="navbar-brand fw-bold m-0 p-0 me-lg-4 d-flex align-items-center" href="dashboard.html">
+                <i class="fas fa-map-marked-alt text-primary me-2 fs-4"></i>
+                <span class="fs-4 text-dark" style="letter-spacing: -0.5px;">TravelMate</span>
+            </a>
 
-            <!-- Action Items (Right) -->
-            <div class="navbar-actions d-flex align-items-center gap-1 gap-sm-2 order-1 order-lg-2 ms-auto ms-lg-0">
-                <div class="network-status-chip online" id="nav-network-status" title="Network Status: Online">
+            <!-- 2. Action Utility Suite (Right on Mobile & Desktop) -->
+            <div class="navbar-actions d-flex align-items-center gap-2 order-1 order-lg-2 ms-auto ms-lg-0 me-2 me-lg-0">
+                <!-- Network Status Chip -->
+                <div class="network-status-chip online me-1" id="nav-network-status" title="Network Status: Online">
                     <span class="status-dot"></span>
                     <span class="status-text d-none d-sm-inline">Online</span>
                 </div>
-                <button class="btn btn-warning btn-sm text-dark fw-bold rounded-pill shadow-sm d-none px-2.5 py-1" id="pwa-install-btn" title="Install TravelMate App">
-                    <i class="fas fa-download me-1"></i><span class="d-none d-sm-inline">Install App</span><span class="d-sm-none">App</span>
-                </button>
+
+                <!-- Notification Bell -->
                 <div class="position-relative">
-                    <button class="btn btn-link nav-link position-relative p-1.5 text-body" id="notif-bell-btn" title="Journey Notifications">
-                        <i class="fas fa-bell fs-5"></i>
+                    <button class="btn btn-light btn-sm rounded-circle p-2 text-dark shadow-2xs" id="notif-bell-btn" title="Journey Notifications" style="width:36px; height:36px; display:flex; align-items:center; justify-content:center;">
+                        <i class="fas fa-bell"></i>
                         <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" id="notif-unread-badge" style="font-size: 0.65rem;">0</span>
                     </button>
                 </div>
-                <button class="btn btn-link nav-link p-1.5 text-body" id="theme-toggle" title="Toggle Dark Mode">
-                    <i class="fas fa-moon fs-5"></i>
+
+                <!-- Dark Mode / Theme Toggle -->
+                <button class="btn btn-light btn-sm rounded-circle p-2 text-dark shadow-2xs" id="theme-toggle" title="Toggle Dark Mode" style="width:36px; height:36px; display:flex; align-items:center; justify-content:center;">
+                    <i class="fas fa-moon"></i>
                 </button>
             </div>
 
-            <!-- Collapsible Navigation (Full Width on Mobile) -->
-            <div class="collapse navbar-collapse order-2 order-lg-1" id="navbarNav">
-                <ul class="navbar-nav me-auto mt-2 mt-lg-0">
+            <!-- 3. Mobile Toggler (Hamburger Button) -->
+            <button class="navbar-toggler p-1.5 border-0 shadow-none order-2 d-lg-none" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <!-- 4. Collapsible Navigation (Center Links + User Profile under Hamburger Menu on Mobile) -->
+            <div class="collapse navbar-collapse order-3 order-lg-1" id="navbarNav">
+                <ul class="navbar-nav me-auto my-2 my-lg-0 gap-lg-1">
                     <li class="nav-item">
-                        <a class="nav-link active" href="dashboard.html">
-                            <i class="fas fa-home me-1"></i>Dashboard
+                        <a class="nav-link active fw-medium px-2.5" href="dashboard.html">
+                            <i class="fas fa-home me-1.5 text-primary"></i>Dashboard
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="car-calculations.html">
-                            <i class="fas fa-calculator me-1"></i>Car Calculator
+                        <a class="nav-link fw-medium px-2.5" href="car-calculations.html">
+                            <i class="fas fa-calculator me-1.5 text-info"></i>Car Calculator
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" id="nav-profile">
-                            <i class="fas fa-user me-1"></i>Profile
+                        <a class="nav-link fw-medium px-2.5" href="#" id="nav-profile">
+                            <i class="fas fa-user me-1.5 text-warning"></i>Profile
                         </a>
                     </li>
                 </ul>
-                <div class="d-flex align-items-center gap-2 mt-2 mt-lg-0">
-                    <img id="user-avatar" class="user-avatar" src="" alt="User Avatar">
-                    <span id="user-name">User</span>
-                    <button class="btn btn-outline-primary btn-sm ms-2" id="logout-btn">
+                <div class="d-flex align-items-center gap-2 pt-2 pt-lg-0 mt-2 mt-lg-0 ms-lg-2" id="nav-auth-section">
+                    <div class="d-flex align-items-center me-2 cursor-pointer" id="nav-profile-header" title="View Profile" style="cursor: pointer;">
+                        <img id="user-avatar" class="user-avatar me-2 shadow-2xs" src="" alt="User Avatar" style="width:34px; height:34px; border-radius:50%; object-fit:cover; border:2px solid var(--primary-color);">
+                        <span class="fw-semibold text-dark small me-1" id="user-name">User</span>
+                    </div>
+                    <button class="btn btn-outline-danger btn-sm rounded-pill px-3 py-1 ms-auto ms-lg-0" id="logout-btn" title="Logout">
                         <i class="fas fa-sign-out-alt me-1"></i>Logout
                     </button>
                 </div>

@@ -444,52 +444,175 @@ async function calculateSimulatedMultiStopRoute(start, destination, stops = []) 
     };
 }
 
+const KNOWN_LOCATION_COORDINATES = {
+    "hyderabad": [78.4867, 17.3850],
+    "secunderabad": [78.5011, 17.4399],
+    "vijayawada": [80.6480, 16.5062],
+    "visakhapatnam": [83.2185, 17.6868],
+    "vizag": [83.2185, 17.6868],
+    "guwahati": [91.7362, 26.1445],
+    "gauhati": [91.7362, 26.1445],
+    "guwahati, assam": [91.7362, 26.1445],
+    "kamakhya": [91.7058, 26.1664],
+    "kamakhya, guwahati": [91.7058, 26.1664],
+    "kamakhya, gauhati": [91.7058, 26.1664],
+    "kamakhya, guwahat": [91.7058, 26.1664],
+    "delhi": [77.2090, 28.6139],
+    "new delhi": [77.2090, 28.6139],
+    "mumbai": [72.8777, 19.0760],
+    "bombay": [72.8777, 19.0760],
+    "bengaluru": [77.5946, 12.9716],
+    "bangalore": [77.5946, 12.9716],
+    "chennai": [80.2707, 13.0827],
+    "madras": [80.2707, 13.0827],
+    "kolkata": [88.3639, 22.5726],
+    "calcutta": [88.3639, 22.5726],
+    "goa": [73.8278, 15.2993],
+    "panaji": [73.8278, 15.2993],
+    "jaipur": [75.7873, 26.9124],
+    "varanasi": [82.9739, 25.3176],
+    "kashi": [82.9739, 25.3176],
+    "agra": [78.0081, 27.1767],
+    "shimla": [77.1734, 31.1048],
+    "manali": [77.1887, 32.2432],
+    "rishikesh": [78.2676, 30.0869],
+    "haridwar": [78.1642, 29.9457],
+    "tirupati": [79.4192, 13.6288],
+    "shirdi": [74.4762, 19.7645],
+    "amritsar": [74.8723, 31.6340],
+    "udaipur": [73.6833, 24.5854],
+    "kochi": [76.2673, 9.9312],
+    "cochin": [76.2673, 9.9312],
+    "munnar": [77.0597, 10.0889],
+    "ooty": [76.6932, 11.4102],
+    "srinagar": [74.7973, 34.0837],
+    "leh": [77.5771, 34.1526],
+    "pune": [73.8567, 18.5204],
+    "ahmedabad": [72.5714, 23.0225],
+    "lucknow": [80.9462, 26.8467],
+    "patna": [85.1376, 25.5941],
+    "bhubaneswar": [85.8245, 20.2961],
+    "puri": [85.8312, 19.8135],
+    "shillong": [91.8933, 25.5788],
+    "darjeeling": [88.2627, 27.0410],
+    "gangtok": [88.6138, 27.3389],
+    "ayodhya": [82.1998, 26.7922],
+    "mathura": [77.6737, 27.4924],
+    "vrindavan": [77.7006, 27.5706],
+    "madurai": [78.1198, 9.9252],
+    "rameshwaram": [79.3129, 9.2876],
+    "kanyakumari": [77.5385, 8.0883],
+    "coimbatore": [76.9558, 11.0168],
+    "mysore": [76.6394, 12.2958],
+    "mysuru": [76.6394, 12.2958]
+};
+
+function normalizeLocationQuery(locationName) {
+    if (!locationName || typeof locationName !== 'string') return '';
+    return locationName.trim()
+        .replace(/\bguwahati\b/gi, 'Guwahati')
+        .replace(/\bgauhati\b/gi, 'Guwahati')
+        .replace(/\bkamakhya\b/gi, 'Kamakhya')
+        .replace(/\bvizag\b/gi, 'Visakhapatnam')
+        .replace(/\bbengaluru\b/gi, 'Bengaluru')
+        .replace(/\bbangalore\b/gi, 'Bengaluru')
+        .replace(/\bbombay\b/gi, 'Mumbai')
+        .replace(/\bcalcutta\b/gi, 'Kolkata')
+        .replace(/\bmadras\b/gi, 'Chennai')
+        .replace(/\btrivandrum\b/gi, 'Thiruvananthapuram')
+        .replace(/\bcochin\b/gi, 'Kochi')
+        .replace(/\bpondicherry\b/gi, 'Puducherry')
+        .replace(/\bgurgaon\b/gi, 'Gurugram')
+        .replace(/\btrichy\b/gi, 'Tiruchirappalli')
+        .replace(/\borissa\b/gi, 'Odisha')
+        .replace(/\bbaroda\b/gi, 'Vadodara')
+        .replace(/\bmysore\b/gi, 'Mysuru');
+}
+
 async function geocodeLocation(locationName) {
-    try {
-        const response = await fetch(
-            `https://api.openrouteservice.org/geocode/search?api_key=${OPENROUTESERVICE_API_KEY}&text=${encodeURIComponent(locationName)}`
-        );
-        if (!response.ok) {
-            throw new Error(`ORS geocoding request failed with status: ${response.status}`);
-        }
-        const data = await response.json();
-        
-        if (data.features && data.features.length > 0) {
-            return data.features[0].geometry.coordinates; // [longitude, latitude]
-        }
-        throw new Error('Location not found in ORS');
-    } catch (error) {
-        console.warn('OpenRouteService geocoding failed, trying Nominatim fallback...', error);
-        try {
-            // Sleep to respect Nominatim rate limit (1 request/second)
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            // Nominatim OpenStreetMap Geocoding (Free, no API key needed)
-            const response = await fetch(
-                `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(locationName)}`,
-                {
-                    headers: {
-                        'Accept-Language': 'en'
-                    }
-                }
-            );
-            if (!response.ok) {
-                throw new Error(`Nominatim request failed with status: ${response.status}`);
-            }
-            const data = await response.json();
-            if (data && data.length > 0) {
-                // Nominatim returns lat, lon as strings
-                const lon = parseFloat(data[0].lon);
-                const lat = parseFloat(data[0].lat);
-                console.log(`Nominatim successfully geocoded "${locationName}" to coordinates: [${lon}, ${lat}]`);
-                return [lon, lat]; // Return in [lon, lat] format to match ORS
-            }
-            throw new Error('Location not found in Nominatim');
-        } catch (nomError) {
-            console.error('Nominatim geocoding also failed:', nomError);
-            throw nomError;
+    if (!locationName || typeof locationName !== 'string') {
+        return [78.4867, 17.3850];
+    }
+
+    const rawQuery = locationName.trim();
+    const cleanedQuery = normalizeLocationQuery(rawQuery);
+    const lowerKey = cleanedQuery.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    // 1. Instant local database lookup
+    for (const [key, coords] of Object.entries(KNOWN_LOCATION_COORDINATES)) {
+        const keyNorm = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (lowerKey === keyNorm || lowerKey.includes(keyNorm) || keyNorm.includes(lowerKey)) {
+            console.log(`[geocodeLocation] Local DB hit for "${locationName}":`, coords);
+            return coords;
         }
     }
+
+    // 2. Try Photon API by Komoot (CORS-enabled, free, fast fuzzy OpenStreetMap geocoding)
+    try {
+        const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(cleanedQuery)}&limit=1`;
+        const res = await fetch(photonUrl);
+        if (res.ok) {
+            const data = await res.json();
+            if (data && data.features && data.features.length > 0) {
+                const coords = data.features[0].geometry.coordinates; // [lon, lat]
+                console.log(`[geocodeLocation] Photon API geocoded "${locationName}" to:`, coords);
+                return coords;
+            }
+        }
+    } catch (photonErr) {
+        console.warn('Photon geocoding failed or offline:', photonErr);
+    }
+
+    // 3. Try Open-Meteo Geocoding API (CORS-enabled, free, tailored for weather cities)
+    try {
+        const searchName = cleanedQuery.split(',')[0].trim();
+        const omUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(searchName)}&count=1&language=en&format=json`;
+        const res = await fetch(omUrl);
+        if (res.ok) {
+            const data = await res.json();
+            if (data && data.results && data.results.length > 0) {
+                const item = data.results[0];
+                const coords = [parseFloat(item.longitude), parseFloat(item.latitude)];
+                console.log(`[geocodeLocation] Open-Meteo geocoded "${searchName}" to:`, coords);
+                return coords;
+            }
+        }
+    } catch (omErr) {
+        console.warn('Open-Meteo geocoding failed:', omErr);
+    }
+
+    // 4. Try Nominatim (OpenStreetMap) with fallback queries
+    const candidateQueries = [cleanedQuery];
+    if (cleanedQuery.includes(',')) {
+        const parts = cleanedQuery.split(',').map(p => p.trim()).filter(Boolean);
+        if (parts.length > 1) {
+            candidateQueries.push(parts[parts.length - 1]);
+            candidateQueries.push(parts[0]);
+        }
+    }
+
+    for (const q of candidateQueries) {
+        try {
+            await new Promise(resolve => setTimeout(resolve, 200));
+            const nomUrl = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`;
+            const res = await fetch(nomUrl, { headers: { 'Accept-Language': 'en' } });
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.length > 0) {
+                    const lon = parseFloat(data[0].lon);
+                    const lat = parseFloat(data[0].lat);
+                    console.log(`[geocodeLocation] Nominatim geocoded "${q}" to:`, [lon, lat]);
+                    return [lon, lat];
+                }
+            }
+        } catch (nomErr) {
+            console.warn(`Nominatim geocoding failed for "${q}":`, nomErr);
+        }
+    }
+
+    // 5. Safe default fallback
+    console.warn(`[geocodeLocation] All geocoders failed for "${locationName}". Using default fallback coordinates.`);
+    return [78.4867, 17.3850];
 }
 
 function calculateSimulatedDistance(start, destination) {

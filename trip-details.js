@@ -240,6 +240,10 @@ function setupTripDetailsEventListeners() {
     if (navProfile) {
         navProfile.addEventListener('click', showProfileModal);
     }
+    const navProfileHeader = document.getElementById('nav-profile-header');
+    if (navProfileHeader) {
+        navProfileHeader.addEventListener('click', showProfileModal);
+    }
     
     // Enhanced CRUD event listeners
     setupEnhancedCRUDEventListeners();

@@ -2779,11 +2779,11 @@ function updateNavigationBasedOnAuth(isLoggedIn) {
         const avatarUrl = localStorage.getItem('user_avatar_' + currentUser.uid) || currentUser.photoURL;
         navAuthSection.innerHTML = `
             <div class="d-flex align-items-center me-2 pe-1 cursor-pointer" id="nav-profile" title="View Profile" style="cursor: pointer;">
-                <img id="user-avatar" class="user-avatar me-1.5 shadow-2xs" src="${getSafeAvatarUrl(avatarUrl, currentUser.displayName || 'User')}" alt="User Avatar" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:2px solid var(--primary-color);">
-                <span class="fw-semibold text-dark small d-none d-md-inline me-1" id="user-name">${currentUser.displayName || 'User'}</span>
+                <img id="user-avatar" class="user-avatar me-2 shadow-2xs" src="${getSafeAvatarUrl(avatarUrl, currentUser.displayName || 'User')}" alt="User Avatar" style="width:34px; height:34px; border-radius:50%; object-fit:cover; border:2px solid var(--primary-color);">
+                <span class="fw-semibold text-dark small me-1" id="user-name">${currentUser.displayName || 'User'}</span>
             </div>
-            <button class="btn btn-outline-danger btn-sm rounded-pill px-2.5 py-1" id="logout-btn" title="Logout">
-                <i class="fas fa-sign-out-alt"></i><span class="d-none d-md-inline ms-1">Logout</span>
+            <button class="btn btn-outline-danger btn-sm rounded-pill px-3 py-1 ms-auto ms-lg-0" id="logout-btn" title="Logout">
+                <i class="fas fa-sign-out-alt me-1"></i><span>Logout</span>
             </button>
         `;
         
@@ -2807,7 +2807,7 @@ function updateNavigationBasedOnAuth(isLoggedIn) {
     } else {
         // User is not logged in
         navAuthSection.innerHTML = `
-            <button class="btn btn-primary btn-sm" id="login-btn">
+            <button class="btn btn-primary btn-sm rounded-pill px-3 py-1 ms-auto ms-lg-0" id="login-btn">
                 <i class="fas fa-sign-in-alt me-1"></i>Sign In
             </button>
         `;
