@@ -1305,131 +1305,94 @@ function updateDashboardActiveTripTracker() {
                 autoTrackBtn.disabled = true;
                 autoTrackBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Locating...';
                 
-                navigator.geolocation.getCurrentPosition(async (position) => {
-                    const currentLat = position.coords.latitude;
-                    const currentLon = position.coords.longitude;
-                    
-                    try {
-                        let startCoords = activeTrip.route?.coordinates?.start;
-                        let destCoords = activeTrip.route?.coordinates?.destination;
-                        
-                        if (!startCoords || !destCoords) {
-                            startCoords = await geocodeLocation(activeTrip.startLocation);
-                            destCoords = await geocodeLocation(activeTrip.destination);
-                        }
-                        
-                        if (!startCoords || !destCoords) {
-                            showAlert('Could not determine start/destination coordinates to track progress.', 'warning');
-                            return;
-                        }
-                        
-                        const startLat = startCoords[1];
-                        const startLon = startCoords[0];
-                        const destLat = destCoords[1];
-                        const destLon = destCoords[0];
-                        
-                        const distFromStart = calculateHaversineDistance(startLat, startLon, currentLat, currentLon);
-                        const distToDest = calculateHaversineDistance(currentLat, currentLon, destLat, destLon);
-                        const calculatedTotal = distFromStart + distToDest;
-                        let currentKm = 0;
-                        
-                        // AI-enhanced: snap to closest route segment using AI stop distances
-                        const segments = getRouteSegments(activeTrip, totalDistance);
-                        if (segments.length > 0 && totalDistance > 0 && activeTrip.route?.aiEnhanced) {
-                            const placeSequence = resolveRouteMetadata(activeTrip.startLocation, activeTrip.destination, activeTrip.stops);
-                            const allStopCoords = [];
-                            for (const place of placeSequence) {
-                                try {
-                                    allStopCoords.push(await geocodeLocation(place.name));
-                                } catch (e) {
-                                    allStopCoords.push(null);
-                                }
-                            }
-                            
-                            // Find closest segment start to current position
-                            let bestSegment = 0;
-                            let minSegDist = Infinity;
-                            for (let si = 0; si < allStopCoords.length - 1; si++) {
-                                const sc = allStopCoords[si];
-                                if (!sc) continue;
-                                const d = calculateHaversineDistance(sc[1], sc[0], currentLat, currentLon);
-                                if (d < minSegDist) { minSegDist = d; bestSegment = si; }
-                            }
-                            
-                            const bestSeg = segments[bestSegment] || { from: 0, to: totalDistance };
-                            const segStartKm = bestSeg.from;
-                            const segEndKm = bestSeg.to;
-                            const segLen = segEndKm - segStartKm;
-                            
-                            const sc1 = allStopCoords[bestSegment];
-                            const sc2 = allStopCoords[bestSegment + 1];
-                            if (sc1 && sc2) {
-                                const segFullLen = calculateHaversineDistance(sc1[1], sc1[0], sc2[1], sc2[0]);
-                                const progressInSeg = segFullLen > 0
-                                    ? calculateHaversineDistance(sc1[1], sc1[0], currentLat, currentLon) / segFullLen
-                                    : 0;
-                                currentKm = Math.min(totalDistance, parseFloat((segStartKm + segLen * Math.min(1, progressInSeg)).toFixed(1)));
-                            } else {
-                                currentKm = Math.min(totalDistance, parseFloat((totalDistance * (distFromStart / calculatedTotal)).toFixed(1)));
-                            }
-                        } else if (totalDistance > 0) {
-                            const ratio = distFromStart / calculatedTotal;
-                            currentKm = Math.min(totalDistance, parseFloat((totalDistance * ratio).toFixed(1)));
-                        } else {
-                            const ratio = distFromStart / calculatedTotal;
-                            currentKm = Math.min(100, parseFloat((100 * ratio).toFixed(1)));
-                        }
-                        
-                        // Reverse geocode to get village, district, state name
-                        let currentLocationName = '';
-                        try {
-                            const revGeoResponse = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${currentLat}&lon=${currentLon}&format=json&accept-language=en`);
-                            if (revGeoResponse.ok) {
-                                const geoData = await revGeoResponse.json();
-                                const addr = geoData.address || {};
-                                
-                                const parts = [];
-                                // Local: Village, Suburb, Town, or City
-                                const local = addr.village || addr.suburb || addr.town || addr.city || addr.hamlet;
-                                if (local) parts.push(local);
-                                
-                                // District: District, County, or City District
-                                const dist = addr.district || addr.county || addr.city_district;
-                                if (dist) parts.push(dist);
-                                
-                                // State
-                                const state = addr.state;
-                                if (state) parts.push(state);
-                                
-                                currentLocationName = parts.join(', ') || 'Active Location';
-                            }
-                        } catch (geoErr) {
-                            console.warn('Reverse geocoding failed:', geoErr);
-                            currentLocationName = `${currentLat.toFixed(2)}, ${currentLon.toFixed(2)}`;
-                        }
-                        
                 function fetchUserGpsPosition(useHighAccuracy) {
                     navigator.geolocation.getCurrentPosition(async (pos) => {
                         try {
                             const currentLat = pos.coords.latitude;
                             const currentLon = pos.coords.longitude;
                             
-                            let currentKm = activeTrip.currentKm || 0;
-                            let currentLocationName = '';
+                            let startCoords = activeTrip.route?.coordinates?.start;
+                            let destCoords = activeTrip.route?.coordinates?.destination;
                             
-                            if (activeTrip.originLat && activeTrip.originLon && typeof calculateDistance === 'function') {
-                                const distFromOrigin = calculateDistance(activeTrip.originLat, activeTrip.originLon, currentLat, currentLon);
-                                currentKm = Math.round(distFromOrigin);
+                            if (!startCoords || !destCoords) {
+                                startCoords = await geocodeLocation(activeTrip.startLocation);
+                                destCoords = await geocodeLocation(activeTrip.destination);
                             }
                             
+                            if (!startCoords || !destCoords) {
+                                showAlert('Could not determine start/destination coordinates to track progress.', 'warning');
+                                return;
+                            }
+                            
+                            const startLat = startCoords[1];
+                            const startLon = startCoords[0];
+                            const destLat = destCoords[1];
+                            const destLon = destCoords[0];
+                            
+                            const distFromStart = calculateHaversineDistance(startLat, startLon, currentLat, currentLon);
+                            const distToDest = calculateHaversineDistance(currentLat, currentLon, destLat, destLon);
+                            const calculatedTotal = distFromStart + distToDest;
+                            let currentKm = 0;
+                            
+                            const segments = getRouteSegments(activeTrip, totalDistance);
+                            if (segments.length > 0 && totalDistance > 0 && activeTrip.route?.aiEnhanced) {
+                                const placeSequence = resolveRouteMetadata(activeTrip.startLocation, activeTrip.destination, activeTrip.stops);
+                                const allStopCoords = [];
+                                for (const place of placeSequence) {
+                                    try {
+                                        allStopCoords.push(await geocodeLocation(place.name));
+                                    } catch (e) {
+                                        allStopCoords.push(null);
+                                    }
+                                }
+                                
+                                let bestSegment = 0;
+                                let minSegDist = Infinity;
+                                for (let si = 0; si < allStopCoords.length - 1; si++) {
+                                    const sc = allStopCoords[si];
+                                    if (!sc) continue;
+                                    const d = calculateHaversineDistance(sc[1], sc[0], currentLat, currentLon);
+                                    if (d < minSegDist) { minSegDist = d; bestSegment = si; }
+                                }
+                                
+                                const bestSeg = segments[bestSegment] || { from: 0, to: totalDistance };
+                                const segStartKm = bestSeg.from;
+                                const segEndKm = bestSeg.to;
+                                const segLen = segEndKm - segStartKm;
+                                
+                                const sc1 = allStopCoords[bestSegment];
+                                const sc2 = allStopCoords[bestSegment + 1];
+                                if (sc1 && sc2) {
+                                    const segFullLen = calculateHaversineDistance(sc1[1], sc1[0], sc2[1], sc2[0]);
+                                    const progressInSeg = segFullLen > 0
+                                        ? calculateHaversineDistance(sc1[1], sc1[0], currentLat, currentLon) / segFullLen
+                                        : 0;
+                                    currentKm = Math.min(totalDistance, parseFloat((segStartKm + segLen * Math.min(1, progressInSeg)).toFixed(1)));
+                                } else {
+                                    currentKm = Math.min(totalDistance, parseFloat((totalDistance * (distFromStart / calculatedTotal)).toFixed(1)));
+                                }
+                            } else if (totalDistance > 0) {
+                                const ratio = distFromStart / calculatedTotal;
+                                currentKm = Math.min(totalDistance, parseFloat((totalDistance * ratio).toFixed(1)));
+                            } else {
+                                const ratio = distFromStart / calculatedTotal;
+                                currentKm = Math.min(100, parseFloat((100 * ratio).toFixed(1)));
+                            }
+                            
+                            let currentLocationName = '';
                             try {
-                                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${currentLat}&lon=${currentLon}&zoom=10`);
-                                const data = await response.json();
-                                if (data && data.address) {
-                                    const addr = data.address;
+                                const revGeoResponse = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${currentLat}&lon=${currentLon}&format=json&accept-language=en`);
+                                if (revGeoResponse.ok) {
+                                    const geoData = await revGeoResponse.json();
+                                    const addr = geoData.address || {};
+                                    
                                     const parts = [];
-                                    const city = addr.city || addr.town || addr.village || addr.county || addr.suburb;
-                                    if (city) parts.push(city);
+                                    const local = addr.village || addr.suburb || addr.town || addr.city || addr.hamlet;
+                                    if (local) parts.push(local);
+                                    
+                                    const dist = addr.district || addr.county || addr.city_district;
+                                    if (dist) parts.push(dist);
+                                    
                                     const state = addr.state;
                                     if (state) parts.push(state);
                                     
@@ -1458,7 +1421,6 @@ function updateDashboardActiveTripTracker() {
                         }
                     }, (error) => {
                         if (useHighAccuracy && (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE)) {
-                            // Retry with standard accuracy fallback for network/IP location
                             fetchUserGpsPosition(false);
                             return;
                         }
