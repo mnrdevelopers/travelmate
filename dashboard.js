@@ -1,4 +1,4 @@
-let currentUser = null;
+﻿let currentUser = null;
 let userTrips = [];
 var customCategories = typeof customCategories !== 'undefined' ? customCategories : [];
 let carExpenseChart = null;
@@ -5943,170 +5943,158 @@ function getAILiveTrainStatusData(trainNo, originStn, depTimeStr) {
 }
 
 window.refreshAILiveTrainStatus = async function(trainNo, originStn) {
-    const locEl = document.getElementById(`ai-live-loc-${trainNo}`);
+    const locEl  = document.getElementById(`ai-live-loc-${trainNo}`);
     const nextEl = document.getElementById(`ai-live-next-${trainNo}`);
-    const delayEl = document.getElementById(`ai-live-delay-${trainNo}`);
+    const delayEl= document.getElementById(`ai-live-delay-${trainNo}`);
     const timeEl = document.getElementById(`ai-live-time-${trainNo}`);
 
-    if (locEl) locEl.innerHTML = '<i class="fas fa-brain fa-spin me-1 text-warning"></i>Groq AI Fetching Live Status...';
+    if (locEl) locEl.innerHTML = '<i class="fas fa-bolt fa-spin me-1 text-warning"></i>Fetching Live Status...';
 
     const stnCode = resolveIndianRailwayStationCode(originStn) || originStn || '';
 
-    // ── Strategy: Try multiple real Indian Railways public JSON APIs ──────────────
-    // ConfirmTkt and RailYatri are React SPAs — raw HTML via CORS proxy returns
-    // an empty shell. We instead call the actual JSON data APIs directly.
+    // Helper: fetch with hard abort timeout
+    function fetchTimeout(url, ms) {
+        return new Promise((resolve, reject) => {
+            const ctrl = new AbortController();
+            const tid = setTimeout(() => { ctrl.abort(); reject(new Error('timeout')); }, ms || 4000);
+            fetch(url, { signal: ctrl.signal })
+                .then(r => { clearTimeout(tid); return r.ok ? r.text() : Promise.reject(new Error('http-' + r.status)); })
+                .then(t => { if (!t || t.length < 15) reject(new Error('empty')); else resolve(t); })
+                .catch(e => { clearTimeout(tid); reject(e); });
+        });
+    }
 
-    let rawApiData = null;
+    // Wrap any target URL through multiple fast CORS proxies — race them
+    function proxyRace(targetUrl) {
+        return Promise.any([
+            fetchTimeout('https://corsproxy.io/?' + encodeURIComponent(targetUrl), 4000),
+            fetchTimeout('https://api.allorigins.win/raw?url=' + encodeURIComponent(targetUrl), 4000),
+            fetchTimeout('https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(targetUrl), 4000)
+        ]).then(t => {
+            if (t.trim().startsWith('<!DOCTYPE') && t.indexOf('station') === -1 && t.indexOf('Station') === -1) {
+                throw new Error('html-shell');
+            }
+            return t;
+        });
+    }
 
-    // API 1: railapi.com (public, CORS-friendly)
-    const railApiEndpoints = [
-        `https://api.railwaystatus.in/api/v1/train/${trainNo}/status`,
-        `https://indian-railway-api.onrender.com/api/trains/${trainNo}/live`,
-        `https://irctc-indian-railway-api.p.rapidapi.com/api/v3/liveTrainStatus?trainNo=${trainNo}&startDay=0`,
+    // Real Indian Railways data endpoints (JSON APIs, not React SPAs)
+    const APIS = [
+        { label: 'railwaystatus.in', url: `https://api.railwaystatus.in/api/v1/liveStatus?trainNumber=${trainNo}` },
+        { label: 'erail.in',        url: `https://erail.in/rail/getTrains.aspx?TrainNo=${trainNo}&DataSource=0&Action=RUNNING_STATUS&time=1` },
+        { label: 'trainman.in',     url: `https://www.trainman.in/api/status/${trainNo}/0/0` },
+        { label: 'railapi.com',     url: `https://indianrailapi.com/api/v2/LiveTrainStatus/apikey/free/TrainNumber/${trainNo}/Date/today/` }
     ];
-
-    // API 2: erail.in JSON (most reliable public source)
-    const erailUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://erail.in/rail/getTrains.aspx?TrainNo=${trainNo}&DataSource=0&Action=RUNNING_STATUS&time=1`)}`;
-    
-    // API 3: trainman.in JSON API
-    const trainmanUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://trainman.in/api/status/${trainNo}/0/0`)}`;
 
     let rawText = '';
     let apiUsed = '';
 
-    // Try erail.in first (most reliable)
+    // Fire ALL APIs in parallel via proxy race — pick the fastest winner
     try {
-        const res = await fetch(erailUrl, { signal: AbortSignal.timeout(6000) });
-        if (res.ok) {
-            rawText = await res.text();
-            if (rawText && rawText.length > 30 && !rawText.includes('error') && !rawText.includes('Error')) {
-                apiUsed = 'erail.in';
-            } else {
-                rawText = '';
-            }
-        }
-    } catch(e) { console.warn('erail API failed:', e.message); }
-
-    // Try trainman if erail failed
-    if (!rawText) {
-        try {
-            const res = await fetch(trainmanUrl, { signal: AbortSignal.timeout(6000) });
-            if (res.ok) {
-                rawText = await res.text();
-                if (rawText && rawText.length > 30) {
-                    apiUsed = 'trainman.in';
-                } else {
-                    rawText = '';
-                }
-            }
-        } catch(e) { console.warn('trainman API failed:', e.message); }
-    }
-
-    // Try ConfirmTkt internal JSON endpoint (they have a JSON API endpoint)
-    if (!rawText) {
-        try {
-            const ctUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://www.confirmtkt.com/api/trains/${trainNo}/live-status`)}`;
-            const res = await fetch(ctUrl, { signal: AbortSignal.timeout(6000) });
-            if (res.ok) {
-                rawText = await res.text();
-                if (rawText && rawText.length > 30 && rawText.startsWith('{')) {
-                    apiUsed = 'confirmtkt-api';
-                } else {
-                    rawText = '';
-                }
-            }
-        } catch(e) { console.warn('ConfirmTkt API failed:', e.message); }
+        const result = await Promise.any(
+            APIS.map(api =>
+                proxyRace(api.url).then(t => ({ text: t, label: api.label }))
+            )
+        );
+        rawText = result.text;
+        apiUsed = result.label;
+        console.log('[LiveStatus] Got data from ' + apiUsed + ' (' + rawText.length + ' chars)');
+    } catch (e) {
+        console.warn('[LiveStatus] All APIs failed');
     }
 
     const groqApiKey = window._groqApiKey || window._openrouterApiKey;
 
-    // If we got real API data, parse it with Groq AI
+    // Groq AI parses the real data
     if (rawText && groqApiKey) {
-        const clipped = rawText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000);
-        const prompt = `You are an Indian Railways live status expert. Parse this live train running data for Train #${trainNo} from ${apiUsed} ${stnCode ? `(origin/boarding station: ${stnCode})` : ''}:
-"${clipped}"
+        const clipped = rawText
+            .replace(/<script[\s\S]*?<\/script>/gi, '')
+            .replace(/<style[\s\S]*?<\/style>/gi, '')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 2500);
 
-Return ONLY strict JSON (no markdown, no extra text):
-{
-  "currentStation": "Exact current station name e.g. Jalna, Partur, or last reported station",
-  "nextStation": "Next station name with ETA if available e.g. Partur (ETA 14:42)",
-  "delayMinutes": 0,
-  "trainStatus": "e.g. RUNNING, ARRIVED, DEPARTED, SCHEDULED",
-  "delayText": "On Time 🟢 or ⚠️ 15m Late",
-  "isDelayed": false,
-  "summary": "1-line human summary e.g. Departed Jalna 10m late, approaching Partur"
-}`;
+        const prompt = 'You are an Indian Railways live status expert. Parse this live running status data for Train #' + trainNo + (stnCode ? ' (boarding station: ' + stnCode + ')' : '') + ' sourced from ' + apiUsed + ':\n\n"' + clipped + '"\n\nReturn ONLY valid JSON, no markdown, no backticks:\n{"currentStation":"last reported station name","nextStation":"next stop with ETA if available","delayMinutes":0,"delayText":"On Time 🟢","isDelayed":false,"summary":"1-line plain English status"}';
 
         try {
-            const groqEndpoint = window._groqApiKey ? 'https://api.groq.com/openai/v1/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions';
+            const groqEndpoint = window._groqApiKey
+                ? 'https://api.groq.com/openai/v1/chat/completions'
+                : 'https://openrouter.ai/api/v1/chat/completions';
             const groqModel = window._groqApiKey ? 'llama-3.3-70b-versatile' : 'google/gemini-2.5-flash';
 
+            const aiCtrl = new AbortController();
+            const aiTid = setTimeout(() => aiCtrl.abort(), 10000);
             const aiRes = await fetch(groqEndpoint, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${groqApiKey}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ model: groqModel, messages: [{ role: 'user', content: prompt }], temperature: 0.1 })
+                signal: aiCtrl.signal,
+                headers: { 'Authorization': 'Bearer ' + groqApiKey, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model: groqModel, messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_tokens: 300 })
             });
+            clearTimeout(aiTid);
 
             if (aiRes.ok) {
                 const aiData = await aiRes.json();
-                const content = aiData.choices?.[0]?.message?.content || '';
-                const jsonMatch = content.match(/\{[\s\S]*\}/);
+                const content = (aiData.choices && aiData.choices[0] && aiData.choices[0].message && aiData.choices[0].message.content) || '';
+                const jsonMatch = content.match(/\{[\s\S]*?\}/);
                 if (jsonMatch) {
                     const parsed = JSON.parse(jsonMatch[0]);
                     if (parsed && parsed.currentStation) {
                         const delayClass = (parsed.isDelayed || parsed.delayMinutes > 0) ? 'bg-danger text-white' : 'bg-success text-white';
-                        const providerLabel = window._groqApiKey ? 'Groq LLaMA AI' : 'Gemini AI';
-                        const timeStr = `${providerLabel} via ${apiUsed} • ${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
+                        const providerLabel = window._groqApiKey ? 'Groq LLaMA' : 'Gemini AI';
+                        const timeStr = providerLabel + ' via ' + apiUsed + ' \u2022 ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
 
-                        if (locEl) locEl.innerHTML = `<i class="fas fa-location-dot me-1 text-danger"></i><strong>${parsed.currentStation}</strong>${parsed.summary ? ` <small class="text-white-50">— ${parsed.summary}</small>` : ''}`;
-                        if (nextEl) nextEl.innerHTML = `<i class="fas fa-arrow-right-long me-1 text-info"></i>${parsed.nextStation || 'En Route'}`;
-                        if (delayEl) { delayEl.textContent = parsed.delayText || 'On Time 🟢'; delayEl.className = `badge ${delayClass} px-2 py-1 font-monospace`; }
+                        if (locEl) locEl.innerHTML = '<i class="fas fa-location-dot me-1 text-danger"></i><strong>' + parsed.currentStation + '</strong>' + (parsed.summary ? '<br><small class="text-white-50 fw-normal">\u2014 ' + parsed.summary + '</small>' : '');
+                        if (nextEl) nextEl.innerHTML = '<i class="fas fa-arrow-right-long me-1 text-info"></i>' + (parsed.nextStation || 'En Route');
+                        if (delayEl) { delayEl.textContent = parsed.delayText || 'On Time \uD83D\uDFE2'; delayEl.className = 'badge ' + delayClass + ' px-2 py-1 font-monospace'; }
                         if (timeEl) timeEl.textContent = timeStr;
 
-                        localStorage.setItem(`ai_live_status_${trainNo}`, JSON.stringify({
+                        localStorage.setItem('ai_live_status_' + trainNo, JSON.stringify({
                             currentLocation: parsed.currentStation,
                             nextStation: parsed.nextStation || 'En Route',
-                            delayText: parsed.delayText || 'On Time 🟢',
+                            delayText: parsed.delayText || 'On Time \uD83D\uDFE2',
                             delayBadgeClass: delayClass,
                             lastUpdated: timeStr,
                             timestamp: Date.now()
                         }));
 
-                        if (typeof showToast === 'function') showToast(`⚡ Live status for Train #${trainNo} via ${apiUsed}!`, 'success');
+                        if (typeof showToast === 'function') showToast('\u26A1 Live status via ' + apiUsed + ' \u2014 Train #' + trainNo + '!', 'success');
                         return;
                     }
                 }
             }
-        } catch(e) {
-            console.warn('Groq AI parse error:', e);
+        } catch (e) {
+            console.warn('[LiveStatus] Groq parse error:', e.message);
         }
     }
 
-    // ── Groq AI key missing but we have raw data — show it directly ──────────
-    if (rawText && !groqApiKey) {
+    // Raw JSON fallback (no Groq key, or AI failed but we have data)
+    if (rawText) {
         try {
-            const rawJson = JSON.parse(rawText);
-            const station = rawJson.current_station || rawJson.station || rawJson.station_name || '';
-            const delay = parseInt(rawJson.delay || rawJson.delay_minutes || 0);
+            const rawJson = JSON.parse(rawText.trim());
+            const station = rawJson.current_station_name || rawJson.currentStation || rawJson.station_name || rawJson.station || rawJson.CurrentStation || '';
+            const delay   = parseInt(rawJson.delay || rawJson.delay_minutes || rawJson.Delay || 0) || 0;
             if (station) {
-                if (locEl) locEl.innerHTML = `<i class="fas fa-location-dot me-1 text-danger"></i>${station}`;
-                if (nextEl) nextEl.textContent = 'Live data from ' + apiUsed;
-                if (delayEl) { delayEl.textContent = delay > 0 ? `⚠️ ${delay}m Late` : 'On Time 🟢'; delayEl.className = `badge ${delay > 0 ? 'bg-danger' : 'bg-success'} text-white px-2 py-1 font-monospace`; }
-                if (timeEl) timeEl.textContent = `API • ${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
-                if (typeof showToast === 'function') showToast('Live status fetched! Add Groq AI key for detailed AI summary.', 'info');
+                if (locEl) locEl.innerHTML = '<i class="fas fa-location-dot me-1 text-danger"></i><strong>' + station + '</strong>';
+                if (nextEl) nextEl.innerHTML = '<i class="fas fa-info-circle me-1 text-muted"></i>Raw data from ' + apiUsed;
+                if (delayEl) { delayEl.textContent = delay > 0 ? '\u26A0\uFE0F ' + delay + 'm Late' : 'On Time \uD83D\uDFE2'; delayEl.className = 'badge ' + (delay > 0 ? 'bg-danger' : 'bg-success') + ' text-white px-2 py-1 font-monospace'; }
+                if (timeEl) timeEl.textContent = apiUsed + ' \u2022 ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+                if (typeof showToast === 'function') showToast('Live data fetched! Add Groq API key for AI summary.', 'info');
                 return;
             }
-        } catch(e) {}
+        } catch(e) { /* not clean JSON */ }
     }
 
-    // ── Final fallback: no live data available ────────────────────────────────
-    const reason = !groqApiKey ? 'Add Groq API Key in Profile Settings for AI parsing.' : 'Live APIs are unavailable right now. Check iframe below.';
-    if (locEl) locEl.innerHTML = `<i class="fas fa-exclamation-triangle me-1 text-warning"></i>Live API Unavailable`;
-    if (nextEl) nextEl.innerHTML = `<i class="fas fa-info-circle me-1 text-muted"></i><small class="text-white-50">${reason}</small>`;
-    if (delayEl) { delayEl.textContent = 'Check iframe'; delayEl.className = 'badge bg-secondary text-white px-2 py-1 font-monospace'; }
-    if (timeEl) timeEl.textContent = `Sync tried • ${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
-    if (typeof showToast === 'function') showToast(`Live APIs unavailable. View the embedded ConfirmTkt/RailYatri iframe directly.`, 'warning');
+    // All sources failed
+    var reason = !groqApiKey ? 'Add Groq API Key in Settings for AI parsing.' : 'All live APIs timed out. See iframe below.';
+    if (locEl) locEl.innerHTML = '<i class="fas fa-exclamation-triangle me-1 text-warning"></i>Live APIs Unavailable';
+    if (nextEl) nextEl.innerHTML = '<i class="fas fa-info-circle me-1 text-muted"></i><small class="text-white-50">' + reason + '</small>';
+    if (delayEl) { delayEl.textContent = 'See iframe'; delayEl.className = 'badge bg-secondary text-white px-2 py-1 font-monospace'; }
+    if (timeEl) timeEl.textContent = 'Tried \u2022 ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    if (typeof showToast === 'function') showToast('Live APIs unavailable \u2014 check iframe below for real-time data.', 'warning');
 };
+
+
 
 function resolveIndianRailwayStationCode(stnInput) {
     if (!stnInput) return '';
