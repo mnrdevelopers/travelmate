@@ -240,10 +240,11 @@ function showProfileModal() {
             }
 
             const railradarKeyField = document.getElementById('profile-railradar-key');
-            if (railradarKeyField && data.railradarApiKey) {
-                railradarKeyField.value = data.railradarApiKey;
+            const savedRrKey = (data && data.railradarApiKey) || localStorage.getItem('railradar_api_key') || '';
+            if (railradarKeyField) {
+                railradarKeyField.value = savedRrKey;
             }
-            if (data.railradarApiKey) window._railradarApiKey = data.railradarApiKey;
+            if (savedRrKey) window._railradarApiKey = savedRrKey;
             
             const modelSelect = document.getElementById('profile-openrouter-model');
             const customInput = document.getElementById('profile-openrouter-custom-model');
@@ -334,6 +335,9 @@ async function saveProfile() {
         const railradarApiKey = railradarKeyInput ? railradarKeyInput.value.trim() : '';
         if (railradarApiKey) {
             window._railradarApiKey = railradarApiKey;
+            localStorage.setItem('railradar_api_key', railradarApiKey);
+        } else {
+            localStorage.removeItem('railradar_api_key');
         }
         
         const modelSelect = document.getElementById('profile-openrouter-model');
@@ -366,6 +370,7 @@ async function saveProfile() {
             const sharedPayload = {};
             if (openrouterApiKey) sharedPayload.openrouterApiKey = openrouterApiKey;
             if (groqApiKey) sharedPayload.groqApiKey = groqApiKey;
+            if (railradarApiKey) sharedPayload.railradarApiKey = railradarApiKey;
             if (openrouterModel) sharedPayload.openrouterModel = openrouterModel;
             if (openrouterCustomModel) sharedPayload.openrouterCustomModel = openrouterCustomModel;
             
@@ -3782,7 +3787,7 @@ async function loadOpenRouterKey() {
         
         window._openrouterApiKey = userData.openrouterApiKey || sharedData.openrouterApiKey || '';
         window._groqApiKey = userData.groqApiKey || sharedData.groqApiKey || '';
-        window._railradarApiKey = userData.railradarApiKey || sharedData.railradarApiKey || '';
+        window._railradarApiKey = localStorage.getItem('railradar_api_key') || userData.railradarApiKey || sharedData.railradarApiKey || '';
         window._openrouterModel = userData.openrouterModel || sharedData.openrouterModel || 'auto';
         window._openrouterCustomModel = userData.openrouterCustomModel || sharedData.openrouterCustomModel || '';
         
@@ -5966,8 +5971,83 @@ window.refreshAILiveTrainStatus = async function(trainNo, originStn) {
 
     const stnCode = resolveIndianRailwayStationCode(originStn) || originStn || '';
 
-    // Helper: fetch with hard abort timeout
-    function fetchTimeout(url, ms) {
+    // ── Priority 1: RailRadar API (direct CORS / proxy fallback) ────────────
+    const rrKey = window._railradarApiKey || localStorage.getItem('railradar_api_key') || '';
+    if (rrKey) {
+        let rrData = null;
+        const authHeader = rrKey.startsWith('Bearer ') ? rrKey : ('Bearer ' + rrKey);
+
+        // Try direct fetch first
+        try {
+            const rrRes = await fetch('https://api.railradar.in/v1/trains/' + trainNo + '/live', {
+                headers: { 'Authorization': authHeader, 'Accept': 'application/json' }
+            });
+            if (rrRes.ok) {
+                rrData = await rrRes.json();
+            } else if (rrRes.status === 401 || rrRes.status === 403) {
+                console.warn('[LiveStatus] RailRadar API Key invalid or expired (HTTP ' + rrRes.status + ')');
+                if (typeof showToast === 'function') showToast('⚠️ RailRadar API Key invalid or expired. Check key in settings.', 'warning');
+            }
+        } catch(e) {
+            console.warn('[LiveStatus] Direct RailRadar fetch failed/blocked, trying proxy:', e.message);
+        }
+
+        // Try via CORS proxy if direct fetch failed
+        if (!rrData) {
+            try {
+                const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent('https://api.railradar.in/v1/trains/' + trainNo + '/live');
+                const rrRes = await fetch(proxyUrl, {
+                    headers: { 'Authorization': authHeader, 'Accept': 'application/json' }
+                });
+                if (rrRes.ok) {
+                    rrData = await rrRes.json();
+                }
+            } catch(e) {
+                console.warn('[LiveStatus] RailRadar proxy fetch failed:', e.message);
+            }
+        }
+
+        // Parse RailRadar JSON response if received
+        if (rrData) {
+            function parseStn(val) {
+                if (!val) return '';
+                if (typeof val === 'string') return val;
+                if (typeof val === 'object') return val.name || val.station_name || val.code || val.station_code || '';
+                return String(val);
+            }
+
+            const d = rrData.data || rrData.result || rrData;
+            let station = parseStn(d.current_station || d.currentStation || d.station || d.last_station || d.current_location || d.location);
+            let nextStn = parseStn(d.next_station || d.nextStation || d.upcoming_station);
+            let delay   = parseInt(d.delay || d.delay_minutes || d.late_minutes || 0) || 0;
+            let status  = d.status || d.train_status || d.running_status || (delay > 0 ? (delay + 'm Late') : 'On Time 🟢');
+
+            if (!station && typeof d === 'object') {
+                for (const k of Object.keys(d)) {
+                    if (k.toLowerCase().includes('station') && d[k]) {
+                        station = parseStn(d[k]);
+                        if (station) break;
+                    }
+                }
+            }
+
+            if (station) {
+                const delayClass = delay > 0 ? 'bg-danger text-white' : 'bg-success text-white';
+                const delayTxt   = delay > 0 ? ('⚠️ ' + delay + 'm Late') : 'On Time 🟢';
+                const timeStr    = 'RailRadar API • ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+                if (locEl) locEl.innerHTML = '<i class="fas fa-location-dot me-1 text-danger"></i><strong>' + station + '</strong><br><small class="text-white-50 fw-normal">— ' + status + (nextStn ? ' • Next: ' + nextStn : '') + '</small>';
+                if (nextEl) nextEl.innerHTML = '<i class="fas fa-arrow-right-long me-1 text-info"></i>' + (nextStn || 'En Route');
+                if (delayEl) { delayEl.textContent = delayTxt; delayEl.className = 'badge ' + delayClass + ' px-2 py-1 font-monospace'; }
+                if (timeEl) timeEl.textContent = timeStr;
+                localStorage.setItem('ai_live_status_' + trainNo, JSON.stringify({ currentLocation: station, nextStation: nextStn || 'En Route', delayText: delayTxt, delayBadgeClass: delayClass, lastUpdated: timeStr, timestamp: Date.now() }));
+                if (typeof showToast === 'function') showToast('⚡ Live station via RailRadar — Train #' + trainNo, 'success');
+                return;
+            }
+        }
+    }
+
+    // ── Priority 2: Parallel race across free APIs via CORS proxies ──────────
+    function fetchTextTimeout(url, ms) {
         return new Promise((resolve, reject) => {
             const ctrl = new AbortController();
             const tid = setTimeout(() => { ctrl.abort(); reject(new Error('timeout')); }, ms || 4000);
@@ -5978,168 +6058,95 @@ window.refreshAILiveTrainStatus = async function(trainNo, originStn) {
         });
     }
 
-    // Wrap any target URL through multiple fast CORS proxies — race them
     function proxyRace(targetUrl) {
         return Promise.any([
-            fetchTimeout('https://corsproxy.io/?' + encodeURIComponent(targetUrl), 4000),
-            fetchTimeout('https://api.allorigins.win/raw?url=' + encodeURIComponent(targetUrl), 4000),
-            fetchTimeout('https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(targetUrl), 4000)
+            fetchTextTimeout('https://corsproxy.io/?' + encodeURIComponent(targetUrl), 4000),
+            fetchTextTimeout('https://api.allorigins.win/raw?url=' + encodeURIComponent(targetUrl), 4000),
+            fetchTextTimeout('https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(targetUrl), 4000)
         ]).then(t => {
-            if (t.trim().startsWith('<!DOCTYPE') && t.indexOf('station') === -1 && t.indexOf('Station') === -1) {
-                throw new Error('html-shell');
-            }
+            if (t.trim().startsWith('<!DOCTYPE') && t.indexOf('station') === -1 && t.indexOf('Station') === -1) throw new Error('html-shell');
             return t;
         });
     }
 
-    // Real Indian Railways data endpoints (JSON APIs, not React SPAs)
     const APIS = [
-        { label: 'railwaystatus.in', url: `https://api.railwaystatus.in/api/v1/liveStatus?trainNumber=${trainNo}` },
-        { label: 'erail.in',        url: `https://erail.in/rail/getTrains.aspx?TrainNo=${trainNo}&DataSource=0&Action=RUNNING_STATUS&time=1` },
-        { label: 'trainman.in',     url: `https://www.trainman.in/api/status/${trainNo}/0/0` },
-        { label: 'railapi.com',     url: `https://indianrailapi.com/api/v2/LiveTrainStatus/apikey/free/TrainNumber/${trainNo}/Date/today/` }
+        { label: 'railwaystatus.in', url: 'https://api.railwaystatus.in/api/v1/liveStatus?trainNumber=' + trainNo },
+        { label: 'erail.in',        url: 'https://erail.in/rail/getTrains.aspx?TrainNo=' + trainNo + '&DataSource=0&Action=RUNNING_STATUS&time=1' },
+        { label: 'trainman.in',     url: 'https://www.trainman.in/api/status/' + trainNo + '/0/0' },
+        { label: 'railapi.com',     url: 'https://indianrailapi.com/api/v2/LiveTrainStatus/apikey/free/TrainNumber/' + trainNo + '/Date/today/' }
     ];
 
     let rawText = '';
     let apiUsed = '';
 
-    // ── Priority 1: RailRadar (direct CORS API — no proxy needed) ────────────
-    // Free key at railradar.in/login — set once in Profile Settings.
-    if (window._railradarApiKey) {
-        try {
-            const rrCtrl = new AbortController();
-            const rrTid = setTimeout(() => rrCtrl.abort(), 5000);
-            const rrRes = await fetch('https://api.railradar.in/v1/trains/' + trainNo + '/live', {
-                signal: rrCtrl.signal,
-                headers: { 'Authorization': 'Bearer ' + window._railradarApiKey, 'Accept': 'application/json' }
-            });
-            clearTimeout(rrTid);
-            if (rrRes.ok) {
-                const rrData = await rrRes.json();
-                const station = rrData.current_station || rrData.currentStation || rrData.station_name || '';
-                const nextStn = rrData.next_station   || rrData.nextStation   || '';
-                const delay   = parseInt(rrData.delay  || rrData.delay_minutes || 0) || 0;
-                const status  = rrData.status          || rrData.train_status  || 'RUNNING';
-                if (station) {
-                    const delayClass = delay > 0 ? 'bg-danger text-white' : 'bg-success text-white';
-                    const delayTxt   = delay > 0 ? '\u26a0\ufe0f ' + delay + 'm Late' : 'On Time \uD83D\uDFE2';
-                    const timeStr    = 'RailRadar \u2022 ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-                    if (locEl) locEl.innerHTML = '<i class="fas fa-location-dot me-1 text-danger"></i><strong>' + station + '</strong><br><small class="text-white-50 fw-normal">\u2014 ' + status + (nextStn ? ' \u2022 Next: ' + nextStn : '') + '</small>';
-                    if (nextEl) nextEl.innerHTML = '<i class="fas fa-arrow-right-long me-1 text-info"></i>' + (nextStn || 'En Route');
-                    if (delayEl) { delayEl.textContent = delayTxt; delayEl.className = 'badge ' + delayClass + ' px-2 py-1 font-monospace'; }
-                    if (timeEl) timeEl.textContent = timeStr;
-                    localStorage.setItem('ai_live_status_' + trainNo, JSON.stringify({ currentLocation: station, nextStation: nextStn || 'En Route', delayText: delayTxt, delayBadgeClass: delayClass, lastUpdated: timeStr, timestamp: Date.now() }));
-                    if (typeof showToast === 'function') showToast('\u26a1 Live station via RailRadar \u2014 Train #' + trainNo, 'success');
-                    return;
-                }
-            }
-        } catch(e) { console.warn('[LiveStatus] RailRadar failed:', e.message); }
-    }
-
-    // ── Priority 2: Parallel race across free APIs via CORS proxies ──────────
-    // Fire ALL APIs simultaneously — take whichever responds first (max 4s)
     try {
-        const result = await Promise.any(
-            APIS.map(api =>
-                proxyRace(api.url).then(t => ({ text: t, label: api.label }))
-            )
-        );
+        const result = await Promise.any(APIS.map(api => proxyRace(api.url).then(t => ({ text: t, label: api.label }))));
         rawText = result.text;
         apiUsed = result.label;
-        console.log('[LiveStatus] Got data from ' + apiUsed + ' (' + rawText.length + ' chars)');
-    } catch (e) {
-        console.warn('[LiveStatus] All APIs failed');
-    }
+        console.log('[LiveStatus] Got data from ' + apiUsed);
+    } catch (e) { console.warn('[LiveStatus] All APIs failed'); }
 
     const groqApiKey = window._groqApiKey || window._openrouterApiKey;
 
-    // Groq AI parses the real data
     if (rawText && groqApiKey) {
-        const clipped = rawText
-            .replace(/<script[\s\S]*?<\/script>/gi, '')
-            .replace(/<style[\s\S]*?<\/style>/gi, '')
-            .replace(/<[^>]+>/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim()
-            .slice(0, 2500);
-
-        const prompt = 'You are an Indian Railways live status expert. Parse this live running status data for Train #' + trainNo + (stnCode ? ' (boarding station: ' + stnCode + ')' : '') + ' sourced from ' + apiUsed + ':\n\n"' + clipped + '"\n\nReturn ONLY valid JSON, no markdown, no backticks:\n{"currentStation":"last reported station name","nextStation":"next stop with ETA if available","delayMinutes":0,"delayText":"On Time 🟢","isDelayed":false,"summary":"1-line plain English status"}';
-
+        const clipped = rawText.replace(/<script[\s\S]*?<\/script>/gi,'').replace(/<style[\s\S]*?<\/style>/gi,'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,2500);
+        const prompt = 'You are an Indian Railways live status expert. Parse this running data for Train #' + trainNo + (stnCode ? ' (boarding: ' + stnCode + ')' : '') + ' from ' + apiUsed + ':\n\n"' + clipped + '"\n\nReturn ONLY valid JSON (no markdown, no backticks):\n{"currentStation":"station name","nextStation":"next stop + ETA","delayMinutes":0,"delayText":"On Time 🟢","isDelayed":false,"summary":"1-line status"}';
         try {
-            const groqEndpoint = window._groqApiKey
-                ? 'https://api.groq.com/openai/v1/chat/completions'
-                : 'https://openrouter.ai/api/v1/chat/completions';
-            const groqModel = window._groqApiKey ? 'llama-3.3-70b-versatile' : 'google/gemini-2.5-flash';
-
+            const groqEndpoint = window._groqApiKey ? 'https://api.groq.com/openai/v1/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions';
+            const groqModel    = window._groqApiKey ? 'llama-3.3-70b-versatile' : 'google/gemini-2.5-flash';
             const aiCtrl = new AbortController();
-            const aiTid = setTimeout(() => aiCtrl.abort(), 10000);
-            const aiRes = await fetch(groqEndpoint, {
-                method: 'POST',
-                signal: aiCtrl.signal,
+            const aiTid  = setTimeout(() => aiCtrl.abort(), 10000);
+            const aiRes  = await fetch(groqEndpoint, {
+                method: 'POST', signal: aiCtrl.signal,
                 headers: { 'Authorization': 'Bearer ' + groqApiKey, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ model: groqModel, messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_tokens: 300 })
             });
             clearTimeout(aiTid);
-
             if (aiRes.ok) {
                 const aiData = await aiRes.json();
-                const content = (aiData.choices && aiData.choices[0] && aiData.choices[0].message && aiData.choices[0].message.content) || '';
-                const jsonMatch = content.match(/\{[\s\S]*?\}/);
+                const aiContent = (aiData.choices && aiData.choices[0] && aiData.choices[0].message && aiData.choices[0].message.content) || '';
+                const jsonMatch = aiContent.match(/\{[\s\S]*?\}/);
                 if (jsonMatch) {
                     const parsed = JSON.parse(jsonMatch[0]);
                     if (parsed && parsed.currentStation) {
                         const delayClass = (parsed.isDelayed || parsed.delayMinutes > 0) ? 'bg-danger text-white' : 'bg-success text-white';
-                        const providerLabel = window._groqApiKey ? 'Groq LLaMA' : 'Gemini AI';
-                        const timeStr = providerLabel + ' via ' + apiUsed + ' \u2022 ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-
-                        if (locEl) locEl.innerHTML = '<i class="fas fa-location-dot me-1 text-danger"></i><strong>' + parsed.currentStation + '</strong>' + (parsed.summary ? '<br><small class="text-white-50 fw-normal">\u2014 ' + parsed.summary + '</small>' : '');
+                        const pLabel = window._groqApiKey ? 'Groq LLaMA' : 'Gemini AI';
+                        const timeStr = pLabel + ' via ' + apiUsed + ' • ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+                        if (locEl) locEl.innerHTML = '<i class="fas fa-location-dot me-1 text-danger"></i><strong>' + parsed.currentStation + '</strong>' + (parsed.summary ? '<br><small class="text-white-50 fw-normal">— ' + parsed.summary + '</small>' : '');
                         if (nextEl) nextEl.innerHTML = '<i class="fas fa-arrow-right-long me-1 text-info"></i>' + (parsed.nextStation || 'En Route');
-                        if (delayEl) { delayEl.textContent = parsed.delayText || 'On Time \uD83D\uDFE2'; delayEl.className = 'badge ' + delayClass + ' px-2 py-1 font-monospace'; }
+                        if (delayEl) { delayEl.textContent = parsed.delayText || 'On Time 🟢'; delayEl.className = 'badge ' + delayClass + ' px-2 py-1 font-monospace'; }
                         if (timeEl) timeEl.textContent = timeStr;
-
-                        localStorage.setItem('ai_live_status_' + trainNo, JSON.stringify({
-                            currentLocation: parsed.currentStation,
-                            nextStation: parsed.nextStation || 'En Route',
-                            delayText: parsed.delayText || 'On Time \uD83D\uDFE2',
-                            delayBadgeClass: delayClass,
-                            lastUpdated: timeStr,
-                            timestamp: Date.now()
-                        }));
-
-                        if (typeof showToast === 'function') showToast('\u26A1 Live status via ' + apiUsed + ' \u2014 Train #' + trainNo + '!', 'success');
+                        localStorage.setItem('ai_live_status_' + trainNo, JSON.stringify({ currentLocation: parsed.currentStation, nextStation: parsed.nextStation || 'En Route', delayText: parsed.delayText || 'On Time 🟢', delayBadgeClass: delayClass, lastUpdated: timeStr, timestamp: Date.now() }));
+                        if (typeof showToast === 'function') showToast('⚡ Live status via ' + apiUsed + ' — Train #' + trainNo, 'success');
                         return;
                     }
                 }
             }
-        } catch (e) {
-            console.warn('[LiveStatus] Groq parse error:', e.message);
-        }
+        } catch(e) { console.warn('[LiveStatus] Groq error:', e.message); }
     }
 
-    // Raw JSON fallback (no Groq key, or AI failed but we have data)
     if (rawText) {
         try {
             const rawJson = JSON.parse(rawText.trim());
-            const station = rawJson.current_station_name || rawJson.currentStation || rawJson.station_name || rawJson.station || rawJson.CurrentStation || '';
-            const delay   = parseInt(rawJson.delay || rawJson.delay_minutes || rawJson.Delay || 0) || 0;
+            const station = rawJson.current_station_name || rawJson.currentStation || rawJson.station_name || rawJson.station || '';
+            const delay = parseInt(rawJson.delay || rawJson.delay_minutes || 0) || 0;
             if (station) {
                 if (locEl) locEl.innerHTML = '<i class="fas fa-location-dot me-1 text-danger"></i><strong>' + station + '</strong>';
                 if (nextEl) nextEl.innerHTML = '<i class="fas fa-info-circle me-1 text-muted"></i>Raw data from ' + apiUsed;
-                if (delayEl) { delayEl.textContent = delay > 0 ? '\u26A0\uFE0F ' + delay + 'm Late' : 'On Time \uD83D\uDFE2'; delayEl.className = 'badge ' + (delay > 0 ? 'bg-danger' : 'bg-success') + ' text-white px-2 py-1 font-monospace'; }
-                if (timeEl) timeEl.textContent = apiUsed + ' \u2022 ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-                if (typeof showToast === 'function') showToast('Live data fetched! Add Groq API key for AI summary.', 'info');
+                if (delayEl) { delayEl.textContent = delay > 0 ? '⚠️ ' + delay + 'm Late' : 'On Time 🟢'; delayEl.className = 'badge ' + (delay > 0 ? 'bg-danger' : 'bg-success') + ' text-white px-2 py-1 font-monospace'; }
+                if (timeEl) timeEl.textContent = apiUsed + ' • ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+                if (typeof showToast === 'function') showToast('Live data fetched! Add Groq key for AI summary.', 'info');
                 return;
             }
-        } catch(e) { /* not clean JSON */ }
+        } catch(e) {}
     }
 
-    // All sources failed
-    var reason = !groqApiKey ? 'Add Groq API Key in Settings for AI parsing.' : 'All live APIs timed out. See iframe below.';
+    const rrHint = (window._railradarApiKey || localStorage.getItem('railradar_api_key')) ? '' : ' Add a <strong>RailRadar API key</strong> in Profile for guaranteed data.';
     if (locEl) locEl.innerHTML = '<i class="fas fa-exclamation-triangle me-1 text-warning"></i>Live APIs Unavailable';
-    if (nextEl) nextEl.innerHTML = '<i class="fas fa-info-circle me-1 text-muted"></i><small class="text-white-50">' + reason + '</small>';
+    if (nextEl) nextEl.innerHTML = '<i class="fas fa-info-circle me-1 text-muted"></i><small class="text-white-50">All APIs timed out. Check iframe below.' + rrHint + '</small>';
     if (delayEl) { delayEl.textContent = 'See iframe'; delayEl.className = 'badge bg-secondary text-white px-2 py-1 font-monospace'; }
-    if (timeEl) timeEl.textContent = 'Tried \u2022 ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-    if (typeof showToast === 'function') showToast('Live APIs unavailable \u2014 check iframe below for real-time data.', 'warning');
+    if (timeEl) timeEl.textContent = 'Tried • ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    if (typeof showToast === 'function') showToast('Live APIs unavailable — check iframe below.', 'warning');
 };
 
 
