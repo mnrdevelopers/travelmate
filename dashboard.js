@@ -1660,9 +1660,9 @@ function _buildActiveTripHero(trip) {
         .sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
         .slice(0, 3);
 
-    // Upcoming train tickets panel — strictly trains departing within the next 12 hours
+    // Active / Upcoming train tickets panel — visible while upcoming or in transit until reaching destination
     const now = Date.now();
-    const twelveHoursMs = 12 * 60 * 60 * 1000;
+    const twentyFourHoursMs = 24 * 60 * 60 * 1000;
     const trainTickets = (trip.tickets || [])
         .filter(t => {
             // Must be train type (or default if type is unspecified/train)
@@ -1670,8 +1670,26 @@ function _buildActiveTripHero(trip) {
             if (!isTrain) return false;
             
             const depMs = _getDepartureMs(t.departureTime, trip.startDate);
-            if (!depMs) return true; // Keep if time not specified
-            return depMs > now && depMs <= (now + twelveHoursMs);
+            if (!depMs) return true; // Keep if departure time not specified
+            
+            const arrMs = _getArrivalMs(t.arrivalTime, t.departureTime, trip.startDate);
+            
+            // 1. Train has reached destination -> Disappear from hero active train status
+            if (arrMs && now > arrMs) {
+                return false;
+            }
+
+            // 2. Train has departed and is currently in transit -> Keep visible until reaching destination
+            if (now >= depMs && (!arrMs || now <= arrMs)) {
+                return true;
+            }
+
+            // 3. Train is upcoming -> Keep visible if departing within 24 hours or during active trip
+            if (depMs > now && depMs <= (now + twentyFourHoursMs)) {
+                return true;
+            }
+
+            return false;
         })
         .sort((a, b) => {
             const da = _getDepartureMs(a.departureTime, trip.startDate) || 0;
@@ -2021,7 +2039,7 @@ function _buildTrainPanel(tickets, manualTd, tripId) {
                 </button>
             </div>`;
         } else {
-            ticketsHtml = `<span style="font-size:0.78rem; color:rgba(255,255,255,0.4);"><i class="fas fa-circle-info me-1"></i>No train departing in the next 12 hours. <a href="trip-details.html?id=${tripId}&tab=tickets" style="color:#80deea;">Add in Trip Details →</a></span>`;
+            ticketsHtml = `<span style="font-size:0.78rem; color:rgba(255,255,255,0.4);"><i class="fas fa-circle-info me-1"></i>No active or upcoming train in transit. <a href="trip-details.html?id=${tripId}&tab=tickets" style="color:#80deea;">Add in Trip Details →</a></span>`;
         }
     }
 
@@ -2030,7 +2048,7 @@ function _buildTrainPanel(tickets, manualTd, tripId) {
         <div class="d-flex align-items-center gap-2 mb-2">
             <i class="fas fa-train" style="color:#80deea;"></i>
             <span style="font-size:0.78rem; font-weight:700; color:rgba(255,255,255,0.85); text-transform:uppercase; letter-spacing:0.5px;">
-                Upcoming Train
+                Upcoming / Live Train
                 ${tickets.length > 0 ? `<span style="background:rgba(128,222,234,0.2); border:1px solid rgba(128,222,234,0.3); color:#80deea; border-radius:8px; padding:1px 7px; font-size:0.68rem; margin-left:4px;">${tickets.length}</span>` : ''}
             </span>
             <button class="hero-action-btn ms-auto" style="padding:2px 10px; font-size:0.72rem;" id="hero-train-toggle-btn">
@@ -2114,6 +2132,26 @@ function _getDepartureMs(departureTime, startDate) {
         return baseDate.getTime();
     }
     return null;
+}
+
+/** Calculates arrival time in milliseconds timestamp, accounting for overnight journeys & fallbacks */
+function _getArrivalMs(arrivalTime, departureTime, startDate) {
+    const depMs = _getDepartureMs(departureTime, startDate);
+    let arrMs = _getDepartureMs(arrivalTime, startDate);
+
+    if (depMs && arrMs) {
+        // If arrival time string is HH:MM and arrMs <= depMs (overnight journey)
+        if (arrMs <= depMs && typeof arrivalTime === 'string' && /^\d{2}:\d{2}/.test(arrivalTime)) {
+            arrMs += 24 * 60 * 60 * 1000;
+        }
+    }
+
+    if (!arrMs && depMs) {
+        // Fallback: default to 6 hours after departure if arrival time is not explicitly specified
+        arrMs = depMs + (6 * 60 * 60 * 1000);
+    }
+
+    return arrMs;
 }
 
 // ── Time extraction helper ─────────────────────────────────────────────────
