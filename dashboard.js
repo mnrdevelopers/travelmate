@@ -1,4 +1,4 @@
-﻿let currentUser = null;
+let currentUser = null;
 let userTrips = [];
 var customCategories = typeof customCategories !== 'undefined' ? customCategories : [];
 let carExpenseChart = null;
@@ -238,6 +238,12 @@ function showProfileModal() {
             if (groqKeyField && data.groqApiKey) {
                 groqKeyField.value = data.groqApiKey;
             }
+
+            const railradarKeyField = document.getElementById('profile-railradar-key');
+            if (railradarKeyField && data.railradarApiKey) {
+                railradarKeyField.value = data.railradarApiKey;
+            }
+            if (data.railradarApiKey) window._railradarApiKey = data.railradarApiKey;
             
             const modelSelect = document.getElementById('profile-openrouter-model');
             const customInput = document.getElementById('profile-openrouter-custom-model');
@@ -323,6 +329,12 @@ async function saveProfile() {
         if (groqApiKey) {
             window._groqApiKey = groqApiKey;
         }
+
+        const railradarKeyInput = document.getElementById('profile-railradar-key');
+        const railradarApiKey = railradarKeyInput ? railradarKeyInput.value.trim() : '';
+        if (railradarApiKey) {
+            window._railradarApiKey = railradarApiKey;
+        }
         
         const modelSelect = document.getElementById('profile-openrouter-model');
         const openrouterModel = modelSelect ? modelSelect.value : 'auto';
@@ -342,6 +354,7 @@ async function saveProfile() {
         };
         if (openrouterApiKey !== undefined) updatePayload.openrouterApiKey = openrouterApiKey;
         if (groqApiKey !== undefined) updatePayload.groqApiKey = groqApiKey;
+        if (railradarApiKey !== undefined) updatePayload.railradarApiKey = railradarApiKey;
         
         await db.collection('users').doc(auth.currentUser.uid).set(updatePayload, { merge: true });
         if (selectedAvatarSrc && auth.currentUser) {
@@ -3769,6 +3782,7 @@ async function loadOpenRouterKey() {
         
         window._openrouterApiKey = userData.openrouterApiKey || sharedData.openrouterApiKey || '';
         window._groqApiKey = userData.groqApiKey || sharedData.groqApiKey || '';
+        window._railradarApiKey = userData.railradarApiKey || sharedData.railradarApiKey || '';
         window._openrouterModel = userData.openrouterModel || sharedData.openrouterModel || 'auto';
         window._openrouterCustomModel = userData.openrouterCustomModel || sharedData.openrouterCustomModel || '';
         
@@ -5989,7 +6003,41 @@ window.refreshAILiveTrainStatus = async function(trainNo, originStn) {
     let rawText = '';
     let apiUsed = '';
 
-    // Fire ALL APIs in parallel via proxy race — pick the fastest winner
+    // ── Priority 1: RailRadar (direct CORS API — no proxy needed) ────────────
+    // Free key at railradar.in/login — set once in Profile Settings.
+    if (window._railradarApiKey) {
+        try {
+            const rrCtrl = new AbortController();
+            const rrTid = setTimeout(() => rrCtrl.abort(), 5000);
+            const rrRes = await fetch('https://api.railradar.in/v1/trains/' + trainNo + '/live', {
+                signal: rrCtrl.signal,
+                headers: { 'Authorization': 'Bearer ' + window._railradarApiKey, 'Accept': 'application/json' }
+            });
+            clearTimeout(rrTid);
+            if (rrRes.ok) {
+                const rrData = await rrRes.json();
+                const station = rrData.current_station || rrData.currentStation || rrData.station_name || '';
+                const nextStn = rrData.next_station   || rrData.nextStation   || '';
+                const delay   = parseInt(rrData.delay  || rrData.delay_minutes || 0) || 0;
+                const status  = rrData.status          || rrData.train_status  || 'RUNNING';
+                if (station) {
+                    const delayClass = delay > 0 ? 'bg-danger text-white' : 'bg-success text-white';
+                    const delayTxt   = delay > 0 ? '\u26a0\ufe0f ' + delay + 'm Late' : 'On Time \uD83D\uDFE2';
+                    const timeStr    = 'RailRadar \u2022 ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+                    if (locEl) locEl.innerHTML = '<i class="fas fa-location-dot me-1 text-danger"></i><strong>' + station + '</strong><br><small class="text-white-50 fw-normal">\u2014 ' + status + (nextStn ? ' \u2022 Next: ' + nextStn : '') + '</small>';
+                    if (nextEl) nextEl.innerHTML = '<i class="fas fa-arrow-right-long me-1 text-info"></i>' + (nextStn || 'En Route');
+                    if (delayEl) { delayEl.textContent = delayTxt; delayEl.className = 'badge ' + delayClass + ' px-2 py-1 font-monospace'; }
+                    if (timeEl) timeEl.textContent = timeStr;
+                    localStorage.setItem('ai_live_status_' + trainNo, JSON.stringify({ currentLocation: station, nextStation: nextStn || 'En Route', delayText: delayTxt, delayBadgeClass: delayClass, lastUpdated: timeStr, timestamp: Date.now() }));
+                    if (typeof showToast === 'function') showToast('\u26a1 Live station via RailRadar \u2014 Train #' + trainNo, 'success');
+                    return;
+                }
+            }
+        } catch(e) { console.warn('[LiveStatus] RailRadar failed:', e.message); }
+    }
+
+    // ── Priority 2: Parallel race across free APIs via CORS proxies ──────────
+    // Fire ALL APIs simultaneously — take whichever responds first (max 4s)
     try {
         const result = await Promise.any(
             APIS.map(api =>
