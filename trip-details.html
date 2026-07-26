@@ -650,6 +650,11 @@
             <!-- Dynamic Stay vs Transit Breakdown loaded here -->
         </div>
 
+        <!-- Journey Disability Concession Savings Summary Card -->
+        <div id="journey-concession-savings-card" class="mb-4 d-none">
+            <!-- Dynamic Concession Savings Summary loaded here -->
+        </div>
+
         <!-- Ticket Category Filter Tabs -->
         <div class="d-flex align-items-center gap-2 mb-3 overflow-x-auto pb-1" id="ticket-filter-tabs">
             <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 active" data-ticket-filter="all">All Tickets</button>
@@ -1030,6 +1035,79 @@
                             <div class="col-md-4 mb-2 px-1">
                                 <label for="ticket-arr-time" class="form-label small mb-1">Arrival Date &amp; Time (Optional)</label>
                                 <input type="datetime-local" class="form-control form-control-sm" id="ticket-arr-time">
+                            </div>
+                        </div>
+
+                        <!-- DISABILITY CONCESSION (DIVYANGJAN) FIELDS -->
+                        <div id="train-concession-container" class="p-3 border border-info border-opacity-50 rounded-3 mb-3" style="background: rgba(13, 202, 240, 0.05);">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <span class="fw-bold text-info-emphasis small text-uppercase">
+                                    <i class="fas fa-wheelchair me-1"></i>Divyangjan / Disability Concession
+                                </span>
+                                <span class="badge bg-info-subtle text-info border border-info border-opacity-25" style="font-size: 0.65rem;">Indian Railways Concession</span>
+                            </div>
+                            
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="ticket-is-concession">
+                                <label class="form-check-label fw-semibold text-dark small" for="ticket-is-concession">
+                                    Apply Disability Concession Discount
+                                </label>
+                            </div>
+
+                            <div id="ticket-concession-fields-wrapper" style="display: none;">
+                                <div class="row g-2 mt-1">
+                                    <div class="col-md-4 mb-2">
+                                        <label for="ticket-general-fare" class="form-label small fw-semibold">General / Full Ticket Fare (<span class="rupee-symbol">₹</span>)</label>
+                                        <input type="number" class="form-control form-control-sm" id="ticket-general-fare" min="0" step="0.01" placeholder="e.g. 1000 (Full price)">
+                                    </div>
+                                    <div class="col-md-4 mb-2">
+                                        <label for="ticket-concession-fare" class="form-label small fw-semibold">Concession / Discounted Fare (<span class="rupee-symbol">₹</span>)</label>
+                                        <input type="number" class="form-control form-control-sm" id="ticket-concession-fare" min="0" step="0.01" placeholder="e.g. 250 (Discounted fare)">
+                                    </div>
+                                    <div class="col-md-4 mb-2">
+                                        <label for="ticket-concession-percent" class="form-label small fw-semibold">Concession Discount (%)</label>
+                                        <div class="input-group input-group-sm">
+                                            <input type="number" class="form-control" id="ticket-concession-percent" min="0" max="100" step="0.1" placeholder="e.g. 75 (Auto %)">
+                                            <button class="btn btn-outline-secondary btn-xs px-1" type="button" onclick="document.getElementById('ticket-concession-percent').value='75'; document.getElementById('ticket-concession-percent').dispatchEvent(new Event('input'));" title="Set 75% Concession">75%</button>
+                                            <button class="btn btn-outline-secondary btn-xs px-1" type="button" onclick="document.getElementById('ticket-concession-percent').value='50'; document.getElementById('ticket-concession-percent').dispatchEvent(new Event('input'));" title="Set 50% Concession">50%</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row g-2">
+                                    <div class="col-md-6 mb-2">
+                                        <label for="ticket-railway-charges" class="form-label small fw-semibold">Railway / IRCTC Charges (<span class="rupee-symbol">₹</span>)</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text bg-white fw-bold">₹</span>
+                                            <input type="number" class="form-control" id="ticket-railway-charges" min="0" step="0.01" value="11.80" placeholder="11.80">
+                                            <button class="btn btn-outline-secondary btn-xs" type="button" id="btn-reset-railway-charges" title="Reset to standard ₹11.80">₹11.80</button>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 mb-2">
+                                        <label for="ticket-travel-insurance" class="form-label small fw-semibold">Travel Insurance Premium (<span class="rupee-symbol">₹</span>)</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text bg-white fw-bold">₹</span>
+                                            <input type="number" class="form-control" id="ticket-travel-insurance" min="0" step="0.01" value="1.80" placeholder="1.80">
+                                            <button class="btn btn-outline-secondary btn-xs" type="button" id="btn-reset-travel-insurance" title="Reset to standard ₹1.80">₹1.80</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="concession-live-calc-badge" class="p-2 border border-success border-opacity-25 rounded bg-success bg-opacity-10 text-success small mt-1 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                    <div>
+                                        <i class="fas fa-calculator me-1"></i>
+                                        <span>Discount: <strong id="concession-badge-pct">75%</strong></span>
+                                        <span class="mx-1">•</span>
+                                        <span>General Fare: <strong id="concession-badge-general">₹0.00</strong></span>
+                                        <span class="mx-1">•</span>
+                                        <span class="text-muted">Fees (₹11.80 + ₹1.80): <strong id="concession-badge-fees">₹13.60</strong></span>
+                                    </div>
+                                    <div>
+                                        <span class="badge bg-success text-white px-2 py-1" style="font-size:0.72rem;">
+                                            <i class="fas fa-piggy-bank me-1"></i>Saved: <span id="concession-badge-saved">₹0.00</span>
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

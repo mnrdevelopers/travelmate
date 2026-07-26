@@ -1824,6 +1824,13 @@ function _buildTrainPanel(tickets, manualTd, tripId) {
                     <i class="fas fa-stopwatch me-1"></i><span class="train-dep-countdown" data-dep-ms="${depMs}">Departs in ${_formatCountdown(depMs - Date.now())}</span>
                 </span>` : '';
 
+            const isConc = tkt.isConcession || (tkt.generalFare > 0 && tkt.generalFare > tkt.cost);
+            const concSaved = tkt.concessionSavings !== undefined ? tkt.concessionSavings : Math.max(0, (tkt.generalFare || 0) - (tkt.cost || 0));
+            const concChip = isConc ? `
+                <span class="hero-train-chip" style="background:rgba(13,202,240,0.18); border-color:rgba(13,202,240,0.4); color:#80deea;">
+                    <i class="fas fa-wheelchair me-1"></i>Divyangjan${concSaved > 0 ? ` (Saved ₹${concSaved.toFixed(0)})` : ''}
+                </span>` : '';
+
             return `
             <div style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.08);">
                 <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:5px;">
@@ -1832,6 +1839,7 @@ function _buildTrainPanel(tickets, manualTd, tripId) {
                     ${tkt.serviceName ? `<span class="hero-train-chip" style="border-color:${tColor}40; background:${tColor}18;"><i class="fas fa-id-badge"></i>${tkt.serviceName}</span>` : ''}
                     ${tkt.operator && tkt.operator !== tkt.serviceName ? `<span class="hero-train-chip" style="border-color:${tColor}40; background:${tColor}18;"><i class="fas fa-building"></i>${tkt.operator}</span>` : ''}
                     ${countdownChip}
+                    ${concChip}
                     ${status ? `<span class="hero-train-chip" style="background:${statusColor}22; border-color:${statusColor}44; color:${statusColor};">${status}</span>` : ''}
                     <button type="button" class="hero-action-btn primary ms-auto" style="padding:2px 10px; font-size:0.72rem; background:rgba(33,150,243,0.25); border-color:rgba(33,150,243,0.45); color:#90caf9;" onclick="openHeroTicketModal(event, '${tkt.id}')">
                         <i class="fas fa-ticket-alt me-1"></i>View Ticket
@@ -5594,9 +5602,26 @@ function openHeroTicketModal(param1, param2) {
                 </div>
                 <div class="col-6 col-md-3">
                     <span class="text-muted small d-block" style="font-size:0.7rem;">TICKET FARE</span>
-                    <span class="fw-bold text-success">${ticket.cost ? '₹' + ticket.cost.toLocaleString('en-IN') : 'Included'}</span>
+                    <span class="fw-bold text-success">${ticket.cost !== undefined && ticket.cost !== null ? '₹' + parseFloat(ticket.cost).toLocaleString('en-IN') : 'Included'}</span>
                 </div>
             </div>
+
+            ${(ticket.isConcession || (ticket.generalFare > 0 && ticket.generalFare > ticket.cost)) ? `
+            <div class="p-2.5 rounded-3 mb-3 border border-info border-opacity-50 bg-info bg-opacity-10 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <span class="text-info-emphasis small fw-bold d-block">
+                        <i class="fas fa-wheelchair me-1"></i>Divyangjan Disability Concession (${ticket.concessionPercent || 75}%)
+                    </span>
+                    <span class="text-muted small" style="font-size:0.72rem;">
+                        General Ticket Fare: <span class="text-decoration-line-through me-1">₹${(ticket.generalFare || 0).toLocaleString('en-IN')}</span> | Paid: <strong>₹${(ticket.cost || 0).toLocaleString('en-IN')}</strong>
+                    </span>
+                </div>
+                <div>
+                    <span class="badge bg-success text-white px-2.5 py-1 fw-bold" style="font-size:0.75rem;">
+                        <i class="fas fa-piggy-bank me-1"></i>Saved ₹${(ticket.concessionSavings !== undefined ? ticket.concessionSavings : Math.max(0, (ticket.generalFare || 0) - (ticket.cost || 0))).toLocaleString('en-IN')}
+                    </span>
+                </div>
+            </div>` : ''}
 
             ${ticket.notes ? `
             <div class="p-2.5 bg-light rounded-3 mb-3 border">
