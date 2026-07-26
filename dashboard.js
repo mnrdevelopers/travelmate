@@ -5848,8 +5848,8 @@ function _renderCleanLiveTrainStatus(trainNo, dateYYYYMMDD, trainNameStr, origin
                         <button type="button" class="btn btn-outline-dark" id="tab-provider-railyatri" onclick="switchLiveTrainIframe('railyatri', '${trainNo}')">
                             <i class="fas fa-compass me-1"></i>RailYatri Live
                         </button>
-                        <button type="button" class="btn btn-outline-warning text-dark fw-bold" id="tab-provider-wimt" onclick="switchLiveTrainIframe('wimt', '${trainNo}')">
-                            <i class="fas fa-location-arrow me-1"></i>Where Is My Train
+                        <button type="button" class="btn btn-outline-warning text-dark fw-bold" id="tab-provider-wimt" onclick="switchLiveTrainIframe('wimt', '${trainNo}')" title="Where Is My Train (Android App)">
+                            <i class="fas fa-location-arrow me-1"></i>Where Is My Train <small class="text-muted" style="font-size:0.6rem;">(Android)</small>
                         </button>
                     </div>
                 </div>
@@ -6020,6 +6020,9 @@ window.switchLiveTrainIframe = function(provider, trainNo) {
     const extBtn = document.getElementById('btn-open-external-live');
     if (!iframe) return;
 
+    const isIosDevice = /iPhone|iPad|iPod/i.test(navigator.userAgent) || 
+                        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
     document.querySelectorAll('#live-train-provider-tabs button').forEach(b => {
         b.classList.remove('active', 'btn-primary', 'btn-warning', 'text-dark', 'fw-bold');
         b.classList.add('btn-outline-dark');
@@ -6039,16 +6042,29 @@ window.switchLiveTrainIframe = function(provider, trainNo) {
         if (originStn) targetUrl += `?start_station=${stnEnc}`;
         if (activeTab) { activeTab.classList.add('active', 'btn-primary'); activeTab.classList.remove('btn-outline-dark'); }
     } else if (provider === 'wimt') {
-        targetUrl = `https://whereismytrain.in/train/${trainNo}`;
-        if (originStn) targetUrl += `?stn=${stnEnc}`;
+        if (isIosDevice) {
+            targetUrl = `https://www.confirmtkt.com/train-running-status/${trainNo}`;
+            if (originStn) targetUrl += `?stn=${stnEnc}`;
+            if (typeof showToast === 'function') {
+                showToast('Where Is My Train app is available on Android. Using ConfirmTkt web live status on iOS.', 'info');
+            }
+        } else {
+            targetUrl = `https://whereismytrain.in/train/${trainNo}`;
+            if (originStn) targetUrl += `?stn=${stnEnc}`;
+        }
         if (activeTab) { activeTab.classList.add('active', 'btn-warning', 'text-dark', 'fw-bold'); activeTab.classList.remove('btn-outline-dark'); }
     }
 
     iframe.src = targetUrl;
     if (extBtn) {
         if (provider === 'wimt') {
-            extBtn.href = `intent://train/${trainNo}#Intent;scheme=wimt;package=com.whereismytrain.android;end;`;
-            extBtn.innerHTML = '<i class="fas fa-mobile-screen-button me-1"></i>Open App';
+            if (isIosDevice) {
+                extBtn.href = `https://www.google.com/search?q=where+is+my+train+${trainNo}`;
+                extBtn.innerHTML = '<i class="fas fa-search me-1"></i>Search Web';
+            } else {
+                extBtn.href = `intent://train/${trainNo}#Intent;scheme=wimt;package=com.whereismytrain.android;end;`;
+                extBtn.innerHTML = '<i class="fas fa-mobile-screen-button me-1"></i>Open Android App';
+            }
         } else {
             extBtn.href = targetUrl;
             extBtn.innerHTML = '<i class="fas fa-external-link-alt me-1"></i>Open Full Page';
