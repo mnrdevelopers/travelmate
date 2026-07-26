@@ -1946,12 +1946,19 @@ function _buildTrainPanel(tickets, manualTd, tripId) {
                             </span>
                         </div>
                         
-                        <div class="position-relative w-100 rounded-pill my-2" style="height: 8px; background: rgba(255, 255, 255, 0.14);">
-                            <div class="h-100 rounded-pill" style="width: ${prog.percent}%; background: linear-gradient(90deg, #22c55e 0%, #06b6d4 50%, #3b82f6 100%); box-shadow: 0 0 12px rgba(34, 197, 94, 0.6); transition: width 0.6s ease;"></div>
-                            <div class="position-absolute top-50 translate-middle d-flex align-items-center justify-content-center" 
-                                 style="left: ${prog.percent}%; transition: left 0.6s ease; width: 22px; height: 22px; background: #0f172a; border: 2px solid #22c55e; border-radius: 50%; box-shadow: 0 0 10px #22c55e; z-index: 2;"
-                                 title="Live Journey Progress: ${prog.percent}%">
-                                <i class="fas fa-train text-warning" style="font-size: 0.65rem;"></i>
+                        <div class="position-relative w-100 my-4" style="height: 10px; background: rgba(255, 255, 255, 0.14); border-radius: 6px; overflow: visible;">
+                            <div class="h-100" style="width: ${prog.percent}%; background: linear-gradient(90deg, #22c55e 0%, #06b6d4 50%, #3b82f6 100%); border-radius: 6px; box-shadow: 0 0 12px rgba(34, 197, 94, 0.6); transition: width 0.6s ease;"></div>
+                            <div class="position-absolute top-50 translate-middle-y" 
+                                 style="left: calc(${prog.percent}% - 40px); transition: left 0.6s ease; pointer-events: none; z-index: 3;"
+                                 title="Live Train Position: ${prog.percent}%">
+                                <div class="d-flex flex-column align-items-center position-relative">
+                                    <img src="indian-train.png" alt="Indian Railways Express Train" 
+                                         style="height: 30px; width: auto; max-width: 120px; filter: drop-shadow(0 4px 10px rgba(0, 255, 180, 0.6)); display: block;" />
+                                    <span class="badge bg-warning text-dark font-monospace fw-bold px-2 py-0.5 rounded-pill shadow-sm position-absolute" 
+                                          style="bottom: -18px; font-size: 0.6rem; border: 1px solid rgba(0,0,0,0.3); white-space: nowrap;">
+                                        <i class="fas fa-bolt text-danger me-0.5"></i>${prog.percent}% Live
+                                    </span>
+                                </div>
                             </div>
                         </div>
 
