@@ -1779,6 +1779,43 @@ function _buildActiveTripHero(trip) {
 
 // ── Train panel builder ────────────────────────────────────────────────────
 
+function _calcJourneyProgress(depTimeRaw, arrTimeRaw) {
+    const now = Date.now();
+    const depMs = typeof _getDepartureMs === 'function' ? _getDepartureMs(depTimeRaw) : null;
+    let arrMs = typeof _getDepartureMs === 'function' ? _getDepartureMs(arrTimeRaw) : null;
+
+    if (!depMs) {
+        return { percent: 45, status: 'Live in Transit', badgeClass: 'bg-primary text-white' };
+    }
+
+    if (!arrMs || arrMs <= depMs) {
+        arrMs = depMs + (6 * 60 * 60 * 1000);
+    }
+
+    if (now < depMs) {
+        const diffMins = Math.round((depMs - now) / 60000);
+        const h = Math.floor(diffMins / 60);
+        const m = diffMins % 60;
+        const timeStr = h > 0 ? `${h}h ${m}m` : `${m}m`;
+        return { percent: 0, status: `Starts in ${timeStr}`, badgeClass: 'bg-info text-dark' };
+    }
+
+    if (now > arrMs) {
+        return { percent: 100, status: 'Completed / Arrived', badgeClass: 'bg-success text-white' };
+    }
+
+    const total = arrMs - depMs;
+    const elapsed = now - depMs;
+    const pct = Math.min(98, Math.max(4, Math.round((elapsed / total) * 100)));
+
+    const remMins = Math.round((arrMs - now) / 60000);
+    const rh = Math.floor(remMins / 60);
+    const rm = remMins % 60;
+    const remStr = rh > 0 ? `${rh}h ${rm}m left` : `${remMins}m left`;
+
+    return { percent: pct, status: `${pct}% Completed • ${remStr}`, badgeClass: 'bg-warning text-dark' };
+}
+
 /**
  * Builds the upcoming train panel in the hero.
  * @param {Array}  tickets  - upcoming train tickets from trip.tickets (type === train)
@@ -1849,6 +1886,42 @@ function _buildTrainPanel(tickets, manualTd, tripId) {
                         <i class="fas fa-location-crosshairs me-1"></i>Track My GPS
                     </button>
                 </div>
+
+                <!-- LIVE JOURNEY PROGRESS BAR ON HERO CARD -->
+                ${(() => {
+                    const prog = _calcJourneyProgress(tkt.departureTime, tkt.arrivalTime);
+                    return `
+                    <div class="hero-journey-progress-container mt-2 mb-2 p-2.5 rounded-3 position-relative overflow-hidden" style="background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(255, 255, 255, 0.12); backdrop-filter: blur(8px);">
+                        <div class="d-flex justify-content-between align-items-center mb-1.5" style="font-size: 0.72rem;">
+                            <span class="fw-bold text-white">
+                                <i class="fas fa-circle-play text-success me-1"></i>${depStn || 'Departure'}
+                            </span>
+                            <span class="badge ${prog.badgeClass} font-monospace px-2 py-0.5" style="font-size: 0.68rem; letter-spacing: 0.3px;">
+                                <i class="fas fa-satellite-dish me-1"></i>${prog.status}
+                            </span>
+                            <span class="fw-bold text-white">
+                                <i class="fas fa-flag-checkered text-danger me-1"></i>${arrStn || 'Destination'}
+                            </span>
+                        </div>
+                        
+                        <div class="position-relative w-100 rounded-pill my-2" style="height: 8px; background: rgba(255, 255, 255, 0.14);">
+                            <div class="h-100 rounded-pill" style="width: ${prog.percent}%; background: linear-gradient(90deg, #22c55e 0%, #06b6d4 50%, #3b82f6 100%); box-shadow: 0 0 12px rgba(34, 197, 94, 0.6); transition: width 0.6s ease;"></div>
+                            <div class="position-absolute top-50 translate-middle d-flex align-items-center justify-content-center" 
+                                 style="left: ${prog.percent}%; transition: left 0.6s ease; width: 22px; height: 22px; background: #0f172a; border: 2px solid #22c55e; border-radius: 50%; box-shadow: 0 0 10px #22c55e; z-index: 2;"
+                                 title="Live Journey Progress: ${prog.percent}%">
+                                <i class="fas fa-train text-warning" style="font-size: 0.65rem;"></i>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center text-white-50" style="font-size: 0.68rem;">
+                            <span>${depTime ? `<i class="far fa-clock me-1 text-success"></i>${depTime}` : ''}</span>
+                            <span class="font-monospace text-info-subtle" style="font-size:0.65rem;"><i class="fas fa-route me-1"></i>Live Journey Progress</span>
+                            <span>${arrTime ? `<i class="far fa-clock me-1 text-danger"></i>${arrTime}` : ''}</span>
+                        </div>
+                    </div>
+                    `;
+                })()}
+
                 <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                     ${depStn  ? `<span class="hero-train-chip"><i class="fas fa-circle-play" style="color:#66bb6a; font-size:0.7rem;"></i>${depStn}</span>` : ''}
                     ${depTime ? `<span class="hero-train-chip"><i class="fas fa-arrow-right-from-bracket"></i>${depTime}</span>` : ''}
