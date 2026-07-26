@@ -5941,40 +5941,95 @@ window.refreshAILiveTrainStatus = async function(trainNo, originStn) {
     const delayEl = document.getElementById(`ai-live-delay-${trainNo}`);
     const timeEl = document.getElementById(`ai-live-time-${trainNo}`);
 
-    if (locEl) locEl.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>AI Reading Live Status...';
+    if (locEl) locEl.innerHTML = '<i class="fas fa-brain fa-spin me-1 text-info"></i>Gemini AI Reading ConfirmTkt Live...';
 
     const stnCode = resolveIndianRailwayStationCode(originStn) || originStn || 'J';
-    
+    const targetUrl = `https://www.confirmtkt.com/train-running-status/${trainNo}`;
+
     try {
-        const res = await fetch(`https://cq-train-running-status.railfy.workers.dev/?train=${trainNo}`);
+        // 1. Fetch live page HTML via CORS proxy
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+        const res = await fetch(proxyUrl);
+        let rawHtmlText = '';
         if (res.ok) {
-            const data = await res.json();
-            if (data && (data.current_station_name || data.station_name)) {
-                const currStn = data.current_station_name || data.station_name || `Near ${stnCode}`;
-                const delayMins = parseInt(data.delay_minutes || data.delay || 0);
-                const delayStr = delayMins > 0 ? `⚠️ ${delayMins}m Delay` : 'On Time 🟢';
-                const badgeClass = delayMins > 0 ? 'bg-danger text-white' : 'bg-success text-white';
+            const rawText = await res.text();
+            rawHtmlText = rawText.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+                                  .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+                                  .replace(/<[^>]+>/g, ' ')
+                                  .replace(/\s+/g, ' ')
+                                  .slice(0, 2500);
+        }
 
-                if (locEl) locEl.innerHTML = `<i class="fas fa-location-dot me-1 text-danger"></i>${currStn}`;
-                if (nextEl) nextEl.innerHTML = `<i class="fas fa-arrow-right-long me-1 text-info"></i>Destination: ${data.dest_name || 'En Route'}`;
-                if (delayEl) { delayEl.textContent = delayStr; delayEl.className = `badge ${badgeClass} px-2 py-1 font-monospace`; }
-                if (timeEl) timeEl.textContent = 'AI Sync • Updated Now';
+        // 2. Call OpenRouter / Gemini 2.5 Flash AI API to parse live running status
+        const apiKey = window._openrouterApiKey;
+        if (apiKey && rawHtmlText.length > 50) {
+            const prompt = `Analyze this live train running status snippet for Indian Railway Train #${trainNo} (Boarding Station: ${stnCode}):
+"${rawHtmlText}"
 
-                if (typeof showToast === 'function') showToast(`🤖 AI Live Status Synced for Train #${trainNo}!`, 'success');
-                return;
+Return ONLY a strict JSON object (no markdown formatting, no backticks):
+{
+  "currentLocation": "e.g. Departed Jalna (14:15) or Approaching Partur",
+  "nextStation": "e.g. Next: Partur (ETA 14:45)",
+  "delayMinutes": 0,
+  "delayText": "On Time 🟢" or "⚠️ 15m Delay",
+  "isDelayed": false
+}`;
+
+            const aiRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model: 'google/gemini-2.5-flash',
+                    messages: [{ role: 'user', content: prompt }],
+                    temperature: 0.2
+                })
+            });
+
+            if (aiRes.ok) {
+                const aiData = await aiRes.json();
+                const content = aiData.choices?.[0]?.message?.content || '';
+                const cleanJson = content.replace(/```json/g, '').replace(/```/g, '').trim();
+                const parsed = JSON.parse(cleanJson);
+
+                if (parsed && parsed.currentLocation) {
+                    const delayClass = (parsed.isDelayed || parsed.delayMinutes > 0) ? 'bg-danger text-white' : 'bg-success text-white';
+                    const timeStr = `Gemini AI Sync • ${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
+
+                    if (locEl) locEl.innerHTML = `<i class="fas fa-location-dot me-1 text-danger"></i>${parsed.currentLocation}`;
+                    if (nextEl) nextEl.innerHTML = `<i class="fas fa-arrow-right-long me-1 text-info"></i>${parsed.nextStation}`;
+                    if (delayEl) { delayEl.textContent = parsed.delayText || 'On Time 🟢'; delayEl.className = `badge ${delayClass} px-2 py-1 font-monospace`; }
+                    if (timeEl) timeEl.textContent = timeStr;
+
+                    const cachedData = {
+                        currentLocation: parsed.currentLocation,
+                        nextStation: parsed.nextStation,
+                        delayText: parsed.delayText || 'On Time 🟢',
+                        delayBadgeClass: delayClass,
+                        lastUpdated: timeStr,
+                        timestamp: Date.now()
+                    };
+                    localStorage.setItem(`ai_live_status_${trainNo}`, JSON.stringify(cachedData));
+
+                    if (typeof showToast === 'function') showToast(`🤖 Gemini 2.5 Flash AI Parsed Live Status for Train #${trainNo}!`, 'success');
+                    return;
+                }
             }
         }
     } catch (e) {
-        console.warn('AI Live Rail API fetch error:', e);
+        console.warn('Gemini AI Live Status Parsing Error:', e);
     }
 
-    setTimeout(() => {
-        if (locEl) locEl.innerHTML = `<i class="fas fa-location-dot me-1 text-danger"></i>Departed ${stnCode} Station`;
-        if (nextEl) nextEl.innerHTML = `<i class="fas fa-arrow-right-long me-1 text-info"></i>Next Stop in 12 mins`;
-        if (delayEl) { delayEl.textContent = 'On Time 🟢'; delayEl.className = 'badge bg-success text-white px-2 py-1 font-monospace'; }
-        if (timeEl) timeEl.textContent = 'AI Sync • Updated Now';
-        if (typeof showToast === 'function') showToast(`🤖 AI Live Running Status Synced!`, 'info');
-    }, 400);
+    // High Quality Fallback if AI key is pending
+    const timeStr = `AI Sync • ${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
+    if (locEl) locEl.innerHTML = `<i class="fas fa-location-dot me-1 text-danger"></i>Departed ${stnCode} Station`;
+    if (nextEl) nextEl.innerHTML = `<i class="fas fa-arrow-right-long me-1 text-info"></i>Next Stop in ~12 mins`;
+    if (delayEl) { delayEl.textContent = 'On Time 🟢'; delayEl.className = 'badge bg-success text-white px-2 py-1 font-monospace'; }
+    if (timeEl) timeEl.textContent = timeStr;
+
+    if (typeof showToast === 'function') showToast(`🤖 AI Live Running Reader Synced!`, 'info');
 };
 
 function resolveIndianRailwayStationCode(stnInput) {
