@@ -6008,7 +6008,12 @@ function renderTicketsList(trip) {
                                     ${isExpensed ? `<span class="badge bg-success-subtle text-success ms-1" style="font-size: 0.55rem;"><i class="fas fa-check me-1"></i>Expensed</span>` : ''}
                                 ` : '<span class="text-muted small">No cost tracked</span>')}
                             </div>
-                            <div>
+                            <div class="d-flex align-items-center gap-1">
+                                ${ticket.serviceNo ? `
+                                    <button type="button" class="btn btn-outline-success btn-xs py-1 px-2 fw-semibold" style="font-size: 0.65rem;" onclick="if(window.fetchAndShowLiveTrainStatus){ window.fetchAndShowLiveTrainStatus(event, '${ticket.serviceNo}', null, '${(ticket.serviceName || ticket.operator || '').replace(/'/g, "\\'")}', '${(ticket.depCode || ticket.departurePlace || '').replace(/'/g, "\\'")}'); }">
+                                        <i class="fas fa-satellite-dish me-1"></i>Live Status
+                                    </button>
+                                ` : ''}
                                 ${ticket.imageUrl ? `
                                     <button type="button" class="btn btn-outline-primary btn-xs py-1 px-2 fw-semibold" style="font-size: 0.65rem;" onclick="viewTicketReceipt('${ticket.imageUrl}', '${ticket.operator}')">
                                         <i class="fas fa-image me-1"></i>View Ticket

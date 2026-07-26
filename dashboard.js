@@ -1844,7 +1844,10 @@ function _buildTrainPanel(tickets, manualTd, tripId) {
                     <button type="button" class="hero-action-btn primary ms-auto" style="padding:2px 10px; font-size:0.72rem; background:rgba(33,150,243,0.25); border-color:rgba(33,150,243,0.45); color:#90caf9;" onclick="openHeroTicketModal(event, '${tkt.id}')">
                         <i class="fas fa-ticket-alt me-1"></i>View Ticket
                     </button>
-                    ${tkt.serviceNo ? `<button type="button" class="hero-action-btn primary ms-1" style="padding:2px 10px; font-size:0.72rem; background:rgba(40,200,100,0.22); border-color:rgba(40,200,100,0.4); color:#52d68a;" onclick="fetchAndShowLiveTrainStatus(event, '${tkt.serviceNo}')"><i class="fas fa-satellite-dish me-1"></i>Live Status</button>` : ''}
+                    ${tkt.serviceNo ? `<button type="button" class="hero-action-btn primary ms-1" style="padding:2px 10px; font-size:0.72rem; background:rgba(40,200,100,0.22); border-color:rgba(40,200,100,0.4); color:#52d68a;" onclick="fetchAndShowLiveTrainStatus(event, '${tkt.serviceNo}', null, '${(tkt.serviceName || tkt.operator || '').replace(/'/g, "\\'")}', '${(tkt.depCode || tkt.departurePlace || '').replace(/'/g, "\\'")}')"><i class="fas fa-satellite-dish me-1"></i>Live Status</button>` : ''}
+                    <button type="button" class="hero-action-btn primary ms-1" style="padding:2px 10px; font-size:0.72rem; background:rgba(234,179,8,0.22); border-color:rgba(234,179,8,0.45); color:#fde047;" onclick="togglePassengerOnTrainGps(event)" title="Track your current physical location on train using phone GPS">
+                        <i class="fas fa-location-crosshairs me-1"></i>Track My GPS
+                    </button>
                 </div>
                 <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                     ${depStn  ? `<span class="hero-train-chip"><i class="fas fa-circle-play" style="color:#66bb6a; font-size:0.7rem;"></i>${depStn}</span>` : ''}
@@ -1872,7 +1875,10 @@ function _buildTrainPanel(tickets, manualTd, tripId) {
                 <button type="button" class="hero-action-btn primary ms-auto" style="padding:2px 10px; font-size:0.72rem; background:rgba(33,150,243,0.25); border-color:rgba(33,150,243,0.45); color:#90caf9;" onclick="openHeroTicketModal(event, 'manual')">
                     <i class="fas fa-ticket-alt me-1"></i>View Ticket
                 </button>
-                ${manualTd.number ? `<button type="button" class="hero-action-btn primary ms-1" style="padding:2px 10px; font-size:0.72rem; background:rgba(40,200,100,0.22); border-color:rgba(40,200,100,0.4); color:#52d68a;" onclick="fetchAndShowLiveTrainStatus(event, '${manualTd.number}')"><i class="fas fa-satellite-dish me-1"></i>Live Status</button>` : ''}
+                ${manualTd.number ? `<button type="button" class="hero-action-btn primary ms-1" style="padding:2px 10px; font-size:0.72rem; background:rgba(40,200,100,0.22); border-color:rgba(40,200,100,0.4); color:#52d68a;" onclick="fetchAndShowLiveTrainStatus(event, '${manualTd.number}', null, '${(manualTd.name || '').replace(/'/g, "\\'")}')"><i class="fas fa-satellite-dish me-1"></i>Live Status</button>` : ''}
+                <button type="button" class="hero-action-btn primary ms-1" style="padding:2px 10px; font-size:0.72rem; background:rgba(234,179,8,0.22); border-color:rgba(234,179,8,0.45); color:#fde047;" onclick="togglePassengerOnTrainGps(event)">
+                    <i class="fas fa-location-crosshairs me-1"></i>Track My GPS
+                </button>
             </div>`;
         } else {
             ticketsHtml = `<span style="font-size:0.78rem; color:rgba(255,255,255,0.4);"><i class="fas fa-circle-info me-1"></i>No train departing in the next 12 hours. <a href="trip-details.html?id=${tripId}&tab=tickets" style="color:#80deea;">Add in Trip Details →</a></span>`;
@@ -1891,6 +1897,42 @@ function _buildTrainPanel(tickets, manualTd, tripId) {
                 <i class="fas fa-pencil"></i>${(prefill.number || prefill.name) ? 'Edit' : 'Add'}
             </button>
         </div>
+
+        <!-- Passenger On-Train Real-Time GPS Tracking Card Widget -->
+        <div id="on-train-gps-container" class="mt-2 mb-2 p-3 rounded-3 text-white shadow-sm" style="display:none; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid rgba(59,130,246,0.4);">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2 pb-2 border-bottom border-secondary border-opacity-50">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="spinner-grow spinner-grow-sm text-success" role="status"></span>
+                    <strong class="text-white small" style="font-size:0.82rem;"><i class="fas fa-satellite-dish text-success me-1"></i>PASSENGER ON-TRAIN LIVE GPS TRACKER</strong>
+                </div>
+                <div class="d-flex align-items-center gap-1">
+                    <button type="button" class="btn btn-xs btn-outline-info rounded-pill px-2.5 py-0.5" style="font-size:0.65rem;" onclick="refreshPassengerGpsPosition()"><i class="fas fa-rotate me-1"></i>Refresh GPS</button>
+                    <button type="button" class="btn btn-xs btn-outline-danger rounded-pill px-2.5 py-0.5" style="font-size:0.65rem;" onclick="stopPassengerOnTrainGpsTracking()"><i class="fas fa-stop me-1"></i>Stop GPS</button>
+                </div>
+            </div>
+
+            <div class="row g-2 text-center">
+                <div class="col-md-5 col-12">
+                    <div class="p-2 rounded bg-white bg-opacity-10 border border-white border-opacity-10">
+                        <small class="text-white-50 d-block text-uppercase" style="font-size:0.6rem;"><i class="fas fa-location-dot text-danger me-1"></i>Your Current Location / Place</small>
+                        <strong id="dashboard-gps-place" class="text-warning fs-6 d-block text-truncate" style="color:#fde047 !important;">📍 Locating GPS Place...</strong>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6">
+                    <div class="p-2 rounded bg-white bg-opacity-10 border border-white border-opacity-10">
+                        <small class="text-white-50 d-block text-uppercase" style="font-size:0.6rem;"><i class="fas fa-gauge-high text-success me-1"></i>Moving Speed</small>
+                        <strong id="dashboard-gps-speed" class="text-success fs-6 d-block" style="color:#4ade80 !important;">⚡ 0 km/h</strong>
+                    </div>
+                </div>
+                <div class="col-md-4 col-6">
+                    <div class="p-2 rounded bg-white bg-opacity-10 border border-white border-opacity-10">
+                        <small class="text-white-50 d-block text-uppercase" style="font-size:0.6rem;"><i class="fas fa-compass text-info me-1"></i>GPS Coordinates</small>
+                        <strong id="dashboard-gps-coords" class="text-info fs-6 d-block font-monospace" style="color:#38bdf8 !important;">--° N, --° E</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div id="hero-train-chips">${ticketsHtml}</div>
         <div id="hero-train-edit-form" style="display:none; margin-top:8px;">
             <div style="font-size:0.72rem; color:rgba(255,255,255,0.45); margin-bottom:6px;"><i class="fas fa-circle-info me-1"></i>Edit or add upcoming train details for the hero view.</div>
@@ -5667,7 +5709,7 @@ window.openHeroTicketModal = openHeroTicketModal;
 
 // ── INDIAN RAIL API LIVE TRAIN RUNNING STATUS INTEGRATION ─────────────────
 
-async function fetchAndShowLiveTrainStatus(evt, trainNumber, tripDateStr) {
+async function fetchAndShowLiveTrainStatus(evt, trainNumber, tripDateStr, customTrainName, originStationCode) {
     if (evt) {
         evt.preventDefault();
         evt.stopPropagation();
@@ -5712,129 +5754,313 @@ async function fetchAndShowLiveTrainStatus(evt, trainNumber, tripDateStr) {
         console.error('Modal toggle error:', e);
     }
 
-    // Render live running status options for cleanTrainNo
-    _renderLiveTrainStatusError(null, cleanTrainNo, dateYYYYMMDD);
+    // Render Clean In-App Live Status (ConfirmTkt & RailYatri only, actual train name & origin station)
+    _renderCleanLiveTrainStatus(cleanTrainNo, dateYYYYMMDD, customTrainName, originStationCode);
 }
 window.fetchAndShowLiveTrainStatus = fetchAndShowLiveTrainStatus;
 
-function _renderLiveTrainStatusResult(data, trainNo, dateYYYYMMDD, apiKey) {
+function resolveIndianRailwayStationCode(stnInput) {
+    if (!stnInput) return '';
+    const clean = stnInput.trim().toUpperCase();
+    
+    const codeMap = {
+        'JALNA': 'J',
+        'CHHATRAPATI SAMBHAJINAGAR': 'AWB',
+        'AURANGABAD': 'AWB',
+        'PARBHANI': 'PBN',
+        'PARBHANI JN': 'PBN',
+        'NANDED': 'NED',
+        'HAZUR SAHIB NANDED': 'NED',
+        'SECUNDERABAD': 'SC',
+        'HYDERABAD': 'HYB',
+        'MUMBAI': 'CSMT',
+        'MUMBAI CSMT': 'CSMT',
+        'CST': 'CSMT',
+        'DADAR': 'DR',
+        'KALYAN': 'KYN',
+        'PANVEL': 'PNVL',
+        'PUNE': 'PUNE',
+        'NEW DELHI': 'NDLS',
+        'CHENNAI': 'MAS',
+        'BENGALURU': 'SBC',
+        'MANMAD': 'MMR',
+        'PARTUR': 'PTU',
+        'SELU': 'SELU',
+        'NIZAMABAD': 'NZB',
+        'KACHEGUDA': 'KCG',
+        'VIJAYAWADA': 'BZA'
+    };
+
+    if (codeMap[clean]) return codeMap[clean];
+    const match = clean.match(/\(([A-Z]{1,5})\)/);
+    if (match) return match[1];
+    if (/^[A-Z]{1,5}$/.test(clean)) return clean;
+    return clean;
+}
+
+function _renderCleanLiveTrainStatus(trainNo, dateYYYYMMDD, trainNameStr, originStnCode) {
     const modalBody = document.getElementById('live-train-status-modal-body');
     if (!modalBody) return;
 
-    if (!data || data.ResponseCode === '404' || data.Status === 'ERROR' || (data.ResponseCode && data.ResponseCode !== '200')) {
-        const msg = data?.Message || data?.Status || 'Unable to fetch live status for this train/date.';
-        modalBody.innerHTML = `
-            <div class="card border-0 shadow-sm p-4 text-center">
-                <div class="text-warning fs-1 mb-2"><i class="fas fa-triangle-exclamation"></i></div>
-                <h6 class="fw-bold text-dark mb-1">Indian Rail API Response: ${data?.ResponseCode || 'Error'}</h6>
-                <p class="text-muted small mb-3">${msg}</p>
-                <div class="p-3 bg-light rounded-3 text-start small mb-3 border">
-                    <div><strong>Train Number:</strong> #${trainNo}</div>
-                    <div><strong>Date (YYYYMMDD):</strong> ${dateYYYYMMDD}</div>
-                    <div class="text-truncate"><strong>API Request:</strong> <code>http://indianrailapi.com/api/v2/livetrainstatus/apikey/${apiKey}/trainnumber/${trainNo}/date/${dateYYYYMMDD}/</code></div>
-                </div>
+    window._currentLiveTrainNo = trainNo;
+    const rawStn = (originStnCode || '').trim();
+    const resolvedCode = resolveIndianRailwayStationCode(rawStn);
+    window._currentLiveOriginStn = resolvedCode || rawStn;
+
+    let initialUrl = `https://www.confirmtkt.com/train-running-status/${trainNo}`;
+    if (window._currentLiveOriginStn) {
+        const stnEnc = encodeURIComponent(window._currentLiveOriginStn);
+        initialUrl += `?stn=${stnEnc}&src=${stnEnc}&boardStation=${stnEnc}#${stnEnc}`;
+    }
+
+    const displayTrainTitle = trainNameStr ? `${trainNameStr} (#${trainNo})` : `Train #${trainNo}`;
+
+    modalBody.innerHTML = `
+        <div class="card border-0 shadow-sm rounded-3 overflow-hidden bg-white">
+            <!-- Modal Header Banner with Saved Train Name & Origin Station -->
+            <div class="p-3 text-white d-flex align-items-center justify-content-between flex-wrap gap-2" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);">
                 <div>
-                    <a href="http://indianrailapi.com/api/v2/livetrainstatus/apikey/${apiKey}/trainnumber/${trainNo}/date/${dateYYYYMMDD}/" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-4">
-                        <i class="fas fa-external-link-alt me-1"></i>Open Direct API URL
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <span class="badge bg-success text-white px-2.5 py-1 font-monospace" style="font-size:0.75rem;">
+                            <i class="fas fa-satellite-dish me-1"></i>Live Running Status
+                        </span>
+                        ${window._currentLiveOriginStn ? `
+                            <span class="badge bg-warning text-dark font-monospace fw-bold" style="font-size:0.75rem;">
+                                <i class="fas fa-location-dot me-1"></i>Origin Station: ${window._currentLiveOriginStn} ${rawStn && rawStn !== window._currentLiveOriginStn ? `(${rawStn})` : ''}
+                            </span>
+                        ` : ''}
+                    </div>
+                    <h4 class="fw-bold mb-0 text-white"><i class="fas fa-train me-2 text-warning"></i>${displayTrainTitle}</h4>
+                </div>
+                <div class="text-end">
+                    <span class="badge bg-secondary font-monospace" style="font-size:0.75rem;">Date: ${dateYYYYMMDD.slice(6,8)}/${dateYYYYMMDD.slice(4,6)}/${dateYYYYMMDD.slice(0,4)}</span>
+                </div>
+            </div>
+
+            <!-- Toolbar Header: Provider Tabs (ConfirmTkt, RailYatri & Where Is My Train) -->
+            <div class="p-3 bg-light border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <span class="fw-semibold text-secondary small me-1">Live Tracker Provider:</span>
+                    <div class="btn-group btn-group-sm" role="group" id="live-train-provider-tabs">
+                        <button type="button" class="btn btn-primary active" id="tab-provider-confirmtkt" onclick="switchLiveTrainIframe('confirmtkt', '${trainNo}')">
+                            <i class="fas fa-train me-1"></i>ConfirmTkt Live
+                        </button>
+                        <button type="button" class="btn btn-outline-dark" id="tab-provider-railyatri" onclick="switchLiveTrainIframe('railyatri', '${trainNo}')">
+                            <i class="fas fa-compass me-1"></i>RailYatri Live
+                        </button>
+                        <button type="button" class="btn btn-outline-warning text-dark fw-bold" id="tab-provider-wimt" onclick="switchLiveTrainIframe('wimt', '${trainNo}')">
+                            <i class="fas fa-location-arrow me-1"></i>Where Is My Train
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-outline-primary btn-sm rounded-pill px-3 py-1" onclick="refreshLiveTrainIframe()" title="Refresh Live Data">
+                        <i class="fas fa-rotate me-1"></i>Refresh
+                    </button>
+                    <a id="btn-open-external-live" href="${initialUrl}" target="_blank" class="btn btn-outline-success btn-sm rounded-pill px-3 py-1" title="Open in External Tab/App">
+                        <i class="fas fa-external-link-alt me-1"></i>Open Full Page
                     </a>
                 </div>
-            </div>`;
+            </div>
+
+            <!-- EMBEDDED INTERACTIVE LIVE MAP & RUNNING TRACKER -->
+            <div class="position-relative w-100 bg-white" style="height: 68vh; min-height: 480px;">
+                <iframe id="live-train-iframe" 
+                        src="${initialUrl}" 
+                        style="width: 100%; height: 100%; border: none;" 
+                        sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"
+                        referrerpolicy="no-referrer"
+                        title="Live Train Running Status">
+                </iframe>
+            </div>
+            
+            <div class="p-2 px-3 bg-light border-top d-flex align-items-center justify-content-between text-muted small" style="font-size:0.75rem;">
+                <span><i class="fas fa-shield-halved text-success me-1"></i>Live Running Tracker ${window._currentLiveOriginStn ? `(Origin: <strong>${window._currentLiveOriginStn}</strong>)` : ''}</span>
+                <span>Switch between ConfirmTkt, RailYatri, and Where Is My Train anytime.</span>
+            </div>
+        </div>
+    `;
+}
+
+window._passengerGpsWatchId = null;
+window._lastPassengerGpsCoords = null;
+
+window.togglePassengerOnTrainGps = function(evt) {
+    if (evt) {
+        evt.preventDefault();
+        evt.stopPropagation();
+    }
+    if (window._passengerGpsWatchId !== null) {
+        window.stopPassengerOnTrainGpsTracking();
+    } else {
+        window.startPassengerOnTrainGpsTracking();
+    }
+};
+
+window.startPassengerOnTrainGpsTracking = function() {
+    if (!('geolocation' in navigator)) {
+        if (typeof showToast === 'function') showToast('GPS Geolocation is not supported by your browser.', 'warning');
         return;
     }
 
-    const trainName = data.TrainName || data.TrainTitle || `Train #${trainNo}`;
-    const currentPosition = data.CurrentPosition || data.CurrentStatus || 'Live running details received.';
-    const curStation = data.CurrentStation?.StationName || data.CurrentStationName || 'In Transit';
-    const delay = data.CurrentStation?.DelayInDeparture || data.Delay || 'On Time';
-    const isLate = delay.toString().toLowerCase().includes('late') || parseInt(delay) > 0;
+    const container = document.getElementById('on-train-gps-container');
+    if (container) container.style.display = 'block';
 
-    modalBody.innerHTML = `
-        <div class="card border-0 shadow-sm overflow-hidden" style="border-radius:16px;">
-            <div class="p-3 text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #1b3a4b 0%, #0d2318 100%);">
-                <div>
-                    <span class="badge ${isLate ? 'bg-warning text-dark' : 'bg-success'} mb-1">
-                        <i class="fas ${isLate ? 'fa-clock' : 'fa-check-circle'} me-1"></i>${isLate ? delay : 'On Time 🟢'}
-                    </span>
-                    <h4 class="fw-bold mb-0 text-white">${trainName} (#${trainNo})</h4>
-                </div>
-                <div class="text-end">
-                    <span class="text-white-50 small d-block" style="font-size:0.7rem;">DATE</span>
-                    <span class="fw-bold text-warning">${dateYYYYMMDD}</span>
-                </div>
-            </div>
+    const placeEl = document.getElementById('dashboard-gps-place');
+    const speedEl = document.getElementById('dashboard-gps-speed');
+    const coordsEl = document.getElementById('dashboard-gps-coords');
 
-            <div class="p-4 bg-white">
-                <div class="p-3 bg-success bg-opacity-10 border border-success border-opacity-25 rounded-3 mb-4">
-                    <div class="d-flex align-items-center gap-2 mb-1 text-success fw-bold">
-                        <i class="fas fa-satellite-dish"></i> Current Running Position
-                    </div>
-                    <div class="fs-6 text-dark fw-semibold">${currentPosition}</div>
-                </div>
+    if (placeEl) placeEl.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Connecting GPS...';
+    if (speedEl) speedEl.textContent = '⚡ Calc Speed...';
+    if (coordsEl) coordsEl.textContent = 'Acquiring Satellites...';
 
-                <div class="row g-3 text-center">
-                    <div class="col-6 col-md-4">
-                        <div class="p-3 bg-light rounded-3 border">
-                            <span class="text-muted small d-block">CURRENT STATION</span>
-                            <strong class="text-dark fs-6">${curStation}</strong>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-4">
-                        <div class="p-3 bg-light rounded-3 border">
-                            <span class="text-muted small d-block">PUNCTUALITY</span>
-                            <strong class="${isLate ? 'text-danger' : 'text-success'} fs-6">${delay}</strong>
-                        </div>
-                    </div>
-                    <div class="col-12 col-md-4">
-                        <div class="p-3 bg-light rounded-3 border">
-                            <span class="text-muted small d-block">LAST UPDATED</span>
-                            <strong class="text-dark fs-6">${data.LastUpdated || 'Just Now'}</strong>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>`;
+    if (typeof showToast === 'function') showToast('📍 On-Train Live GPS Tracking Started!', 'success');
+
+    function onGpsPositionUpdate(pos) {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const speedMps = pos.coords.speed || 0;
+        let speedKmH = Math.round(speedMps * 3.6);
+
+        if (speedKmH === 0 && window._lastPassengerGpsCoords && window._lastPassengerGpsCoords.time) {
+            const timeDiffSec = (pos.timestamp - window._lastPassengerGpsCoords.time) / 1000;
+            if (timeDiffSec > 2) {
+                const distM = _calcHaversineDistanceKm(window._lastPassengerGpsCoords.lat, window._lastPassengerGpsCoords.lng, lat, lng) * 1000;
+                speedKmH = Math.min(180, Math.round((distM / timeDiffSec) * 3.6));
+            }
+        }
+        window._lastPassengerGpsCoords = { lat, lng, time: pos.timestamp };
+
+        if (coordsEl) coordsEl.textContent = `${lat.toFixed(4)}° N, ${lng.toFixed(4)}° E`;
+        if (speedEl) speedEl.textContent = `⚡ ${speedKmH} km/h`;
+
+        fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`)
+            .then(r => r.json())
+            .then(data => {
+                const city = data.city || data.locality || data.principalSubdivision || '';
+                const placeName = city ? `${city}, ${data.principalSubdivision || 'India'}` : `${lat.toFixed(3)}° N, ${lng.toFixed(3)}° E`;
+                
+                if (placeEl) placeEl.innerHTML = `📍 ${placeName}`;
+            })
+            .catch(err => {
+                console.warn('Reverse geocode error:', err);
+                if (placeEl) placeEl.innerHTML = `📍 ${lat.toFixed(3)}° N, ${lng.toFixed(3)}° E`;
+            });
+    }
+
+    function onGpsError(err) {
+        console.error('GPS error:', err);
+        if (placeEl) placeEl.innerHTML = '<span class="text-danger">⚠️ GPS Permission Required</span>';
+        if (typeof showToast === 'function') showToast('Unable to get GPS position. Please check location permissions.', 'danger');
+    }
+
+    if (window._passengerGpsWatchId !== null) {
+        navigator.geolocation.clearWatch(window._passengerGpsWatchId);
+    }
+
+    window._passengerGpsWatchId = navigator.geolocation.watchPosition(onGpsPositionUpdate, onGpsError, {
+        enableHighAccuracy: true,
+        timeout: 20000,
+        maximumAge: 3000
+    });
+};
+
+window.refreshPassengerGpsPosition = function() {
+    if (window._passengerGpsWatchId !== null) {
+        window.startPassengerOnTrainGpsTracking();
+    }
+};
+
+window.stopPassengerOnTrainGpsTracking = function() {
+    if (window._passengerGpsWatchId !== null) {
+        navigator.geolocation.clearWatch(window._passengerGpsWatchId);
+        window._passengerGpsWatchId = null;
+    }
+    const container = document.getElementById('on-train-gps-container');
+    if (container) container.style.display = 'none';
+    if (typeof showToast === 'function') showToast('GPS Tracking stopped.', 'info');
+};
+
+function _calcHaversineDistanceKm(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
 }
 
-function _renderLiveTrainStatusError(err, trainNo, dateYYYYMMDD) {
-    const modalBody = document.getElementById('live-train-status-modal-body');
-    if (!modalBody) return;
+window.updateLiveSummaryBadges = function(delayStr, locationStr) {
+    const delayEl = document.getElementById('live-card-delay-status');
+    const locEl = document.getElementById('live-card-current-location');
 
-    modalBody.innerHTML = `
-        <div class="card border-0 shadow-sm p-4">
-            <div class="text-center mb-3">
-                <div class="rounded-circle bg-success bg-opacity-10 text-success d-inline-flex align-items-center justify-content-center p-3 mb-2" style="width:56px; height:56px;">
-                    <i class="fas fa-satellite-dish fs-3"></i>
-                </div>
-                <h5 class="fw-bold text-dark mb-1">Live Train Running Status</h5>
-                <p class="text-muted small mb-0">Track real-time GPS position & delay for <strong>Train #${trainNo}</strong></p>
-            </div>
+    if (delayEl) {
+        if (!delayStr || delayStr.toLowerCase().includes('on time')) {
+            delayEl.className = 'fs-6 d-block mt-0.5 text-success';
+            delayEl.style.color = '#4ade80';
+            delayEl.innerHTML = '<i class="fas fa-check-circle me-1"></i>On Time 🟢';
+        } else {
+            delayEl.className = 'fs-6 d-block mt-0.5 text-danger';
+            delayEl.style.color = '#f87171';
+            delayEl.innerHTML = `<i class="fas fa-clock me-1"></i>${delayStr}`;
+        }
+    }
 
-            <!-- Quick Live Tracking Cards -->
-            <div class="p-3 bg-success bg-opacity-10 border border-success border-opacity-25 rounded-3 mb-3">
-                <div class="fw-bold text-success mb-2" style="font-size:0.85rem;">
-                    <i class="fas fa-location-crosshairs me-1"></i>Official Live Trackers for Train #${trainNo}:
-                </div>
-                <div class="d-flex gap-2 flex-wrap mb-2">
-                    <a href="https://www.confirmtkt.com/train-running-status/${trainNo}" target="_blank" class="btn btn-sm btn-success rounded-pill px-3 py-1.5 fw-semibold">
-                        <i class="fas fa-train me-1"></i>Track Live on ConfirmTkt
-                    </a>
-                    <a href="https://www.railyatri.in/live-train-status/${trainNo}" target="_blank" class="btn btn-sm btn-outline-dark rounded-pill px-3 py-1.5 fw-semibold">
-                        <i class="fas fa-compass me-1"></i>Track Live on RailYatri
-                    </a>
-                    <a href="https://enquiry.indianrail.gov.in/" target="_blank" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1.5 fw-semibold">
-                        <i class="fas fa-building me-1"></i>NTES Official
-                    </a>
-                </div>
-                <small class="text-muted d-block" style="font-size:0.75rem;"><i class="fas fa-info-circle me-1 text-primary"></i>Opens official live GPS position, platform number & arrival delay for Train #${trainNo}.</small>
-            </div>
+    if (locEl && locationStr) {
+        locEl.style.color = '#fde047';
+        locEl.innerHTML = `📍 ${locationStr}`;
+    }
+};
 
-            <div class="p-3 bg-light rounded-3 text-start small border">
-                <div class="d-flex gap-3 justify-content-between align-items-center flex-wrap">
-                    <div><strong>Train Number:</strong> <span class="badge bg-dark">#${trainNo}</span></div>
-                    <div><strong>Journey Date:</strong> <span class="badge bg-secondary">${dateYYYYMMDD}</span></div>
-                </div>
-            </div>
-        </div>`;
-}
+window.switchLiveTrainIframe = function(provider, trainNo) {
+    const iframe = document.getElementById('live-train-iframe');
+    const extBtn = document.getElementById('btn-open-external-live');
+    if (!iframe) return;
 
+    document.querySelectorAll('#live-train-provider-tabs button').forEach(b => {
+        b.classList.remove('active', 'btn-primary', 'btn-warning', 'text-dark', 'fw-bold');
+        b.classList.add('btn-outline-dark');
+    });
+
+    const originStn = (window._currentLiveOriginStn || '').trim();
+    const stnEnc = encodeURIComponent(originStn);
+    let targetUrl = `https://www.confirmtkt.com/train-running-status/${trainNo}`;
+    const activeTab = document.getElementById(`tab-provider-${provider}`);
+
+    if (provider === 'confirmtkt') {
+        targetUrl = `https://www.confirmtkt.com/train-running-status/${trainNo}`;
+        if (originStn) targetUrl += `?stn=${stnEnc}&src=${stnEnc}&boardStation=${stnEnc}#${stnEnc}`;
+        if (activeTab) { activeTab.classList.add('active', 'btn-primary'); activeTab.classList.remove('btn-outline-dark'); }
+    } else if (provider === 'railyatri') {
+        targetUrl = `https://www.railyatri.in/live-train-status/${trainNo}`;
+        if (originStn) targetUrl += `?start_station=${stnEnc}`;
+        if (activeTab) { activeTab.classList.add('active', 'btn-primary'); activeTab.classList.remove('btn-outline-dark'); }
+    } else if (provider === 'wimt') {
+        targetUrl = `https://whereismytrain.in/train/${trainNo}`;
+        if (originStn) targetUrl += `?stn=${stnEnc}`;
+        if (activeTab) { activeTab.classList.add('active', 'btn-warning', 'text-dark', 'fw-bold'); activeTab.classList.remove('btn-outline-dark'); }
+    }
+
+    iframe.src = targetUrl;
+    if (extBtn) {
+        if (provider === 'wimt') {
+            extBtn.href = `intent://train/${trainNo}#Intent;scheme=wimt;package=com.whereismytrain.android;end;`;
+            extBtn.innerHTML = '<i class="fas fa-mobile-screen-button me-1"></i>Open App';
+        } else {
+            extBtn.href = targetUrl;
+            extBtn.innerHTML = '<i class="fas fa-external-link-alt me-1"></i>Open Full Page';
+        }
+    }
+};
+
+window.refreshLiveTrainIframe = function() {
+    const iframe = document.getElementById('live-train-iframe');
+    if (!iframe) return;
+    const currentSrc = iframe.src;
+    iframe.src = 'about:blank';
+    setTimeout(() => { iframe.src = currentSrc; }, 50);
+};
 
