@@ -1,4 +1,4 @@
-const CACHE_NAME = 'travelmate-cache-v25';
+const CACHE_NAME = 'travelmate-cache-v26';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -21,6 +21,7 @@ const ASSETS_TO_CACHE = [
   './js/ai-planner-ui.js',
   './js/offline-sync-engine.js',
   './icon.png',
+  './indian-train.png',
   './manifest.json'
 ];
 
