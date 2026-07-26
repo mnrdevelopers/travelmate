@@ -1408,32 +1408,76 @@ function updateDashboardActiveTripTracker() {
                             currentLocationName = `${currentLat.toFixed(2)}, ${currentLon.toFixed(2)}`;
                         }
                         
-                        await db.collection('trips').doc(activeTrip.id).update({
-                            currentKm: currentKm,
-                            currentLocationName: currentLocationName
-                        });
-                        
-                        activeTrip.currentKm = currentKm;
-                        activeTrip.currentLocationName = currentLocationName;
-                        displayTrips();
-                        showAlert(`GPS tracking complete! Location: ${currentLocationName || 'Determined'}. Distance Traveled: ${currentKm}${totalDistance > 0 ? ' km' : '%'}`, 'success');
-                    } catch (err) {
-                        console.error('Error auto-tracking location:', err);
-                        showAlert('Error auto-tracking location. Make sure GPS is enabled.', 'danger');
-                    } finally {
+                function fetchUserGpsPosition(useHighAccuracy) {
+                    navigator.geolocation.getCurrentPosition(async (pos) => {
+                        try {
+                            const currentLat = pos.coords.latitude;
+                            const currentLon = pos.coords.longitude;
+                            
+                            let currentKm = activeTrip.currentKm || 0;
+                            let currentLocationName = '';
+                            
+                            if (activeTrip.originLat && activeTrip.originLon && typeof calculateDistance === 'function') {
+                                const distFromOrigin = calculateDistance(activeTrip.originLat, activeTrip.originLon, currentLat, currentLon);
+                                currentKm = Math.round(distFromOrigin);
+                            }
+                            
+                            try {
+                                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${currentLat}&lon=${currentLon}&zoom=10`);
+                                const data = await response.json();
+                                if (data && data.address) {
+                                    const addr = data.address;
+                                    const parts = [];
+                                    const city = addr.city || addr.town || addr.village || addr.county || addr.suburb;
+                                    if (city) parts.push(city);
+                                    const state = addr.state;
+                                    if (state) parts.push(state);
+                                    
+                                    currentLocationName = parts.join(', ') || 'Active Location';
+                                }
+                            } catch (geoErr) {
+                                console.warn('Reverse geocoding failed:', geoErr);
+                                currentLocationName = `${currentLat.toFixed(2)}, ${currentLon.toFixed(2)}`;
+                            }
+                            
+                            await db.collection('trips').doc(activeTrip.id).update({
+                                currentKm: currentKm,
+                                currentLocationName: currentLocationName
+                            });
+                            
+                            activeTrip.currentKm = currentKm;
+                            activeTrip.currentLocationName = currentLocationName;
+                            displayTrips();
+                            showAlert(`GPS tracking complete! Location: ${currentLocationName || 'Determined'}. Distance Traveled: ${currentKm}${totalDistance > 0 ? ' km' : '%'}`, 'success');
+                        } catch (err) {
+                            console.error('Error auto-tracking location:', err);
+                            showAlert('Error auto-tracking location. Make sure GPS is enabled.', 'danger');
+                        } finally {
+                            autoTrackBtn.disabled = false;
+                            autoTrackBtn.innerHTML = '<i class="fas fa-location-crosshairs me-1 text-info"></i>Auto-Track GPS';
+                        }
+                    }, (error) => {
+                        if (useHighAccuracy && (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE)) {
+                            // Retry with standard accuracy fallback for network/IP location
+                            fetchUserGpsPosition(false);
+                            return;
+                        }
+                        console.warn('Geolocation notice:', error.message || error);
+                        let alertMsg = 'Failed to access GPS. Please check location permissions.';
+                        if (error.code === error.PERMISSION_DENIED) {
+                            alertMsg = 'Location access was denied. Please allow location permissions in your browser.';
+                        }
+                        showAlert(alertMsg, 'warning');
                         autoTrackBtn.disabled = false;
                         autoTrackBtn.innerHTML = '<i class="fas fa-location-crosshairs me-1 text-info"></i>Auto-Track GPS';
-                    }
-                }, (error) => {
-                    console.error('Geolocation error:', error);
-                    showAlert('Failed to access GPS. Please check location permissions.', 'warning');
-                    autoTrackBtn.disabled = false;
-                    autoTrackBtn.innerHTML = '<i class="fas fa-location-crosshairs me-1 text-info"></i>Auto-Track GPS';
-                }, {
-                    enableHighAccuracy: true,
-                    timeout: 10000,
-                    maximumAge: 0
-                });
+                    }, {
+                        enableHighAccuracy: useHighAccuracy,
+                        timeout: useHighAccuracy ? 5000 : 10000,
+                        maximumAge: 10000
+                    });
+                }
+                
+                fetchUserGpsPosition(true);
             });
         }
         const updateBtn = document.getElementById('update-dashboard-progress');
@@ -6029,9 +6073,13 @@ window.startPassengerOnTrainGpsTracking = function() {
     }
 
     function onGpsError(err) {
-        console.error('GPS error:', err);
-        if (placeEl) placeEl.innerHTML = '<span class="text-danger">⚠️ GPS Permission Required</span>';
-        if (typeof showToast === 'function') showToast('Unable to get GPS position. Please check location permissions.', 'danger');
+        console.warn('Passenger GPS notice:', err.message || err);
+        if (err.code === err.PERMISSION_DENIED) {
+            if (placeEl) placeEl.innerHTML = '<span class="text-danger"><i class="fas fa-lock me-1"></i>Location Permission Denied</span>';
+            if (typeof showToast === 'function') showToast('Location permission denied. Please allow location access in browser settings.', 'warning');
+        } else {
+            if (placeEl) placeEl.innerHTML = '<span class="text-warning"><i class="fas fa-wifi me-1"></i>Acquiring Signal...</span>';
+        }
     }
 
     if (window._passengerGpsWatchId !== null) {
@@ -6039,9 +6087,9 @@ window.startPassengerOnTrainGpsTracking = function() {
     }
 
     window._passengerGpsWatchId = navigator.geolocation.watchPosition(onGpsPositionUpdate, onGpsError, {
-        enableHighAccuracy: true,
-        timeout: 20000,
-        maximumAge: 3000
+        enableHighAccuracy: false, // Standard accuracy for robust network + satellite acquisition
+        timeout: 15000,
+        maximumAge: 5000
     });
 };
 
