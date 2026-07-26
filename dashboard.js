@@ -5948,99 +5948,164 @@ window.refreshAILiveTrainStatus = async function(trainNo, originStn) {
     const delayEl = document.getElementById(`ai-live-delay-${trainNo}`);
     const timeEl = document.getElementById(`ai-live-time-${trainNo}`);
 
-    if (locEl) locEl.innerHTML = '<i class="fas fa-brain fa-spin me-1 text-info"></i>Groq AI Reading ConfirmTkt Live...';
+    if (locEl) locEl.innerHTML = '<i class="fas fa-brain fa-spin me-1 text-warning"></i>Groq AI Fetching Live Status...';
 
-    const stnCode = resolveIndianRailwayStationCode(originStn) || originStn || 'J';
-    const targetUrl = `https://www.confirmtkt.com/train-running-status/${trainNo}`;
+    const stnCode = resolveIndianRailwayStationCode(originStn) || originStn || '';
 
+    // ── Strategy: Try multiple real Indian Railways public JSON APIs ──────────────
+    // ConfirmTkt and RailYatri are React SPAs — raw HTML via CORS proxy returns
+    // an empty shell. We instead call the actual JSON data APIs directly.
+
+    let rawApiData = null;
+
+    // API 1: railapi.com (public, CORS-friendly)
+    const railApiEndpoints = [
+        `https://api.railwaystatus.in/api/v1/train/${trainNo}/status`,
+        `https://indian-railway-api.onrender.com/api/trains/${trainNo}/live`,
+        `https://irctc-indian-railway-api.p.rapidapi.com/api/v3/liveTrainStatus?trainNo=${trainNo}&startDay=0`,
+    ];
+
+    // API 2: erail.in JSON (most reliable public source)
+    const erailUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://erail.in/rail/getTrains.aspx?TrainNo=${trainNo}&DataSource=0&Action=RUNNING_STATUS&time=1`)}`;
+    
+    // API 3: trainman.in JSON API
+    const trainmanUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://trainman.in/api/status/${trainNo}/0/0`)}`;
+
+    let rawText = '';
+    let apiUsed = '';
+
+    // Try erail.in first (most reliable)
     try {
-        // 1. Fetch live page HTML via CORS proxy
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-        const res = await fetch(proxyUrl);
-        let rawHtmlText = '';
+        const res = await fetch(erailUrl, { signal: AbortSignal.timeout(6000) });
         if (res.ok) {
-            const rawText = await res.text();
-            rawHtmlText = rawText.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-                                  .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-                                  .replace(/<[^>]+>/g, ' ')
-                                  .replace(/\s+/g, ' ')
-                                  .slice(0, 2500);
+            rawText = await res.text();
+            if (rawText && rawText.length > 30 && !rawText.includes('error') && !rawText.includes('Error')) {
+                apiUsed = 'erail.in';
+            } else {
+                rawText = '';
+            }
         }
+    } catch(e) { console.warn('erail API failed:', e.message); }
 
-        // 2. Call Groq AI API (or OpenRouter fallback)
-        const groqApiKey = window._groqApiKey || window._openrouterApiKey;
-        if (groqApiKey && rawHtmlText.length > 50) {
-            const prompt = `Analyze this live train running status snippet for Indian Railway Train #${trainNo} (Boarding Station: ${stnCode}):
-"${rawHtmlText}"
+    // Try trainman if erail failed
+    if (!rawText) {
+        try {
+            const res = await fetch(trainmanUrl, { signal: AbortSignal.timeout(6000) });
+            if (res.ok) {
+                rawText = await res.text();
+                if (rawText && rawText.length > 30) {
+                    apiUsed = 'trainman.in';
+                } else {
+                    rawText = '';
+                }
+            }
+        } catch(e) { console.warn('trainman API failed:', e.message); }
+    }
 
-Return ONLY a strict JSON object (no markdown formatting, no backticks):
+    // Try ConfirmTkt internal JSON endpoint (they have a JSON API endpoint)
+    if (!rawText) {
+        try {
+            const ctUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://www.confirmtkt.com/api/trains/${trainNo}/live-status`)}`;
+            const res = await fetch(ctUrl, { signal: AbortSignal.timeout(6000) });
+            if (res.ok) {
+                rawText = await res.text();
+                if (rawText && rawText.length > 30 && rawText.startsWith('{')) {
+                    apiUsed = 'confirmtkt-api';
+                } else {
+                    rawText = '';
+                }
+            }
+        } catch(e) { console.warn('ConfirmTkt API failed:', e.message); }
+    }
+
+    const groqApiKey = window._groqApiKey || window._openrouterApiKey;
+
+    // If we got real API data, parse it with Groq AI
+    if (rawText && groqApiKey) {
+        const clipped = rawText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000);
+        const prompt = `You are an Indian Railways live status expert. Parse this live train running data for Train #${trainNo} from ${apiUsed} ${stnCode ? `(origin/boarding station: ${stnCode})` : ''}:
+"${clipped}"
+
+Return ONLY strict JSON (no markdown, no extra text):
 {
-  "currentLocation": "e.g. Departed Jalna (14:15) or Approaching Partur",
-  "nextStation": "e.g. Next: Partur (ETA 14:45)",
+  "currentStation": "Exact current station name e.g. Jalna, Partur, or last reported station",
+  "nextStation": "Next station name with ETA if available e.g. Partur (ETA 14:42)",
   "delayMinutes": 0,
-  "delayText": "On Time 🟢" or "⚠️ 15m Delay",
-  "isDelayed": false
+  "trainStatus": "e.g. RUNNING, ARRIVED, DEPARTED, SCHEDULED",
+  "delayText": "On Time 🟢 or ⚠️ 15m Late",
+  "isDelayed": false,
+  "summary": "1-line human summary e.g. Departed Jalna 10m late, approaching Partur"
 }`;
 
+        try {
             const groqEndpoint = window._groqApiKey ? 'https://api.groq.com/openai/v1/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions';
             const groqModel = window._groqApiKey ? 'llama-3.3-70b-versatile' : 'google/gemini-2.5-flash';
 
             const aiRes = await fetch(groqEndpoint, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${groqApiKey}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    model: groqModel,
-                    messages: [{ role: 'user', content: prompt }],
-                    temperature: 0.2
-                })
+                headers: { 'Authorization': `Bearer ${groqApiKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model: groqModel, messages: [{ role: 'user', content: prompt }], temperature: 0.1 })
             });
 
             if (aiRes.ok) {
                 const aiData = await aiRes.json();
                 const content = aiData.choices?.[0]?.message?.content || '';
-                const cleanJson = content.replace(/```json/g, '').replace(/```/g, '').trim();
-                const parsed = JSON.parse(cleanJson);
+                const jsonMatch = content.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    const parsed = JSON.parse(jsonMatch[0]);
+                    if (parsed && parsed.currentStation) {
+                        const delayClass = (parsed.isDelayed || parsed.delayMinutes > 0) ? 'bg-danger text-white' : 'bg-success text-white';
+                        const providerLabel = window._groqApiKey ? 'Groq LLaMA AI' : 'Gemini AI';
+                        const timeStr = `${providerLabel} via ${apiUsed} • ${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
 
-                if (parsed && parsed.currentLocation) {
-                    const delayClass = (parsed.isDelayed || parsed.delayMinutes > 0) ? 'bg-danger text-white' : 'bg-success text-white';
-                    const providerLabel = window._groqApiKey ? 'Groq LLaMA 3.3 AI' : 'Gemini AI';
-                    const timeStr = `${providerLabel} Sync • ${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
+                        if (locEl) locEl.innerHTML = `<i class="fas fa-location-dot me-1 text-danger"></i><strong>${parsed.currentStation}</strong>${parsed.summary ? ` <small class="text-white-50">— ${parsed.summary}</small>` : ''}`;
+                        if (nextEl) nextEl.innerHTML = `<i class="fas fa-arrow-right-long me-1 text-info"></i>${parsed.nextStation || 'En Route'}`;
+                        if (delayEl) { delayEl.textContent = parsed.delayText || 'On Time 🟢'; delayEl.className = `badge ${delayClass} px-2 py-1 font-monospace`; }
+                        if (timeEl) timeEl.textContent = timeStr;
 
-                    if (locEl) locEl.innerHTML = `<i class="fas fa-location-dot me-1 text-danger"></i>${parsed.currentLocation}`;
-                    if (nextEl) nextEl.innerHTML = `<i class="fas fa-arrow-right-long me-1 text-info"></i>${parsed.nextStation}`;
-                    if (delayEl) { delayEl.textContent = parsed.delayText || 'On Time 🟢'; delayEl.className = `badge ${delayClass} px-2 py-1 font-monospace`; }
-                    if (timeEl) timeEl.textContent = timeStr;
+                        localStorage.setItem(`ai_live_status_${trainNo}`, JSON.stringify({
+                            currentLocation: parsed.currentStation,
+                            nextStation: parsed.nextStation || 'En Route',
+                            delayText: parsed.delayText || 'On Time 🟢',
+                            delayBadgeClass: delayClass,
+                            lastUpdated: timeStr,
+                            timestamp: Date.now()
+                        }));
 
-                    const cachedData = {
-                        currentLocation: parsed.currentLocation,
-                        nextStation: parsed.nextStation,
-                        delayText: parsed.delayText || 'On Time 🟢',
-                        delayBadgeClass: delayClass,
-                        lastUpdated: timeStr,
-                        timestamp: Date.now()
-                    };
-                    localStorage.setItem(`ai_live_status_${trainNo}`, JSON.stringify(cachedData));
-
-                    if (typeof showToast === 'function') showToast(`⚡ Groq AI Parsed Live Status for Train #${trainNo}!`, 'success');
-                    return;
+                        if (typeof showToast === 'function') showToast(`⚡ Live status for Train #${trainNo} via ${apiUsed}!`, 'success');
+                        return;
+                    }
                 }
             }
+        } catch(e) {
+            console.warn('Groq AI parse error:', e);
         }
-    } catch (e) {
-        console.warn('Groq AI Live Status Parsing Error:', e);
     }
 
-    // High Quality Fallback if Groq key is pending
-    const timeStr = `Groq AI • ${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
-    if (locEl) locEl.innerHTML = `<i class="fas fa-location-dot me-1 text-danger"></i>Departed ${stnCode} Station`;
-    if (nextEl) nextEl.innerHTML = `<i class="fas fa-arrow-right-long me-1 text-info"></i>Next Stop in ~12 mins`;
-    if (delayEl) { delayEl.textContent = 'On Time 🟢'; delayEl.className = 'badge bg-success text-white px-2 py-1 font-monospace'; }
-    if (timeEl) timeEl.textContent = timeStr;
+    // ── Groq AI key missing but we have raw data — show it directly ──────────
+    if (rawText && !groqApiKey) {
+        try {
+            const rawJson = JSON.parse(rawText);
+            const station = rawJson.current_station || rawJson.station || rawJson.station_name || '';
+            const delay = parseInt(rawJson.delay || rawJson.delay_minutes || 0);
+            if (station) {
+                if (locEl) locEl.innerHTML = `<i class="fas fa-location-dot me-1 text-danger"></i>${station}`;
+                if (nextEl) nextEl.textContent = 'Live data from ' + apiUsed;
+                if (delayEl) { delayEl.textContent = delay > 0 ? `⚠️ ${delay}m Late` : 'On Time 🟢'; delayEl.className = `badge ${delay > 0 ? 'bg-danger' : 'bg-success'} text-white px-2 py-1 font-monospace`; }
+                if (timeEl) timeEl.textContent = `API • ${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
+                if (typeof showToast === 'function') showToast('Live status fetched! Add Groq AI key for detailed AI summary.', 'info');
+                return;
+            }
+        } catch(e) {}
+    }
 
-    if (typeof showToast === 'function') showToast(`⚡ Groq AI Live Running Reader Synced!`, 'info');
+    // ── Final fallback: no live data available ────────────────────────────────
+    const reason = !groqApiKey ? 'Add Groq API Key in Profile Settings for AI parsing.' : 'Live APIs are unavailable right now. Check iframe below.';
+    if (locEl) locEl.innerHTML = `<i class="fas fa-exclamation-triangle me-1 text-warning"></i>Live API Unavailable`;
+    if (nextEl) nextEl.innerHTML = `<i class="fas fa-info-circle me-1 text-muted"></i><small class="text-white-50">${reason}</small>`;
+    if (delayEl) { delayEl.textContent = 'Check iframe'; delayEl.className = 'badge bg-secondary text-white px-2 py-1 font-monospace'; }
+    if (timeEl) timeEl.textContent = `Sync tried • ${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
+    if (typeof showToast === 'function') showToast(`Live APIs unavailable. View the embedded ConfirmTkt/RailYatri iframe directly.`, 'warning');
 };
 
 function resolveIndianRailwayStationCode(stnInput) {
