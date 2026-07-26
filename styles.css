@@ -1665,19 +1665,436 @@ html, body {
     margin-top: 1rem;
 }
 
-/* Hero Carousel Styles — 16:5 aspect ratio */
+/* Hero Carousel Styles — true 16:5 aspect ratio, no cropping */
 .hero-slide-img {
-    height: 200px;
-    background-size: cover;
-    background-position: center;
     width: 100%;
+    aspect-ratio: 16 / 5;
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-color: #111;  /* letterbox bars */
 }
 
-@media (min-width: 768px) {
-    .hero-slide-img {
-        height: 350px;
-    }
+/* ═══════════════════════════════════════════════════════
+   TRIP COMMAND CENTER HERO
+   ═══════════════════════════════════════════════════════ */
+
+.trip-hero {
+    border-radius: 18px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
 }
+
+/* Active trip gradient background */
+.trip-hero-bg {
+    background: linear-gradient(135deg, #1a3a2a 0%, #0d2318 40%, #1b3a4b 100%);
+    padding: 22px 24px 18px;
+    position: relative;
+    overflow: hidden;
+    min-height: 220px;
+}
+.trip-hero-bg::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 80% 20%, rgba(45,200,120,0.08) 0%, transparent 60%),
+                radial-gradient(ellipse at 10% 80%, rgba(33,158,220,0.07) 0%, transparent 50%);
+    pointer-events: none;
+}
+
+/* Photo background layer */
+.trip-hero-photo-bg {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    opacity: 0.18;
+    filter: blur(2px);
+    pointer-events: none;
+}
+
+/* No-trip variant */
+.trip-hero-no-trip {
+    background: linear-gradient(135deg, #bf360c 0%, #e65100 50%, #f57c00 100%);
+    padding: 26px 24px 22px;
+    position: relative;
+    overflow: hidden;
+    min-height: 180px;
+}
+.trip-hero-no-trip::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    pointer-events: none;
+}
+
+/* Live badge */
+.hero-live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(40,200,100,0.18);
+    border: 1px solid rgba(40,200,100,0.35);
+    color: #52d68a;
+    border-radius: 20px;
+    padding: 3px 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+}
+.hero-live-badge .pulse-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #52d68a;
+    animation: pulse-hero 1.4s ease-in-out infinite;
+}
+@keyframes pulse-hero {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50%       { transform: scale(1.5); opacity: 0.6; }
+}
+
+/* Day badge */
+.hero-day-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: rgba(255,255,255,0.9);
+    border-radius: 20px;
+    padding: 3px 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+/* Trip title */
+.hero-trip-title {
+    font-size: 1.45rem;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: -0.3px;
+    line-height: 1.2;
+    margin: 8px 0 4px;
+}
+@media (max-width: 576px) {
+    .hero-trip-title { font-size: 1.1rem; }
+}
+
+/* Route pills */
+.hero-route-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+.hero-route-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.85);
+    border-radius: 12px;
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+.hero-route-arrow {
+    color: rgba(255,255,255,0.4);
+    font-size: 0.85rem;
+}
+
+/* Stats row */
+.hero-stats-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+.hero-stat-pill {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 12px;
+    padding: 8px 14px;
+    min-width: 100px;
+    flex: 1;
+}
+.hero-stat-pill .stat-label {
+    font-size: 0.68rem;
+    color: rgba(255,255,255,0.55);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: block;
+    margin-bottom: 3px;
+}
+.hero-stat-pill .stat-value {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #ffffff;
+    line-height: 1.1;
+}
+.hero-stat-pill .stat-sub {
+    font-size: 0.68rem;
+    color: rgba(255,255,255,0.5);
+    margin-top: 2px;
+    display: block;
+}
+
+/* Budget bar */
+.hero-budget-bar {
+    margin-top: 6px;
+}
+.hero-budget-bar .progress {
+    height: 5px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 10px;
+    overflow: hidden;
+}
+.hero-budget-bar .progress-bar {
+    border-radius: 10px;
+    transition: width 0.8s cubic-bezier(.4,0,.2,1);
+}
+
+/* Train panel */
+.hero-train-panel {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 14px;
+    padding: 12px 16px;
+    margin-bottom: 14px;
+}
+.hero-train-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(33,150,243,0.18);
+    border: 1px solid rgba(33,150,243,0.3);
+    color: #90caf9;
+    border-radius: 10px;
+    padding: 4px 10px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin-right: 6px;
+    margin-bottom: 4px;
+}
+.hero-train-edit-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+.hero-train-edit-row input {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #fff;
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 0.78rem;
+    flex: 1;
+    min-width: 90px;
+}
+.hero-train-edit-row input::placeholder { color: rgba(255,255,255,0.4); }
+.hero-train-edit-row input:focus {
+    outline: none;
+    border-color: rgba(33,150,243,0.6);
+    background: rgba(255,255,255,0.15);
+}
+
+/* Countdown block */
+.hero-countdown-block {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 14px;
+    padding: 12px 18px;
+    min-width: 110px;
+    text-align: center;
+}
+.hero-countdown-value {
+    font-size: 1.55rem;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: -0.5px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+}
+.hero-countdown-label {
+    font-size: 0.65rem;
+    color: rgba(255,255,255,0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    font-weight: 600;
+    margin-top: 4px;
+}
+
+/* Upcoming trips mini-panel */
+.hero-upcoming-panel {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 14px;
+    padding: 12px 14px;
+}
+.hero-upcoming-title {
+    font-size: 0.7rem;
+    color: rgba(255,255,255,0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+.hero-upcoming-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+.hero-upcoming-item:last-child { border-bottom: none; padding-bottom: 0; }
+.hero-upcoming-item:first-child { padding-top: 0; }
+.hero-upcoming-icon {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.1);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+.hero-upcoming-name {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: rgba(255,255,255,0.9);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 110px;
+}
+.hero-upcoming-chip {
+    margin-left: auto;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 8px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* Quick actions bar */
+.hero-actions-bar {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+}
+.hero-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: rgba(255,255,255,0.9);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.18s, border-color 0.18s, transform 0.14s;
+    text-decoration: none;
+}
+.hero-action-btn:hover {
+    background: rgba(255,255,255,0.2);
+    border-color: rgba(255,255,255,0.4);
+    color: #fff;
+    transform: translateY(-1px);
+}
+.hero-action-btn.primary {
+    background: rgba(45,180,100,0.25);
+    border-color: rgba(45,180,100,0.45);
+    color: #6ee09e;
+}
+.hero-action-btn.primary:hover {
+    background: rgba(45,180,100,0.38);
+    color: #a3f5c5;
+}
+.hero-action-btn.info-btn {
+    background: rgba(33,150,243,0.2);
+    border-color: rgba(33,150,243,0.35);
+    color: #90caf9;
+}
+.hero-action-btn.info-btn:hover {
+    background: rgba(33,150,243,0.32);
+    color: #bbdefb;
+}
+
+/* No-trip upcoming cards */
+.hero-no-trip-card {
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 14px;
+    padding: 14px 16px;
+    flex: 1;
+    min-width: 130px;
+    transition: transform 0.15s;
+}
+.hero-no-trip-card:hover { transform: translateY(-2px); }
+.hero-no-trip-card .card-trip-name {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.hero-no-trip-card .card-trip-date {
+    font-size: 0.72rem;
+    color: rgba(255,255,255,0.65);
+    margin-bottom: 8px;
+}
+.hero-no-trip-card .card-trip-countdown {
+    font-size: 1rem;
+    font-weight: 800;
+    color: #fff;
+}
+.hero-no-trip-card .card-trip-unit {
+    font-size: 0.68rem;
+    color: rgba(255,255,255,0.6);
+    text-transform: uppercase;
+}
+
+/* Dark mode overrides */
+body.dark-mode .trip-hero-bg {
+    background: linear-gradient(135deg, #0a1f14 0%, #061410 40%, #0c1e2e 100%);
+}
+body.dark-mode .hero-train-edit-row input {
+    background: rgba(255,255,255,0.07);
+    border-color: rgba(255,255,255,0.15);
+}
+
+/* Custom scrollbar for Hero Ticket Modal */
+#hero-ticket-modal-body::-webkit-scrollbar {
+    width: 6px;
+}
+#hero-ticket-modal-body::-webkit-scrollbar-track {
+    background: rgba(0,0,0,0.05);
+    border-radius: 4px;
+}
+#hero-ticket-modal-body::-webkit-scrollbar-thumb {
+    background: rgba(45, 180, 100, 0.4);
+    border-radius: 4px;
+}
+#hero-ticket-modal-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(45, 180, 100, 0.7);
+}
+
 
 /* Dark Mode Styles */
 body.dark-mode {

@@ -135,11 +135,10 @@ function setupDashboardEventListeners() {
     // Profile operations
     setupProfileEventListeners();
     
-    // Slideshow quick-upload button wiring (Active Trip Hero Banner)
-    const addSlideshowPhotoBtn = document.getElementById('add-slideshow-photo-btn');
+    // Hero photo upload file input — wired dynamically inside renderTripHero() each render.
+    // The initial wire is done here as a fallback for first page load.
     const slideshowQuickInput = document.getElementById('slideshow-quick-photo-input');
-    if (addSlideshowPhotoBtn && slideshowQuickInput) {
-        addSlideshowPhotoBtn.addEventListener('click', () => slideshowQuickInput.click());
+    if (slideshowQuickInput) {
         slideshowQuickInput.addEventListener('change', handleQuickActiveTripPhotoUpload);
     }
     
@@ -1484,158 +1483,626 @@ function updateDashboardActiveTripTracker() {
 }
 
 // =========================================================================
-// ACTIVE TRIP HERO SLIDESHOW & PHOTO UPLOAD ENGINE
+// TRIP COMMAND CENTER HERO
 // =========================================================================
 
-function renderActiveTripHeroSlideshow(activeTrip) {
-    const carouselInner  = document.getElementById('hero-carousel-inner');
-    const carouselIndicators = document.getElementById('hero-carousel-indicators');
-    const uploadOverlay  = document.getElementById('hero-upload-overlay');
+let _heroCountdownInterval = null;
 
-    // --- Default slides (shown when no active trip) ---
-    const defaultSlides = [
-        { img: 'https://images.unsplash.com/photo-1548013146-72479768bada?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80', title: 'Spiritual Journeys', sub: 'Find peace in devotional trips' },
-        { img: 'https://images.unsplash.com/photo-1501555088652-021faa106b9b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80', title: 'Adventure Awaits', sub: 'Challenge yourself with thrilling experiences' },
-        { img: 'https://images.unsplash.com/photo-1516426122078-c23e76319801?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80', title: 'Wild Safari', sub: 'Explore nature and wildlife' },
-        { img: 'https://images.unsplash.com/photo-1566737236500-c8ac43014a67?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80', title: 'Party in Goa & Bangkok', sub: 'Experience the best nightlife' },
-        { img: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80', title: 'Local Road Trips', sub: 'Discover hidden gems nearby' }
-    ];
+/**
+ * Main entry point — replaces the old carousel slideshow.
+ * Called from updateDashboardActiveTripTracker().
+ */
+function renderTripHero(activeTrip) {
+    const section = document.getElementById('trip-hero-section');
+    if (!section) return;
 
-    if (!activeTrip) {
-        // Restore default slides
-        if (carouselInner) {
-            carouselInner.innerHTML = defaultSlides.map((s, i) => `
-                <div class="carousel-item ${i === 0 ? 'active' : ''}" data-bs-interval="4000">
-                    <div class="hero-slide-img" style="background-image: url('${s.img}');"></div>
-                    <div class="hero-overlay p-4 d-flex align-items-end">
-                        <div class="text-white text-shadow">
-                            <h3 class="fw-bold mb-1">${s.title}</h3>
-                            <p class="mb-0 d-none d-md-block">${s.sub}</p>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-        }
-        if (carouselIndicators) {
-            carouselIndicators.innerHTML = defaultSlides.map((_, i) => `
-                <button type="button" data-bs-target="#dashboardHeroCarousel" data-bs-slide-to="${i}" ${i === 0 ? 'class="active"' : ''}></button>
-            `).join('');
-        }
-        if (uploadOverlay) uploadOverlay.style.display = 'none';
-        return;
+    // Clear any existing countdown ticker
+    if (_heroCountdownInterval) {
+        clearInterval(_heroCountdownInterval);
+        _heroCountdownInterval = null;
     }
 
-    // --- Active trip: use uploaded images or show a "no photos" prompt slide ---
-    const uploadedImages = (activeTrip.images && Array.isArray(activeTrip.images))
-        ? activeTrip.images.filter(img => typeof img === 'string' && img.trim().length > 0)
-        : [];
-
-    const tripName = activeTrip.name || 'Your Active Trip';
-    const sDate = new Date(activeTrip.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    const eDate = new Date(activeTrip.endDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-
-    let slidesHtml = '';
-    let indicatorsHtml = '';
-
-    if (uploadedImages.length > 0) {
-        // Show uploaded images in carousel — each photo is a slide
-        slidesHtml = uploadedImages.map((url, i) => `
-            <div class="carousel-item ${i === 0 ? 'active' : ''}" data-bs-interval="4000">
-                <div class="hero-slide-img" style="background-image: url('${url}');"></div>
-                <div class="hero-overlay p-4 d-flex align-items-end">
-                    <div class="text-white text-shadow">
-                        <h3 class="fw-bold mb-1">🚀 ${tripName}</h3>
-                        <p class="mb-0 d-none d-md-block">
-                            <i class="fas fa-location-dot me-1 text-warning"></i>${activeTrip.startLocation} → ${activeTrip.destination}
-                            &nbsp;·&nbsp;
-                            <i class="far fa-calendar-alt me-1"></i>${sDate} – ${eDate}
-                        </p>
-                    </div>
-                </div>
-            </div>
-        `).join('');
-        indicatorsHtml = uploadedImages.map((_, i) => `
-            <button type="button" data-bs-target="#dashboardHeroCarousel" data-bs-slide-to="${i}" ${i === 0 ? 'class="active"' : ''}></button>
-        `).join('');
+    if (activeTrip) {
+        section.innerHTML = _buildActiveTripHero(activeTrip);
+        _wireHeroButtons(activeTrip);
+        _startHeroCountdown(activeTrip);
     } else {
-        // No images uploaded yet — show one prompt slide with a nice overlay
-        slidesHtml = defaultSlides.map((s, i) => `
-            <div class="carousel-item ${i === 0 ? 'active' : ''}" data-bs-interval="4000">
-                <div class="hero-slide-img" style="background-image: url('${s.img}');"></div>
-                <div class="hero-overlay p-4 d-flex align-items-end">
-                    <div class="text-white text-shadow">
-                        <h3 class="fw-bold mb-1">🚀 ${tripName}</h3>
-                        <p class="mb-0 d-none d-md-block">
-                            <i class="fas fa-location-dot me-1 text-warning"></i>${activeTrip.startLocation} → ${activeTrip.destination}
-                            &nbsp;·&nbsp;
-                            <i class="far fa-calendar-alt me-1"></i>${sDate} – ${eDate}
-                        </p>
-                    </div>
-                </div>
-            </div>
-        `).join('');
-        indicatorsHtml = defaultSlides.map((_, i) => `
-            <button type="button" data-bs-target="#dashboardHeroCarousel" data-bs-slide-to="${i}" ${i === 0 ? 'class="active"' : ''}></button>
-        `).join('');
+        // No active trip — show upcoming trips preview
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const upcoming = (window.userTrips || [])
+            .filter(t => new Date(t.startDate) > today)
+            .sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
+            .slice(0, 3);
+        section.innerHTML = _buildNoTripHero(upcoming);
+        _wireNoTripButtons();
     }
 
-    if (carouselInner) carouselInner.innerHTML = slidesHtml;
-    if (carouselIndicators) carouselIndicators.innerHTML = indicatorsHtml;
-
-    // Show/update the upload overlay button on top of the carousel
-    if (uploadOverlay) {
-        uploadOverlay.style.display = 'block';
-        const btn = document.getElementById('add-slideshow-photo-btn');
-        const statusSpan = document.getElementById('hero-upload-status');
-        if (btn) {
-            btn.innerHTML = '<i class="fas fa-camera me-1"></i> Add Trip Photos';
-            btn.disabled = false;
-        }
-        if (statusSpan) {
-            const count = uploadedImages.length;
-            statusSpan.style.display = count > 0 ? 'inline-block' : 'none';
-            statusSpan.textContent = count > 0 ? `${count} photo${count > 1 ? 's' : ''} in slideshow` : '';
-        }
+    // Wire the photo-upload file input (kept outside hero in HTML)
+    const quickInput = document.getElementById('slideshow-quick-photo-input');
+    if (quickInput) {
+        // Remove any old listener and add fresh one
+        const newInput = quickInput.cloneNode(true);
+        quickInput.parentNode.replaceChild(newInput, quickInput);
+        newInput.addEventListener('change', handleQuickActiveTripPhotoUpload);
     }
 }
 
+// ── Countdown helpers ──────────────────────────────────────────────────────
 
-async function deleteActiveTripPhoto(photoIndex) {
+function _formatCountdown(ms) {
+    if (ms <= 0) return '0m';
+    const totalSec = Math.floor(ms / 1000);
+    const d = Math.floor(totalSec / 86400);
+    const h = Math.floor((totalSec % 86400) / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    if (d > 0) return `${d}d ${h}h`;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+}
+
+function _startHeroCountdown(activeTrip) {
+    const endDate = new Date(activeTrip.endDate);
+    endDate.setHours(23, 59, 59, 999);
+
+    function tick() {
+        const now = Date.now();
+        const remaining = endDate - now;
+        const el = document.getElementById('hero-countdown-value');
+        if (el) {
+            if (remaining <= 0) {
+                el.textContent = 'Done!';
+            } else {
+                el.textContent = _formatCountdown(remaining);
+            }
+        }
+
+        // Live departure countdown for train tickets
+        document.querySelectorAll('.train-dep-countdown').forEach(cdEl => {
+            const depMs = parseInt(cdEl.getAttribute('data-dep-ms'));
+            if (!depMs) return;
+            const diff = depMs - now;
+            if (diff <= 0) {
+                cdEl.textContent = 'Departed / In Transit';
+                if (cdEl.parentElement) {
+                    cdEl.parentElement.style.background = 'rgba(102,187,106,0.22)';
+                    cdEl.parentElement.style.borderColor = 'rgba(102,187,106,0.4)';
+                    cdEl.parentElement.style.color = '#a5d6a7';
+                }
+            } else {
+                cdEl.textContent = 'Departs in ' + _formatCountdown(diff);
+            }
+        });
+    }
+    tick();
+    _heroCountdownInterval = setInterval(tick, 1000);
+}
+
+// ── Transport icon helper ──────────────────────────────────────────────────
+
+function _transportIcon(mode) {
+    const m = (mode || 'car').toLowerCase();
+    const map = {
+        car: 'fa-car', flight: 'fa-plane', train: 'fa-train',
+        bus: 'fa-bus', public: 'fa-train-subway'
+    };
+    return map[m] || 'fa-car';
+}
+function _transportColor(mode) {
+    const m = (mode || 'car').toLowerCase();
+    const map = { car: '#6ee09e', flight: '#90caf9', train: '#80deea', bus: '#ffe082', public: '#b39ddb' };
+    return map[m] || '#6ee09e';
+}
+function _transportLabel(mode) {
+    const m = (mode || 'car').toLowerCase();
+    const map = { car: 'Car', flight: 'Flight', train: 'Train', bus: 'Bus', public: 'Public' };
+    return map[m] || 'Car';
+}
+
+// ── Active trip hero HTML builder ──────────────────────────────────────────
+
+function _buildActiveTripHero(trip) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const activeTrip = userTrips.find(trip => {
-        const start = new Date(trip.startDate);
-        const end = new Date(trip.endDate);
-        start.setHours(0, 0, 0, 0);
-        end.setHours(23, 59, 59, 999);
-        return today >= start && today <= end;
-    });
+    const startDate = new Date(trip.startDate);
+    const endDate   = new Date(trip.endDate);
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
 
-    if (!activeTrip || !activeTrip.images) return;
-    if (!confirm(`Remove photo ${photoIndex + 1} from your trip slideshow?`)) return;
+    const totalDays   = Math.round((endDate - startDate) / 86400000) + 1;
+    const dayOfTrip   = Math.max(1, Math.round((today - startDate) / 86400000) + 1);
+    const totalSpent  = (trip.expenses || []).reduce((s, e) => s + (e.amount || 0), 0);
+    const budget      = trip.budget || 0;
+    const budgetPct   = budget > 0 ? Math.min(100, (totalSpent / budget) * 100) : 0;
+    const budgetColor = budgetPct > 85 ? '#ef5350' : budgetPct > 60 ? '#ffa726' : '#66bb6a';
+    const totalDist   = parseFloat(trip.route?.distance) || parseFloat(trip.distance) || 0;
+    const mode        = (trip.transportMode || 'car').toLowerCase();
+    const icon        = _transportIcon(mode);
+    const iconColor   = _transportColor(mode);
+    const modeLabel   = _transportLabel(mode);
 
-    activeTrip.images.splice(photoIndex, 1);
+    // Background photo (first image if any)
+    const photoBg = (trip.images && trip.images[0])
+        ? `<div class="trip-hero-photo-bg" style="background-image:url('${trip.images[0]}');"></div>`
+        : '';
 
-    try {
-        await db.collection('trips').doc(activeTrip.id).update({
-            images: activeTrip.images,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    // Upcoming trips for the side panel
+    const allTrips    = window.userTrips || [];
+    const nowTs       = Date.now();
+    const upcomingList = allTrips
+        .filter(t => new Date(t.startDate) > today && t.id !== trip.id)
+        .sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
+        .slice(0, 3);
+
+    // Upcoming train tickets panel — strictly trains departing within the next 12 hours
+    const now = Date.now();
+    const twelveHoursMs = 12 * 60 * 60 * 1000;
+    const trainTickets = (trip.tickets || [])
+        .filter(t => {
+            // Must be train type (or default if type is unspecified/train)
+            const isTrain = (t.type === 'train' || (!t.type && (t.serviceNo || t.operator)));
+            if (!isTrain) return false;
+            
+            const depMs = _getDepartureMs(t.departureTime, trip.startDate);
+            if (!depMs) return true; // Keep if time not specified
+            return depMs > now && depMs <= (now + twelveHoursMs);
+        })
+        .sort((a, b) => {
+            const da = _getDepartureMs(a.departureTime, trip.startDate) || 0;
+            const db2 = _getDepartureMs(b.departureTime, trip.startDate) || 0;
+            return da - db2;
         });
-        const idx = userTrips.findIndex(t => t.id === activeTrip.id);
-        if (idx !== -1) userTrips[idx].images = activeTrip.images;
-        window.userTrips = userTrips;
-        if (typeof showToast === 'function') showToast('Photo removed from slideshow.', 'info');
-        currentSlideIndex = 0;
-        renderActiveTripHeroSlideshow(activeTrip);
-    } catch (e) {
-        console.error('Error removing photo:', e);
-        if (typeof showToast === 'function') showToast('Failed to remove photo.', 'danger');
+
+    const manualTd = trip.trainDetails || {};
+    const trainPanel = (trainTickets.length > 0 || manualTd.number || manualTd.name || mode === 'train' || mode === 'public')
+        ? _buildTrainPanel(trainTickets, manualTd, trip.id)
+        : '';
+
+    // Countdown end
+    const endTs = endDate.getTime();
+    const remainMs = endTs - Date.now();
+
+    const sDateStr = startDate.toLocaleDateString(undefined, { month:'short', day:'numeric' });
+    const eDateStr = endDate.toLocaleDateString(undefined, { month:'short', day:'numeric' });
+
+    return `
+    <div class="trip-hero-bg" style="position:relative;">
+        ${photoBg}
+        <div style="position:relative; z-index:2;">
+
+            <!-- Top badges row -->
+            <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                <span class="hero-live-badge"><span class="pulse-dot"></span>Active</span>
+                <span class="hero-day-badge"><i class="fas ${icon} me-1" style="color:${iconColor};"></i>Day ${dayOfTrip} of ${totalDays} · ${modeLabel}</span>
+                <span class="hero-day-badge"><i class="far fa-calendar-alt me-1"></i>${sDateStr} – ${eDateStr}</span>
+            </div>
+
+            <!-- Trip title -->
+            <div class="hero-trip-title">🧳 ${trip.name || 'Active Trip'}</div>
+
+            <!-- Route row -->
+            <div class="hero-route-row">
+                <span class="hero-route-chip"><i class="fas fa-circle-play" style="color:#66bb6a; font-size:0.75rem;"></i>${trip.startLocation || '—'}</span>
+                ${(trip.stops && trip.stops.length > 0)
+                    ? trip.stops.slice(0,2).map(s => {
+                        const n = typeof s === 'object' ? s.name : s;
+                        return `<span class="hero-route-arrow">›</span><span class="hero-route-chip"><i class="fas fa-location-dot" style="color:#ffa726; font-size:0.75rem;"></i>${n}</span>`;
+                    }).join('') + (trip.stops.length > 2 ? `<span class="hero-route-arrow">›</span><span class="hero-route-chip" style="opacity:0.65;">+${trip.stops.length-2} stops</span>` : '')
+                    : ''}
+                <span class="hero-route-arrow">›</span>
+                <span class="hero-route-chip"><i class="fas fa-flag-checkered" style="color:#ef5350; font-size:0.75rem;"></i>${trip.destination || '—'}</span>
+            </div>
+
+            <!-- Stats + countdown row -->
+            <div class="d-flex gap-3 flex-wrap align-items-start mb-0">
+
+                <!-- Stats pills -->
+                <div class="hero-stats-row flex-grow-1" style="margin-bottom:0;">
+
+                    <!-- Budget pill -->
+                    <div class="hero-stat-pill">
+                        <span class="stat-label"><i class="fas fa-wallet me-1"></i>Budget</span>
+                        <div class="stat-value">₹${totalSpent.toLocaleString('en-IN')}<span style="font-size:0.75rem; font-weight:500; color:rgba(255,255,255,0.5);"> / ₹${budget.toLocaleString('en-IN')}</span></div>
+                        <div class="hero-budget-bar">
+                            <div class="progress mt-1">
+                                <div class="progress-bar" role="progressbar" style="width:${budgetPct.toFixed(1)}%; background:${budgetColor};"></div>
+                            </div>
+                        </div>
+                        <span class="stat-sub">${budget > 0 ? `₹${(budget - totalSpent).toLocaleString('en-IN')} remaining` : 'No budget set'}</span>
+                    </div>
+
+                    <!-- Distance pill -->
+                    ${totalDist > 0 ? `
+                    <div class="hero-stat-pill">
+                        <span class="stat-label"><i class="fas fa-route me-1"></i>Distance</span>
+                        <div class="stat-value">${totalDist.toFixed(0)} <span style="font-size:0.75rem; font-weight:500; color:rgba(255,255,255,0.5);">km</span></div>
+                        <span class="stat-sub">${trip.startLocation} → ${trip.destination}</span>
+                    </div>` : ''}
+
+                    <!-- Photos pill -->
+                    <div class="hero-stat-pill" style="cursor:pointer;" id="hero-add-photo-pill" title="Add trip photos">
+                        <span class="stat-label"><i class="fas fa-camera me-1"></i>Photos</span>
+                        <div class="stat-value">${(trip.images||[]).length}</div>
+                        <span class="stat-sub">Tap to add</span>
+                    </div>
+                </div>
+
+                <!-- Countdown block -->
+                <div class="hero-countdown-block flex-shrink-0">
+                    <div class="hero-countdown-value" id="hero-countdown-value">${_formatCountdown(remainMs)}</div>
+                    <div class="hero-countdown-label">Trip ends in</div>
+                </div>
+
+                <!-- Upcoming panel (hidden on very small) -->
+                ${upcomingList.length > 0 ? `
+                <div class="hero-upcoming-panel flex-shrink-0 d-none d-md-block" style="min-width:180px; max-width:220px;">
+                    <div class="hero-upcoming-title"><i class="fas fa-calendar-days me-1"></i>Upcoming</div>
+                    ${upcomingList.map(t => {
+                        const daysLeft = Math.ceil((new Date(t.startDate) - Date.now()) / 86400000);
+                        const uIcon = _transportIcon(t.transportMode);
+                        const chipColor = daysLeft <= 3 ? 'background:#ef535022; color:#ef9a9a;' : daysLeft <= 7 ? 'background:#ffa72622; color:#ffcc80;' : 'background:#66bb6a22; color:#a5d6a7;';
+                        return `
+                        <div class="hero-upcoming-item">
+                            <div class="hero-upcoming-icon"><i class="fas ${uIcon}" style="color:${_transportColor(t.transportMode)};"></i></div>
+                            <span class="hero-upcoming-name" title="${t.name}">${t.name}</span>
+                            <span class="hero-upcoming-chip" style="${chipColor}">${daysLeft}d</span>
+                        </div>`;
+                    }).join('')}
+                </div>` : ''}
+            </div>
+
+            <!-- Train panel -->
+            ${trainPanel}
+
+            <!-- Quick actions bar -->
+            <div class="hero-actions-bar">
+                <button class="hero-action-btn primary" id="hero-gps-track-btn" data-trip-id="${trip.id}">
+                    <i class="fas fa-location-crosshairs"></i>GPS Track
+                </button>
+                <button class="hero-action-btn info-btn" id="hero-photo-btn">
+                    <i class="fas fa-camera"></i>Add Photos
+                    <span id="hero-photo-count" style="opacity:0.7;">${(trip.images||[]).length > 0 ? `(${trip.images.length})` : ''}</span>
+                </button>
+                <a class="hero-action-btn" href="trip-details.html?id=${trip.id}" id="hero-view-trip-btn">
+                    <i class="fas fa-map-marked-alt"></i>View Trip
+                </a>
+                <button class="hero-action-btn" id="hero-update-progress-btn" data-trip-id="${trip.id}" data-total-dist="${totalDist}">
+                    <i class="fas fa-edit"></i>Progress
+                </button>
+            </div>
+
+        </div>
+    </div>`;
+}
+
+// ── Train panel builder ────────────────────────────────────────────────────
+
+/**
+ * Builds the upcoming train panel in the hero.
+ * @param {Array}  tickets  - upcoming train tickets from trip.tickets (type === train)
+ * @param {Object} manualTd - manually saved trainDetails fallback
+ * @param {string} tripId
+ */
+function _buildTrainPanel(tickets, manualTd, tripId) {
+    const typeIconMap = { train: 'fa-train', flight: 'fa-plane', bus: 'fa-bus', public: 'fa-train-subway' };
+    const typeColorMap = { train: '#80deea', flight: '#90caf9', bus: '#ffe082', public: '#b39ddb' };
+    const typeLabelMap = { train: 'Train', flight: 'Flight', bus: 'Bus', public: 'Transit' };
+
+    // Build first-ticket pre-fill values for the manual edit form
+    const firstTkt = tickets[0] || {};
+    const prefill = {
+        number:    firstTkt.serviceNo     || manualTd.number    || '',
+        name:      firstTkt.serviceName   || manualTd.name      || '',
+        departure: _extractTime(firstTkt.departureTime) || manualTd.departure || '',
+        arrival:   _extractTime(firstTkt.arrivalTime)   || manualTd.arrival   || '',
+        platform:  manualTd.platform || '',
+        coach:     firstTkt.seatNo   || manualTd.coach || '',
+    };
+
+    // ── Ticket rows from trip.tickets ────────────────────────────────────────
+    let ticketsHtml = '';
+    if (tickets.length > 0) {
+        ticketsHtml = tickets.map(tkt => {
+            const tIcon  = typeIconMap[tkt.type]  || 'fa-train';
+            const tColor = typeColorMap[tkt.type] || '#80deea';
+            const depTime = _extractTime(tkt.departureTime);
+            const arrTime = _extractTime(tkt.arrivalTime);
+            const depStn  = tkt.depCode   || tkt.departurePlace || '';
+            const arrStn  = tkt.arrCode   || tkt.arrivalPlace   || '';
+            const pnr     = tkt.ticketNo  || '';
+            const seat    = tkt.seatNo    || '';
+            const status  = tkt.bookingStatus || '';
+            const statusColor = status.toLowerCase().includes('confirm') ? '#66bb6a'
+                              : status.toLowerCase().includes('wait')    ? '#ffa726'
+                              : status.toLowerCase().includes('cancel')  ? '#ef5350'
+                              : '#90a4ae';
+            const depMs = _getDepartureMs(tkt.departureTime);
+            const countdownChip = depMs ? `
+                <span class="hero-train-chip" style="background:rgba(239,83,80,0.22); border-color:rgba(239,83,80,0.45); color:#ff8a80; font-weight:700;">
+                    <i class="fas fa-stopwatch me-1"></i><span class="train-dep-countdown" data-dep-ms="${depMs}">Departs in ${_formatCountdown(depMs - Date.now())}</span>
+                </span>` : '';
+
+            return `
+            <div style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.08);">
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:5px;">
+                    <i class="fas ${tIcon}" style="color:${tColor};"></i>
+                    ${tkt.serviceNo   ? `<span class="hero-train-chip" style="border-color:${tColor}40; background:${tColor}18;"><i class="fas fa-hashtag"></i>${tkt.serviceNo}</span>` : ''}
+                    ${tkt.serviceName ? `<span class="hero-train-chip" style="border-color:${tColor}40; background:${tColor}18;"><i class="fas fa-id-badge"></i>${tkt.serviceName}</span>` : ''}
+                    ${tkt.operator && tkt.operator !== tkt.serviceName ? `<span class="hero-train-chip" style="border-color:${tColor}40; background:${tColor}18;"><i class="fas fa-building"></i>${tkt.operator}</span>` : ''}
+                    ${countdownChip}
+                    ${status ? `<span class="hero-train-chip" style="background:${statusColor}22; border-color:${statusColor}44; color:${statusColor};">${status}</span>` : ''}
+                    <button type="button" class="hero-action-btn primary ms-auto" style="padding:2px 10px; font-size:0.72rem; background:rgba(33,150,243,0.25); border-color:rgba(33,150,243,0.45); color:#90caf9;" onclick="openHeroTicketModal(event, '${tkt.id}')">
+                        <i class="fas fa-ticket-alt me-1"></i>View Ticket
+                    </button>
+                    ${tkt.serviceNo ? `<button type="button" class="hero-action-btn primary ms-1" style="padding:2px 10px; font-size:0.72rem; background:rgba(40,200,100,0.22); border-color:rgba(40,200,100,0.4); color:#52d68a;" onclick="fetchAndShowLiveTrainStatus(event, '${tkt.serviceNo}')"><i class="fas fa-satellite-dish me-1"></i>Live Status</button>` : ''}
+                </div>
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    ${depStn  ? `<span class="hero-train-chip"><i class="fas fa-circle-play" style="color:#66bb6a; font-size:0.7rem;"></i>${depStn}</span>` : ''}
+                    ${depTime ? `<span class="hero-train-chip"><i class="fas fa-arrow-right-from-bracket"></i>${depTime}</span>` : ''}
+                    ${(depStn || depTime) && (arrStn || arrTime) ? `<span style="color:rgba(255,255,255,0.3); font-size:0.8rem;">›</span>` : ''}
+                    ${arrTime ? `<span class="hero-train-chip"><i class="fas fa-arrow-right-to-bracket"></i>${arrTime}</span>` : ''}
+                    ${arrStn  ? `<span class="hero-train-chip"><i class="fas fa-flag-checkered" style="color:#ef5350; font-size:0.7rem;"></i>${arrStn}</span>` : ''}
+                    ${pnr     ? `<span class="hero-train-chip"><i class="fas fa-qrcode"></i>PNR: ${pnr}</span>` : ''}
+                    ${seat    ? `<span class="hero-train-chip"><i class="fas fa-couch"></i>${seat}</span>` : ''}
+                </div>
+            </div>`;
+        }).join('');
+    } else {
+        // No tickets — show manual trainDetails chips or empty state
+        const hasMd = manualTd.number || manualTd.name || manualTd.departure;
+        if (hasMd) {
+            ticketsHtml = `
+            <div style="display:flex; flex-wrap:wrap; gap:4px; align-items:center;">
+                ${manualTd.number    ? `<span class="hero-train-chip"><i class="fas fa-train"></i>${manualTd.number}</span>` : ''}
+                ${manualTd.name      ? `<span class="hero-train-chip"><i class="fas fa-id-badge"></i>${manualTd.name}</span>` : ''}
+                ${manualTd.departure ? `<span class="hero-train-chip"><i class="fas fa-arrow-right-from-bracket"></i>Dep ${manualTd.departure}</span>` : ''}
+                ${manualTd.arrival   ? `<span class="hero-train-chip"><i class="fas fa-arrow-right-to-bracket"></i>Arr ${manualTd.arrival}</span>` : ''}
+                ${manualTd.platform  ? `<span class="hero-train-chip"><i class="fas fa-grip-lines-vertical"></i>PF ${manualTd.platform}</span>` : ''}
+                ${manualTd.coach     ? `<span class="hero-train-chip"><i class="fas fa-couch"></i>${manualTd.coach}</span>` : ''}
+                <button type="button" class="hero-action-btn primary ms-auto" style="padding:2px 10px; font-size:0.72rem; background:rgba(33,150,243,0.25); border-color:rgba(33,150,243,0.45); color:#90caf9;" onclick="openHeroTicketModal(event, 'manual')">
+                    <i class="fas fa-ticket-alt me-1"></i>View Ticket
+                </button>
+                ${manualTd.number ? `<button type="button" class="hero-action-btn primary ms-1" style="padding:2px 10px; font-size:0.72rem; background:rgba(40,200,100,0.22); border-color:rgba(40,200,100,0.4); color:#52d68a;" onclick="fetchAndShowLiveTrainStatus(event, '${manualTd.number}')"><i class="fas fa-satellite-dish me-1"></i>Live Status</button>` : ''}
+            </div>`;
+        } else {
+            ticketsHtml = `<span style="font-size:0.78rem; color:rgba(255,255,255,0.4);"><i class="fas fa-circle-info me-1"></i>No train departing in the next 12 hours. <a href="trip-details.html?id=${tripId}&tab=tickets" style="color:#80deea;">Add in Trip Details →</a></span>`;
+        }
+    }
+
+    return `
+    <div class="hero-train-panel mb-3">
+        <div class="d-flex align-items-center gap-2 mb-2">
+            <i class="fas fa-train" style="color:#80deea;"></i>
+            <span style="font-size:0.78rem; font-weight:700; color:rgba(255,255,255,0.85); text-transform:uppercase; letter-spacing:0.5px;">
+                Upcoming Train
+                ${tickets.length > 0 ? `<span style="background:rgba(128,222,234,0.2); border:1px solid rgba(128,222,234,0.3); color:#80deea; border-radius:8px; padding:1px 7px; font-size:0.68rem; margin-left:4px;">${tickets.length}</span>` : ''}
+            </span>
+            <button class="hero-action-btn ms-auto" style="padding:2px 10px; font-size:0.72rem;" id="hero-train-toggle-btn">
+                <i class="fas fa-pencil"></i>${(prefill.number || prefill.name) ? 'Edit' : 'Add'}
+            </button>
+        </div>
+        <div id="hero-train-chips">${ticketsHtml}</div>
+        <div id="hero-train-edit-form" style="display:none; margin-top:8px;">
+            <div style="font-size:0.72rem; color:rgba(255,255,255,0.45); margin-bottom:6px;"><i class="fas fa-circle-info me-1"></i>Edit or add upcoming train details for the hero view.</div>
+            <div class="hero-train-edit-row">
+                <input id="htd-number"    placeholder="Train No."           value="${prefill.number}">
+                <input id="htd-name"      placeholder="Train Name"          value="${prefill.name}">
+                <input id="htd-departure" placeholder="Departure" type="time" value="${prefill.departure}">
+                <input id="htd-arrival"   placeholder="Arrival"   type="time" value="${prefill.arrival}">
+                <input id="htd-platform"  placeholder="Platform"            value="${prefill.platform}" style="max-width:80px;">
+                <input id="htd-coach"     placeholder="Coach/Seat"          value="${prefill.coach}" style="max-width:80px;">
+            </div>
+            <div class="d-flex gap-2 mt-2">
+                <button class="hero-action-btn primary" style="padding:4px 14px;" id="hero-train-save-btn" data-trip-id="${tripId}">
+                    <i class="fas fa-check"></i>Save Train Details
+                </button>
+                <button class="hero-action-btn" style="padding:4px 12px; color:rgba(255,255,255,0.55);" id="hero-train-cancel-btn">Cancel</button>
+            </div>
+        </div>
+    </div>`;
+}
+
+// ── Time & Date helpers ───────────────────────────────────────────────────
+
+/** Parses departureTime (ISO datetime, time string HH:MM, or Date string) into milliseconds timestamp */
+function _getDepartureMs(departureTime, startDate) {
+    if (!departureTime) return null;
+    if (typeof departureTime === 'string' && departureTime.includes('T')) {
+        const d = new Date(departureTime);
+        return isNaN(d.getTime()) ? null : d.getTime();
+    }
+    const parsed = new Date(departureTime);
+    if (!isNaN(parsed.getTime())) {
+        return parsed.getTime();
+    }
+    if (typeof departureTime === 'string' && /^\d{2}:\d{2}/.test(departureTime)) {
+        const [hh, mm] = departureTime.split(':').map(Number);
+        const baseDate = startDate ? new Date(startDate) : new Date();
+        baseDate.setHours(hh, mm, 0, 0);
+        return baseDate.getTime();
+    }
+    return null;
+}
+
+// ── Time extraction helper ─────────────────────────────────────────────────
+
+/** Extract HH:MM from an ISO datetime string (2026-07-26T06:30) or bare time (06:30 / 06:30:00) */
+function _extractTime(val) {
+    if (!val) return '';
+    if (typeof val === 'string' && val.includes('T')) {
+        const t = val.split('T')[1];
+        return t ? t.slice(0, 5) : '';
+    }
+    if (typeof val === 'string' && /^\d{2}:\d{2}/.test(val)) return val.slice(0, 5);
+    return val;
+}
+
+// ── No-trip hero HTML builder ──────────────────────────────────────────────
+
+function _buildNoTripHero(upcoming) {
+    const now = Date.now();
+    const cardsHtml = upcoming.length > 0
+        ? upcoming.map(t => {
+            const daysLeft = Math.ceil((new Date(t.startDate) - now) / 86400000);
+            const sd = new Date(t.startDate).toLocaleDateString(undefined, { month:'short', day:'numeric' });
+            const ed = new Date(t.endDate).toLocaleDateString(undefined,   { month:'short', day:'numeric' });
+            const tIcon = _transportIcon(t.transportMode);
+            return `
+            <div class="hero-no-trip-card">
+                <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
+                    <i class="fas ${tIcon}" style="color:${_transportColor(t.transportMode)};"></i>
+                    <div class="card-trip-name" title="${t.name}">${t.name}</div>
+                </div>
+                <div class="card-trip-date">${t.startLocation||'?'} → ${t.destination||'?'} · ${sd}–${ed}</div>
+                <div class="d-flex align-items-baseline gap-1">
+                    <span class="card-trip-countdown">${daysLeft}</span>
+                    <span class="card-trip-unit">days away</span>
+                </div>
+            </div>`;
+        }).join('')
+        : `<div style="color:rgba(255,255,255,0.7); font-size:0.9rem;">No upcoming trips yet. Start planning! 🗺️</div>`;
+
+    return `
+    <div class="trip-hero-no-trip" style="position:relative;">
+        <div style="position:relative; z-index:2;">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <i class="fas fa-globe-asia" style="font-size:1.4rem; color:rgba(255,255,255,0.8);"></i>
+                <div>
+                    <div style="font-size:1.25rem; font-weight:800; color:#fff; line-height:1.15;">No Active Trip</div>
+                    <div style="font-size:0.8rem; color:rgba(255,255,255,0.65);">Ready for your next adventure?</div>
+                </div>
+                <button class="hero-action-btn ms-auto" id="hero-create-trip-btn" style="background:rgba(255,255,255,0.2); border-color:rgba(255,255,255,0.35);">
+                    <i class="fas fa-plus"></i>New Trip
+                </button>
+            </div>
+            ${upcoming.length > 0
+                ? `<div style="font-size:0.7rem; color:rgba(255,255,255,0.55); text-transform:uppercase; letter-spacing:0.7px; font-weight:700; margin:14px 0 8px;"><i class="fas fa-calendar-days me-1"></i>Upcoming Trips</div>`
+                : ''}
+            <div class="d-flex gap-3 flex-wrap">${cardsHtml}</div>
+        </div>
+    </div>`;
+}
+
+// ── Button wiring ──────────────────────────────────────────────────────────
+
+function _wireHeroButtons(activeTrip) {
+    // GPS Track
+    const gpsBtn = document.getElementById('hero-gps-track-btn');
+    if (gpsBtn) {
+        gpsBtn.addEventListener('click', () => {
+            const existingBtn = document.getElementById('auto-track-dashboard-btn');
+            if (existingBtn) { existingBtn.click(); return; }
+            if ('geolocation' in navigator) {
+                if (typeof showToast === 'function') showToast('GPS tracking — use the Live Tracker card below.', 'info');
+            } else {
+                if (typeof showToast === 'function') showToast('Geolocation not supported on this device.', 'warning');
+            }
+        });
+    }
+
+    // Add photos — triggers the hidden file input
+    const photoBtn = document.getElementById('hero-photo-btn');
+    const photoPill = document.getElementById('hero-add-photo-pill');
+    const fileInput = document.getElementById('slideshow-quick-photo-input');
+    if (photoBtn && fileInput)  photoBtn.addEventListener('click',  () => fileInput.click());
+    if (photoPill && fileInput) photoPill.addEventListener('click', () => fileInput.click());
+
+    // Update Progress — delegate to existing card button
+    const progressBtn = document.getElementById('hero-update-progress-btn');
+    if (progressBtn) {
+        progressBtn.addEventListener('click', () => {
+            const existing = document.getElementById('update-dashboard-progress');
+            if (existing) { existing.click(); return; }
+            if (typeof showUpdateProgressModal === 'function') {
+                showUpdateProgressModal(activeTrip.id, parseFloat(activeTrip.route?.distance) || 0);
+            }
+        });
+    }
+
+    // Train panel toggle
+    const trainToggle = document.getElementById('hero-train-toggle-btn');
+    const trainForm   = document.getElementById('hero-train-edit-form');
+    const trainChips  = document.getElementById('hero-train-chips');
+    if (trainToggle && trainForm) {
+        trainToggle.addEventListener('click', () => {
+            const isOpen = trainForm.style.display !== 'none';
+            trainForm.style.display = isOpen ? 'none' : 'block';
+            trainToggle.innerHTML   = isOpen ? '<i class="fas fa-pencil"></i>Edit' : '<i class="fas fa-times"></i>Close';
+        });
+    }
+    const trainCancel = document.getElementById('hero-train-cancel-btn');
+    if (trainCancel && trainForm) {
+        trainCancel.addEventListener('click', () => {
+            trainForm.style.display = 'none';
+            if (trainToggle) trainToggle.innerHTML = '<i class="fas fa-pencil"></i>Edit';
+        });
+    }
+
+    // Train save
+    const trainSave = document.getElementById('hero-train-save-btn');
+    if (trainSave) {
+        trainSave.addEventListener('click', async () => {
+            const details = {
+                number:    document.getElementById('htd-number')?.value.trim()    || '',
+                name:      document.getElementById('htd-name')?.value.trim()      || '',
+                departure: document.getElementById('htd-departure')?.value.trim() || '',
+                arrival:   document.getElementById('htd-arrival')?.value.trim()   || '',
+                platform:  document.getElementById('htd-platform')?.value.trim()  || '',
+                coach:     document.getElementById('htd-coach')?.value.trim()     || '',
+            };
+            await _saveTrainDetails(activeTrip.id, details, activeTrip);
+        });
     }
 }
 
-// updateSlideshowDOM is no longer needed — Bootstrap carousel handles slide transitions
-// It's kept as a no-op stub to avoid breaking any lingering calls
+function _wireNoTripButtons() {
+    const createBtn = document.getElementById('hero-create-trip-btn');
+    if (createBtn) {
+        createBtn.addEventListener('click', () => {
+            if (typeof showCreateTripModal === 'function') showCreateTripModal();
+            else document.getElementById('create-trip-btn')?.click();
+        });
+    }
+}
+
+// ── Firestore save for train details ──────────────────────────────────────
+
+async function _saveTrainDetails(tripId, details, activeTrip) {
+    const saveBtn = document.getElementById('hero-train-save-btn');
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>Saving...'; }
+    try {
+        await db.collection('trips').doc(tripId).update({
+            trainDetails: details,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        // Update local cache
+        activeTrip.trainDetails = details;
+        const idx = (window.userTrips||[]).findIndex(t => t.id === tripId);
+        if (idx !== -1) window.userTrips[idx].trainDetails = details;
+
+        if (typeof showToast === 'function') showToast('Train details saved!', 'success');
+        // Re-render hero to show chips
+        renderTripHero(activeTrip);
+    } catch(e) {
+        console.error('Error saving train details:', e);
+        if (typeof showToast === 'function') showToast('Failed to save train details.', 'danger');
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '<i class="fas fa-check"></i>Save'; }
+    }
+}
+
+// ── Compatibility stub (old calls still work) ──────────────────────────────
+
+/** @deprecated — kept so any lingering call sites don't error out */
+function renderActiveTripHeroSlideshow(activeTrip) {
+    renderTripHero(activeTrip);
+}
+
+// updateSlideshowDOM is no longer needed — stub preserved
 function updateSlideshowDOM() {}
+
+
 
 
 // Function to handle photo uploads from Create & Edit modals
@@ -1667,9 +2134,9 @@ async function handleTripPhotoUpload(event, isEdit = false) {
                 }
             }
             
-            // 2. Fallback to resized compressed Data URL
+            // 2. Fallback: resize to 16:5 canvas (1600×500, crisp, no crop)
             if (!finalUrl) {
-                finalUrl = await compressImageToDataUrl(file, 900, 0.75);
+                finalUrl = await resizeImageTo16x5(file);
             }
             
             if (finalUrl) {
@@ -1691,28 +2158,48 @@ async function handleTripPhotoUpload(event, isEdit = false) {
 }
 
 function compressImageToDataUrl(file, maxWidth = 900, quality = 0.75) {
-    return new Promise((resolve) => {
+    // Legacy stub — kept so any other callers don't break.
+    // New uploads use resizeImageTo16x5() instead.
+    return resizeImageTo16x5(file, quality);
+}
+
+/**
+ * Resize an uploaded image to a 1600×500 canvas (16:5 ratio).
+ * The image is scaled to *fit inside* the canvas (contain logic)
+ * with black letterbox bars filling any remaining space.
+ * Exports as JPEG at the given quality (default 0.88 for crisp results).
+ */
+function resizeImageTo16x5(file, quality = 0.88) {
+    return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => {
             const img = new Image();
             img.onload = () => {
+                const TARGET_W = 1600;
+                const TARGET_H = 500; // 16:5 ratio
                 const canvas = document.createElement('canvas');
-                let width = img.width;
-                let height = img.height;
-                
-                if (width > maxWidth) {
-                    height = Math.round((height * maxWidth) / width);
-                    width = maxWidth;
-                }
-                
-                canvas.width = width;
-                canvas.height = height;
+                canvas.width = TARGET_W;
+                canvas.height = TARGET_H;
                 const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
+
+                // Letterbox background
+                ctx.fillStyle = '#111111';
+                ctx.fillRect(0, 0, TARGET_W, TARGET_H);
+
+                // Scale image to fit inside canvas without any cropping
+                const scale = Math.min(TARGET_W / img.width, TARGET_H / img.height);
+                const drawW = Math.round(img.width * scale);
+                const drawH = Math.round(img.height * scale);
+                const offsetX = Math.round((TARGET_W - drawW) / 2);
+                const offsetY = Math.round((TARGET_H - drawH) / 2);
+
+                ctx.drawImage(img, offsetX, offsetY, drawW, drawH);
                 resolve(canvas.toDataURL('image/jpeg', quality));
             };
+            img.onerror = reject;
             img.src = e.target.result;
         };
+        reader.onerror = reject;
         reader.readAsDataURL(file);
     });
 }
@@ -1795,9 +2282,9 @@ async function handleQuickActiveTripPhotoUpload(event) {
                 }
             }
 
-            // Fallback: compressed data URL
+            // Fallback: resize to 16:5 canvas (1600×500, crisp, no crop)
             if (!finalUrl) {
-                finalUrl = await compressImageToDataUrl(file, 900, 0.78);
+                finalUrl = await resizeImageTo16x5(file);
             }
 
             if (finalUrl) {
@@ -4955,6 +5442,374 @@ function handleSearchResultClick(result) {
             ecoCard.scrollIntoView({ behavior: 'smooth' });
         }
     }
+}
+
+
+// ── HERO DIGITAL TICKET VIEW MODAL ───────────────────────────────────────
+
+function openHeroTicketModal(param1, param2) {
+    let ticketId = param1;
+    if (param1 && typeof param1 === 'object' && param1.preventDefault) {
+        param1.preventDefault();
+        param1.stopPropagation();
+        ticketId = param2;
+    }
+
+    const modalEl = document.getElementById('heroTicketViewModal');
+    const modalBody = document.getElementById('hero-ticket-modal-body');
+    if (!modalEl || !modalBody) return;
+
+    // Ensure modal element is at body root level to avoid CSS transform/overflow traps
+    if (modalEl.parentNode !== document.body) {
+        document.body.appendChild(modalEl);
+    }
+
+    let ticket = null;
+    let tripName = 'Active Trip';
+
+    // Find active trip or search all userTrips for this ticketId
+    const activeTrip = (window.userTrips || []).find(t => {
+        if (!t.tickets) return false;
+        return t.tickets.some(tkt => tkt && tkt.id === ticketId);
+    });
+
+    if (activeTrip && activeTrip.tickets) {
+        ticket = activeTrip.tickets.find(tkt => tkt && tkt.id === ticketId);
+        tripName = activeTrip.name || 'Trip Pass';
+    }
+
+    const detailsLink = document.getElementById('hero-ticket-details-link');
+    if (detailsLink && activeTrip) {
+        detailsLink.href = `trip-details.html?id=${activeTrip.id}&tab=tickets`;
+    }
+
+    // Fallback search across all trips
+    if (!ticket && window.userTrips) {
+        for (const tr of window.userTrips) {
+            if (tr.tickets) {
+                const found = tr.tickets.find(tkt => tkt && tkt.id === ticketId);
+                if (found) {
+                    ticket = found;
+                    tripName = tr.name || 'Trip Pass';
+                    break;
+                }
+            }
+        }
+    }
+
+    // Fallback: check activeTrip.trainDetails if ticketId === 'manual' or ticket not found
+    if (!ticket) {
+        const curActive = (window.userTrips || []).find(t => {
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const start = new Date(t.startDate);
+            const end = new Date(t.endDate);
+            start.setHours(0,0,0,0);
+            end.setHours(23,59,59,999);
+            return today >= start && today <= end;
+        }) || (window.userTrips && window.userTrips[0]);
+
+        if (curActive) {
+            tripName = curActive.name || 'Active Trip';
+            if (curActive.tickets && curActive.tickets.length > 0) {
+                ticket = curActive.tickets.find(tkt => tkt.type === 'train') || curActive.tickets[0];
+            }
+            if (!ticket && curActive.trainDetails) {
+                const td = curActive.trainDetails;
+                ticket = {
+                    id: 'manual',
+                    serviceNo: td.number,
+                    serviceName: td.name,
+                    departureTime: td.departure,
+                    arrivalTime: td.arrival,
+                    departurePlace: curActive.startLocation,
+                    arrivalPlace: curActive.destination,
+                    seatNo: td.coach,
+                    bookingStatus: 'Confirmed',
+                    operator: 'Indian Railways'
+                };
+            }
+        }
+    }
+
+    if (!ticket) {
+        if (typeof showToast === 'function') showToast('Ticket details not found.', 'warning');
+        return;
+    }
+
+    const depTime = typeof _extractTime === 'function' ? _extractTime(ticket.departureTime) : (ticket.departureTime || '—');
+    const arrTime = typeof _extractTime === 'function' ? _extractTime(ticket.arrivalTime) : (ticket.arrivalTime || '—');
+    const status = ticket.bookingStatus || 'Confirmed';
+    const statusColor = status.toLowerCase().includes('confirm') ? 'bg-success'
+                      : status.toLowerCase().includes('wait')    ? 'bg-warning text-dark'
+                      : 'bg-danger';
+
+    modalBody.innerHTML = `
+    <div class="card border-0 shadow-sm overflow-hidden" style="border-radius: 16px;">
+        <!-- Digital Pass Header -->
+        <div class="p-3 text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #1a3a2a 0%, #0d2318 100%);">
+            <div>
+                <span class="badge ${statusColor} mb-1"><i class="fas fa-check-circle me-1"></i>${status}</span>
+                <h4 class="fw-bold mb-0 text-white">${ticket.serviceNo ? ticket.serviceNo + ' - ' : ''}${ticket.serviceName || ticket.operator || 'Train Boarding Pass'}</h4>
+                <small class="text-white-50"><i class="fas fa-suitcase-rolling me-1"></i>${tripName}</small>
+            </div>
+            <div class="text-end">
+                <span class="text-white-50 small d-block" style="font-size:0.7rem; letter-spacing:0.5px;">PNR / BOOKING NO.</span>
+                <span class="fw-bold font-monospace fs-5 text-warning">${ticket.ticketNo || 'N/A'}</span>
+            </div>
+        </div>
+
+        <!-- Pass Body -->
+        <div class="p-4 bg-white">
+            <!-- Route / Stations -->
+            <div class="row align-items-center text-center mb-4 pb-3 border-bottom">
+                <div class="col-5 text-start">
+                    <span class="text-muted small d-block" style="font-size:0.7rem;">DEPARTURE</span>
+                    <h5 class="fw-bold mb-0 text-dark">${ticket.depCode || ticket.departurePlace || 'Origin'}</h5>
+                    <span class="text-success fw-semibold"><i class="fas fa-clock me-1"></i>${depTime}</span>
+                </div>
+                <div class="col-2">
+                    <i class="fas fa-arrow-right text-muted fs-4"></i>
+                </div>
+                <div class="col-5 text-end">
+                    <span class="text-muted small d-block" style="font-size:0.7rem;">ARRIVAL</span>
+                    <h5 class="fw-bold mb-0 text-dark">${ticket.arrCode || ticket.arrivalPlace || 'Destination'}</h5>
+                    <span class="text-primary fw-semibold"><i class="fas fa-clock me-1"></i>${arrTime}</span>
+                </div>
+            </div>
+
+            <!-- Details Grid -->
+            <div class="row g-3 mb-3">
+                <div class="col-6 col-md-3">
+                    <span class="text-muted small d-block" style="font-size:0.7rem;">PASSENGER</span>
+                    <span class="fw-semibold text-dark">${ticket.passengerName || 'Traveler'}</span>
+                </div>
+                <div class="col-6 col-md-3">
+                    <span class="text-muted small d-block" style="font-size:0.7rem;">COACH / SEAT</span>
+                    <span class="fw-semibold text-dark">${ticket.seatNo || '—'}</span>
+                </div>
+                <div class="col-6 col-md-3">
+                    <span class="text-muted small d-block" style="font-size:0.7rem;">OPERATOR</span>
+                    <span class="fw-semibold text-dark">${ticket.operator || 'Indian Railways'}</span>
+                </div>
+                <div class="col-6 col-md-3">
+                    <span class="text-muted small d-block" style="font-size:0.7rem;">TICKET FARE</span>
+                    <span class="fw-bold text-success">${ticket.cost ? '₹' + ticket.cost.toLocaleString('en-IN') : 'Included'}</span>
+                </div>
+            </div>
+
+            ${ticket.notes ? `
+            <div class="p-2.5 bg-light rounded-3 mb-3 border">
+                <small class="text-muted d-block fw-semibold" style="font-size:0.72rem;">Notes:</small>
+                <small class="text-dark">${ticket.notes}</small>
+            </div>` : ''}
+
+            <!-- Attachment / Receipt image if available -->
+            ${ticket.imageUrl ? `
+            <div class="text-center pt-3 border-top">
+                <span class="text-muted small d-block mb-2"><i class="fas fa-file-image me-1 text-primary"></i>Uploaded Ticket Pass / QR Code Receipt</span>
+                <div class="position-relative d-inline-block border rounded-3 overflow-hidden shadow-2xs bg-light p-2 mb-2" style="max-width:100%;">
+                    <img src="${ticket.imageUrl}" alt="Ticket Image" class="img-fluid rounded" style="max-height: 380px; object-fit: contain;">
+                </div>
+                <div>
+                    <a href="${ticket.imageUrl}" target="_blank" download class="btn btn-sm btn-outline-primary rounded-pill px-4">
+                        <i class="fas fa-download me-1"></i>Open Full Image / Pass
+                    </a>
+                </div>
+            </div>` : `
+            <div class="text-center pt-3 border-top">
+                <span class="text-muted small"><i class="fas fa-info-circle me-1"></i>No ticket image attached.</span>
+            </div>`}
+        </div>
+    </div>`;
+
+    try {
+        if (window.bootstrap && bootstrap.Modal) {
+            const bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            bsModal.show();
+        } else if (typeof $ !== 'undefined') {
+            $('#heroTicketViewModal').modal('show');
+        } else {
+            modalEl.classList.add('show');
+            modalEl.style.display = 'block';
+        }
+    } catch (e) {
+        console.error('Modal toggle error:', e);
+    }
+}
+window.openHeroTicketModal = openHeroTicketModal;
+
+
+// ── INDIAN RAIL API LIVE TRAIN RUNNING STATUS INTEGRATION ─────────────────
+
+async function fetchAndShowLiveTrainStatus(evt, trainNumber, tripDateStr) {
+    if (evt) {
+        evt.preventDefault();
+        evt.stopPropagation();
+    }
+
+    const modalEl = document.getElementById('liveTrainStatusModal');
+    const modalBody = document.getElementById('live-train-status-modal-body');
+    if (!modalEl || !modalBody) return;
+
+    if (modalEl.parentNode !== document.body) {
+        document.body.appendChild(modalEl);
+    }
+
+    // Clean train number (strip non-digits, e.g. "12788")
+    const cleanTrainNo = (trainNumber || '').toString().replace(/\D/g, '');
+    if (!cleanTrainNo) {
+        if (typeof showToast === 'function') showToast('Please provide a valid Train Number.', 'warning');
+        return;
+    }
+
+    // Format YYYYMMDD for Indian Rail API
+    let dateObj = new Date();
+    if (tripDateStr) {
+        const parsed = new Date(tripDateStr);
+        if (!isNaN(parsed.getTime())) dateObj = parsed;
+    }
+    const yyyy = dateObj.getFullYear();
+    const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const dd = String(dateObj.getDate()).padStart(2, '0');
+    const dateYYYYMMDD = `${yyyy}${mm}${dd}`;
+
+    try {
+        if (window.bootstrap && bootstrap.Modal) {
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        } else if (typeof $ !== 'undefined') {
+            $('#liveTrainStatusModal').modal('show');
+        } else {
+            modalEl.classList.add('show');
+            modalEl.style.display = 'block';
+        }
+    } catch (e) {
+        console.error('Modal toggle error:', e);
+    }
+
+    // Render live running status options for cleanTrainNo
+    _renderLiveTrainStatusError(null, cleanTrainNo, dateYYYYMMDD);
+}
+window.fetchAndShowLiveTrainStatus = fetchAndShowLiveTrainStatus;
+
+function _renderLiveTrainStatusResult(data, trainNo, dateYYYYMMDD, apiKey) {
+    const modalBody = document.getElementById('live-train-status-modal-body');
+    if (!modalBody) return;
+
+    if (!data || data.ResponseCode === '404' || data.Status === 'ERROR' || (data.ResponseCode && data.ResponseCode !== '200')) {
+        const msg = data?.Message || data?.Status || 'Unable to fetch live status for this train/date.';
+        modalBody.innerHTML = `
+            <div class="card border-0 shadow-sm p-4 text-center">
+                <div class="text-warning fs-1 mb-2"><i class="fas fa-triangle-exclamation"></i></div>
+                <h6 class="fw-bold text-dark mb-1">Indian Rail API Response: ${data?.ResponseCode || 'Error'}</h6>
+                <p class="text-muted small mb-3">${msg}</p>
+                <div class="p-3 bg-light rounded-3 text-start small mb-3 border">
+                    <div><strong>Train Number:</strong> #${trainNo}</div>
+                    <div><strong>Date (YYYYMMDD):</strong> ${dateYYYYMMDD}</div>
+                    <div class="text-truncate"><strong>API Request:</strong> <code>http://indianrailapi.com/api/v2/livetrainstatus/apikey/${apiKey}/trainnumber/${trainNo}/date/${dateYYYYMMDD}/</code></div>
+                </div>
+                <div>
+                    <a href="http://indianrailapi.com/api/v2/livetrainstatus/apikey/${apiKey}/trainnumber/${trainNo}/date/${dateYYYYMMDD}/" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-4">
+                        <i class="fas fa-external-link-alt me-1"></i>Open Direct API URL
+                    </a>
+                </div>
+            </div>`;
+        return;
+    }
+
+    const trainName = data.TrainName || data.TrainTitle || `Train #${trainNo}`;
+    const currentPosition = data.CurrentPosition || data.CurrentStatus || 'Live running details received.';
+    const curStation = data.CurrentStation?.StationName || data.CurrentStationName || 'In Transit';
+    const delay = data.CurrentStation?.DelayInDeparture || data.Delay || 'On Time';
+    const isLate = delay.toString().toLowerCase().includes('late') || parseInt(delay) > 0;
+
+    modalBody.innerHTML = `
+        <div class="card border-0 shadow-sm overflow-hidden" style="border-radius:16px;">
+            <div class="p-3 text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #1b3a4b 0%, #0d2318 100%);">
+                <div>
+                    <span class="badge ${isLate ? 'bg-warning text-dark' : 'bg-success'} mb-1">
+                        <i class="fas ${isLate ? 'fa-clock' : 'fa-check-circle'} me-1"></i>${isLate ? delay : 'On Time 🟢'}
+                    </span>
+                    <h4 class="fw-bold mb-0 text-white">${trainName} (#${trainNo})</h4>
+                </div>
+                <div class="text-end">
+                    <span class="text-white-50 small d-block" style="font-size:0.7rem;">DATE</span>
+                    <span class="fw-bold text-warning">${dateYYYYMMDD}</span>
+                </div>
+            </div>
+
+            <div class="p-4 bg-white">
+                <div class="p-3 bg-success bg-opacity-10 border border-success border-opacity-25 rounded-3 mb-4">
+                    <div class="d-flex align-items-center gap-2 mb-1 text-success fw-bold">
+                        <i class="fas fa-satellite-dish"></i> Current Running Position
+                    </div>
+                    <div class="fs-6 text-dark fw-semibold">${currentPosition}</div>
+                </div>
+
+                <div class="row g-3 text-center">
+                    <div class="col-6 col-md-4">
+                        <div class="p-3 bg-light rounded-3 border">
+                            <span class="text-muted small d-block">CURRENT STATION</span>
+                            <strong class="text-dark fs-6">${curStation}</strong>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <div class="p-3 bg-light rounded-3 border">
+                            <span class="text-muted small d-block">PUNCTUALITY</span>
+                            <strong class="${isLate ? 'text-danger' : 'text-success'} fs-6">${delay}</strong>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <div class="p-3 bg-light rounded-3 border">
+                            <span class="text-muted small d-block">LAST UPDATED</span>
+                            <strong class="text-dark fs-6">${data.LastUpdated || 'Just Now'}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+}
+
+function _renderLiveTrainStatusError(err, trainNo, dateYYYYMMDD) {
+    const modalBody = document.getElementById('live-train-status-modal-body');
+    if (!modalBody) return;
+
+    modalBody.innerHTML = `
+        <div class="card border-0 shadow-sm p-4">
+            <div class="text-center mb-3">
+                <div class="rounded-circle bg-success bg-opacity-10 text-success d-inline-flex align-items-center justify-content-center p-3 mb-2" style="width:56px; height:56px;">
+                    <i class="fas fa-satellite-dish fs-3"></i>
+                </div>
+                <h5 class="fw-bold text-dark mb-1">Live Train Running Status</h5>
+                <p class="text-muted small mb-0">Track real-time GPS position & delay for <strong>Train #${trainNo}</strong></p>
+            </div>
+
+            <!-- Quick Live Tracking Cards -->
+            <div class="p-3 bg-success bg-opacity-10 border border-success border-opacity-25 rounded-3 mb-3">
+                <div class="fw-bold text-success mb-2" style="font-size:0.85rem;">
+                    <i class="fas fa-location-crosshairs me-1"></i>Official Live Trackers for Train #${trainNo}:
+                </div>
+                <div class="d-flex gap-2 flex-wrap mb-2">
+                    <a href="https://www.confirmtkt.com/train-running-status/${trainNo}" target="_blank" class="btn btn-sm btn-success rounded-pill px-3 py-1.5 fw-semibold">
+                        <i class="fas fa-train me-1"></i>Track Live on ConfirmTkt
+                    </a>
+                    <a href="https://www.railyatri.in/live-train-status/${trainNo}" target="_blank" class="btn btn-sm btn-outline-dark rounded-pill px-3 py-1.5 fw-semibold">
+                        <i class="fas fa-compass me-1"></i>Track Live on RailYatri
+                    </a>
+                    <a href="https://enquiry.indianrail.gov.in/" target="_blank" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1.5 fw-semibold">
+                        <i class="fas fa-building me-1"></i>NTES Official
+                    </a>
+                </div>
+                <small class="text-muted d-block" style="font-size:0.75rem;"><i class="fas fa-info-circle me-1 text-primary"></i>Opens official live GPS position, platform number & arrival delay for Train #${trainNo}.</small>
+            </div>
+
+            <div class="p-3 bg-light rounded-3 text-start small border">
+                <div class="d-flex gap-3 justify-content-between align-items-center flex-wrap">
+                    <div><strong>Train Number:</strong> <span class="badge bg-dark">#${trainNo}</span></div>
+                    <div><strong>Journey Date:</strong> <span class="badge bg-secondary">${dateYYYYMMDD}</span></div>
+                </div>
+            </div>
+        </div>`;
 }
 
 
