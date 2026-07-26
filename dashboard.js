@@ -5866,11 +5866,17 @@ function _renderCleanLiveTrainStatus(trainNo, dateYYYYMMDD, trainNameStr, origin
 
             <!-- EMBEDDED INTERACTIVE LIVE MAP & RUNNING TRACKER -->
             <div class="position-relative w-100 bg-white" style="height: 68vh; min-height: 480px;">
+                <!-- Subtle 3px Top Progress Loader Bar -->
+                <div id="iframe-top-loader" class="progress position-absolute top-0 start-0 w-100 rounded-0" style="height: 3px; z-index: 5; opacity: 0; transition: opacity 0.2s ease;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-success w-100"></div>
+                </div>
+
                 <iframe id="live-train-iframe" 
                         src="${initialUrl}" 
-                        style="width: 100%; height: 100%; border: none;" 
+                        style="width: 100%; height: 100%; border: none; transition: opacity 0.25s ease-in-out; opacity: 1;" 
                         sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"
                         referrerpolicy="no-referrer"
+                        onload="const ldr = document.getElementById('iframe-top-loader'); if(ldr) ldr.style.opacity = '0'; this.style.opacity = '1';"
                         title="Live Train Running Status">
                 </iframe>
             </div>
@@ -6018,7 +6024,24 @@ window.updateLiveSummaryBadges = function(delayStr, locationStr) {
 window.switchLiveTrainIframe = function(provider, trainNo) {
     const iframe = document.getElementById('live-train-iframe');
     const extBtn = document.getElementById('btn-open-external-live');
+    const loader = document.getElementById('iframe-top-loader');
     if (!iframe) return;
+
+    // Subtle smooth loading transition to eliminate iframe flicker/glitch
+    if (loader) loader.style.opacity = '1';
+    iframe.style.opacity = '0.35';
+
+    if (window._iframeFadeTimer) clearTimeout(window._iframeFadeTimer);
+    window._iframeFadeTimer = setTimeout(() => {
+        if (iframe) iframe.style.opacity = '1';
+        if (loader) loader.style.opacity = '0';
+    }, 1200);
+
+    iframe.onload = function() {
+        iframe.style.opacity = '1';
+        if (loader) loader.style.opacity = '0';
+        if (window._iframeFadeTimer) clearTimeout(window._iframeFadeTimer);
+    };
 
     const isIosDevice = /iPhone|iPad|iPod/i.test(navigator.userAgent) || 
                         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -6074,7 +6097,24 @@ window.switchLiveTrainIframe = function(provider, trainNo) {
 
 window.refreshLiveTrainIframe = function() {
     const iframe = document.getElementById('live-train-iframe');
+    const loader = document.getElementById('iframe-top-loader');
     if (!iframe) return;
+
+    if (loader) loader.style.opacity = '1';
+    iframe.style.opacity = '0.35';
+
+    if (window._iframeFadeTimer) clearTimeout(window._iframeFadeTimer);
+    window._iframeFadeTimer = setTimeout(() => {
+        if (iframe) iframe.style.opacity = '1';
+        if (loader) loader.style.opacity = '0';
+    }, 1200);
+
+    iframe.onload = function() {
+        iframe.style.opacity = '1';
+        if (loader) loader.style.opacity = '0';
+        if (window._iframeFadeTimer) clearTimeout(window._iframeFadeTimer);
+    };
+
     const currentSrc = iframe.src;
     iframe.src = 'about:blank';
     setTimeout(() => { iframe.src = currentSrc; }, 50);
