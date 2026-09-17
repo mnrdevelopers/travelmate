@@ -92,6 +92,9 @@ function setupDashboardEventListeners() {
             addStopField(document.getElementById('trip-stops-container'));
         });
     }
+
+    // Auto-detect invitation join code from URL
+    checkUrlJoinTripCode();
     
     const editAddTripStopBtn = document.getElementById('edit-add-trip-stop-btn');
     if (editAddTripStopBtn) {
@@ -2624,6 +2627,9 @@ function createTripCard(trip) {
                                 <i class="fas fa-ellipsis-v"></i>
                             </button>
                             <ul class="dropdown-menu">
+                                <li><a class="dropdown-item share-trip-card-btn" href="#" data-trip-id="${trip.id}">
+                                    <i class="fas fa-share-alt me-2 text-primary"></i>Share with Friends
+                                </a></li>
                                 <li><a class="dropdown-item edit-trip-btn" href="#" data-trip-id="${trip.id}">
                                     <i class="fas fa-edit me-2"></i>Edit Trip
                                 </a></li>
@@ -2691,9 +2697,14 @@ function createTripCard(trip) {
                 </div>
                 
                 <div class="d-flex justify-content-between align-items-center">
-                    <button class="btn btn-outline-primary btn-sm view-trip-btn">
-                        <i class="fas fa-eye me-1"></i>View Details
-                    </button>
+                    <div class="d-flex align-items-center gap-1">
+                        <button class="btn btn-outline-primary btn-sm view-trip-btn">
+                            <i class="fas fa-eye me-1"></i>View Details
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm share-trip-card-btn" data-trip-id="${trip.id}" title="Share Trip with Friends">
+                            <i class="fas fa-share-alt"></i>
+                        </button>
+                    </div>
                     <div class="d-flex align-items-center">
                         <div class="member-avatar me-2" title="${trip.members.length} members">
                             <i class="fas fa-users"></i>
@@ -2709,6 +2720,14 @@ function createTripCard(trip) {
     col.querySelector('.view-trip-btn').addEventListener('click', () => {
         setCurrentTrip(trip);
         navigateTo('trip-details.html');
+    });
+    
+    col.querySelectorAll('.share-trip-card-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openShareTripModal(trip);
+        });
     });
     
     // Add event listeners for edit and delete buttons
@@ -2739,11 +2758,20 @@ function showCreateTripModal() {
     const imgInput = document.getElementById('trip-image-input');
     if (imgInput) imgInput.value = '';
     
-    document.getElementById('add-trip-form').reset();
-    document.getElementById('transport-mode').value = 'car';
-    document.getElementById('distance-calc-container').classList.remove('d-none');
-    document.getElementById('distance-results').classList.add('d-none');
-    document.getElementById('calculate-distance').checked = false;
+    const tripForm = document.getElementById('create-trip-form') || document.getElementById('add-trip-form');
+    if (tripForm) tripForm.reset();
+
+    const transportMode = document.getElementById('transport-mode');
+    if (transportMode) transportMode.value = 'car';
+
+    const distCalcContainer = document.getElementById('distance-calc-container');
+    if (distCalcContainer) distCalcContainer.classList.remove('d-none');
+
+    const distResults = document.getElementById('distance-results');
+    if (distResults) distResults.classList.add('d-none');
+
+    const calcDistance = document.getElementById('calculate-distance');
+    if (calcDistance) calcDistance.checked = false;
     
     // Clear stops
     const stopsContainer = document.getElementById('trip-stops-container');
@@ -2753,11 +2781,17 @@ function showCreateTripModal() {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     
-    document.getElementById('start-date').value = today.toISOString().split('T')[0];
-    document.getElementById('end-date').value = tomorrow.toISOString().split('T')[0];
+    const startDate = document.getElementById('start-date');
+    if (startDate) startDate.value = today.toISOString().split('T')[0];
+
+    const endDate = document.getElementById('end-date');
+    if (endDate) endDate.value = tomorrow.toISOString().split('T')[0];
     
-    const modal = new bootstrap.Modal(document.getElementById('createTripModal'));
-    modal.show();
+    const modalEl = document.getElementById('createTripModal');
+    if (modalEl) {
+        const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        modal.show();
+    }
 }
 
 function showEditTripModal(trip) {
@@ -3037,9 +3071,7 @@ async function saveTrip() {
         const modal = bootstrap.Modal.getInstance(document.getElementById('createTripModal'));
         modal.hide();
         
-        document.getElementById('share-trip-code').textContent = code;
-        const shareModal = new bootstrap.Modal(document.getElementById('shareTripModal'));
-        shareModal.show();
+        openShareTripModal(newTrip);
         
     } catch (error) {
         console.error('Error creating trip:', error);
@@ -5195,6 +5227,8 @@ function performGlobalSearch(query) {
                     ticket.passNo || '',
                     ticket.holderName || '',
                     ticket.passengerName || '',
+                    ticket.escortName || '',
+                    ticket.coPassengers || '',
                     ticket.origin || '',
                     ticket.destination || '',
                     ticket.venue || '',
@@ -5811,7 +5845,7 @@ function openHeroTicketModal(param1, param2) {
             <div class="row g-3 mb-3">
                 <div class="col-6 col-md-3">
                     <span class="text-muted small d-block" style="font-size:0.7rem;">PASSENGER</span>
-                    <span class="fw-semibold text-dark">${ticket.passengerName || 'Traveler'}</span>
+                    <span class="fw-semibold text-dark">${ticket.passengerName || 'Traveler'}${ticket.hasEscort && ticket.escortName ? ` + Escort: ${ticket.escortName}` : ((ticket.passengerCount || 1) > 1 ? ` (${ticket.passengerCount} Persons)` : '')}</span>
                 </div>
                 <div class="col-6 col-md-3">
                     <span class="text-muted small d-block" style="font-size:0.7rem;">COACH / SEAT</span>
@@ -6554,3 +6588,28 @@ window.refreshLiveTrainIframe = function() {
     setTimeout(() => { iframe.src = currentSrc; }, 50);
 };
 
+
+
+// Check for join code in URL (e.g. dashboard.html?join=ABC123)
+function checkUrlJoinTripCode() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const joinCode = urlParams.get('join') || urlParams.get('joinCode') || urlParams.get('code');
+    if (joinCode && joinCode.trim().length >= 6) {
+        const cleanCode = joinCode.trim().toUpperCase();
+        setTimeout(() => {
+            const input = document.getElementById('trip-code');
+            if (input) input.value = cleanCode;
+            const modalEl = document.getElementById('joinTripModal');
+            if (modalEl) {
+                const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                modal.show();
+                const msgEl = document.getElementById('join-trip-message');
+                if (msgEl) {
+                    msgEl.className = 'alert alert-info py-2 small';
+                    msgEl.innerHTML = `<i class="fas fa-info-circle me-1"></i>Trip Code <strong>${cleanCode}</strong> pre-filled from your invitation link. Click "Join Trip" to confirm!`;
+                    msgEl.classList.remove('d-none');
+                }
+            }
+        }, 600);
+    }
+}

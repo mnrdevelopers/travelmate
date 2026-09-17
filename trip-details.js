@@ -5104,6 +5104,8 @@ function toggleTicketFormFields(ticketType) {
     const darshanContainer = document.getElementById('darshan-fields-container');
     const transportContainer = document.getElementById('transport-fields-container');
     const concessionContainer = document.getElementById('train-concession-container');
+    const standardPassengerContainer = document.getElementById('standard-passenger-fare-container');
+    const isConcessionCb = document.getElementById('ticket-is-concession');
     
     const labelTicketNo = document.getElementById('label-ticket-no');
     const labelPassengerName = document.getElementById('label-passenger-name');
@@ -5112,20 +5114,35 @@ function toggleTicketFormFields(ticketType) {
         if (darshanContainer) darshanContainer.style.display = 'block';
         if (transportContainer) transportContainer.style.display = 'none';
         if (concessionContainer) concessionContainer.style.display = 'none';
+        if (standardPassengerContainer) standardPassengerContainer.style.display = 'none';
         if (labelTicketNo) labelTicketNo.textContent = 'Token / Ticket / Booking Number';
         if (labelPassengerName) labelPassengerName.textContent = 'Primary Devotee Name';
     } else {
         if (darshanContainer) darshanContainer.style.display = 'none';
         if (transportContainer) transportContainer.style.display = 'block';
-        if (concessionContainer) concessionContainer.style.display = (ticketType === 'train' || ['flight', 'bus'].includes(ticketType)) ? 'block' : 'none';
+        const isTransport = (ticketType === 'train' || ['flight', 'bus'].includes(ticketType));
+        if (concessionContainer) concessionContainer.style.display = isTransport ? 'block' : 'none';
+        if (standardPassengerContainer) {
+            standardPassengerContainer.style.display = (isConcessionCb && isConcessionCb.checked) ? 'none' : 'block';
+        }
         if (labelTicketNo) labelTicketNo.textContent = 'PNR / Ticket / Booking Number';
         if (labelPassengerName) labelPassengerName.textContent = 'Passenger Name';
     }
 }
 
+window.setStandardPassengerCount = function(count) {
+    const paxInput = document.getElementById('ticket-passenger-count');
+    if (paxInput) {
+        paxInput.value = count;
+        paxInput.dispatchEvent(new Event('input'));
+    }
+};
+
 function initConcessionEventListeners() {
     const isConcessionCb = document.getElementById('ticket-is-concession');
     const concessionFieldsWrapper = document.getElementById('ticket-concession-fields-wrapper');
+    const hasEscortCb = document.getElementById('ticket-has-escort');
+    const escortWrapper = document.getElementById('ticket-escort-fields-wrapper');
     const generalFareInput = document.getElementById('ticket-general-fare');
     const concessionFareInput = document.getElementById('ticket-concession-fare');
     const concessionPercentInput = document.getElementById('ticket-concession-percent');
@@ -5133,14 +5150,81 @@ function initConcessionEventListeners() {
     const travelInsuranceInput = document.getElementById('ticket-travel-insurance');
     const ticketCostInput = document.getElementById('ticket-cost');
 
+    // Standard passenger inputs (Active when disability concession is disabled/unchecked)
+    const stdContainer = document.getElementById('standard-passenger-fare-container');
+    const paxCountInput = document.getElementById('ticket-passenger-count');
+    const farePerPersonInput = document.getElementById('ticket-fare-per-person');
+    const coPaxWrapper = document.getElementById('co-passengers-wrapper');
+    const coPaxInput = document.getElementById('ticket-co-passengers');
+
     if (!isConcessionCb || isConcessionCb.dataset.hasListener) return;
     isConcessionCb.dataset.hasListener = 'true';
 
     let isUpdating = false;
 
+    // Standard Fare Calculation (When disability concession is OFF)
+    function updateStandardFareCalculation(source, autoSetCost = true) {
+        if (isConcessionCb && isConcessionCb.checked) return;
+        if (isUpdating) return;
+        isUpdating = true;
+
+        let count = parseInt(paxCountInput?.value) || 1;
+        if (count < 1) {
+            count = 1;
+            if (paxCountInput) paxCountInput.value = 1;
+        }
+
+        if (coPaxWrapper) {
+            coPaxWrapper.style.display = count > 1 ? 'block' : 'none';
+        }
+
+        let unitFare = parseFloat(farePerPersonInput?.value) || 0;
+        let totalCost = parseFloat(ticketCostInput?.value) || 0;
+
+        if (source === 'farePerPerson' || source === 'paxCount') {
+            if (unitFare > 0) {
+                totalCost = unitFare * count;
+                if (autoSetCost && ticketCostInput) {
+                    ticketCostInput.value = totalCost.toFixed(2);
+                }
+            } else if (totalCost > 0) {
+                unitFare = totalCost / count;
+                if (farePerPersonInput) {
+                    farePerPersonInput.value = unitFare.toFixed(2);
+                }
+            }
+        } else if (source === 'totalCost') {
+            if (totalCost > 0) {
+                unitFare = totalCost / count;
+                if (farePerPersonInput) {
+                    farePerPersonInput.value = unitFare.toFixed(2);
+                }
+            } else {
+                if (farePerPersonInput) farePerPersonInput.value = '';
+            }
+        }
+
+        unitFare = parseFloat(farePerPersonInput?.value) || 0;
+        totalCost = parseFloat(ticketCostInput?.value) || (unitFare * count);
+
+        const countBadge = document.getElementById('calc-badge-count');
+        const unitBadge = document.getElementById('calc-badge-unit-fare');
+        const totalBadge = document.getElementById('calc-badge-total');
+
+        if (countBadge) countBadge.textContent = count;
+        if (unitBadge) unitBadge.textContent = '₹' + unitFare.toFixed(2);
+        if (totalBadge) totalBadge.textContent = '₹' + totalCost.toFixed(2);
+
+        isUpdating = false;
+    }
+
+    // Disability Concession Calculation (With Escort Passenger support)
     function updateConcessionCalculation(source, autoSetCost = true) {
         if (!isConcessionCb.checked || isUpdating) return;
         isUpdating = true;
+
+        const hasEscort = hasEscortCb ? hasEscortCb.checked : false;
+        const paxMultiplier = hasEscort ? 2 : 1;
 
         let genFare = parseFloat(generalFareInput?.value) || 0;
         let concFare = parseFloat(concessionFareInput?.value) || 0;
@@ -5148,7 +5232,7 @@ function initConcessionEventListeners() {
 
         const railwayCharges = parseFloat(railwayChargesInput?.value) || 0;
         const travelInsurance = parseFloat(travelInsuranceInput?.value) || 0;
-        const totalExtraFees = railwayCharges + travelInsurance;
+        const totalExtraFees = (railwayCharges + travelInsurance) * paxMultiplier;
 
         if (source === 'general') {
             if (genFare > 0 && concFare > 0) {
@@ -5180,11 +5264,14 @@ function initConcessionEventListeners() {
         concFare = parseFloat(concessionFareInput?.value) || 0;
         pct = parseFloat(concessionPercentInput?.value) || 0;
 
-        const actualPaid = concFare > 0 ? (concFare + totalExtraFees) : (genFare > 0 ? (genFare + totalExtraFees) : totalExtraFees);
-        const savedAmt = (genFare > 0 && concFare > 0) ? Math.max(0, genFare - concFare) : 0;
+        const totalConcBase = concFare * paxMultiplier;
+        const totalGenBase = genFare * paxMultiplier;
+
+        const actualPaid = totalConcBase > 0 ? (totalConcBase + totalExtraFees) : (totalGenBase > 0 ? (totalGenBase + totalExtraFees) : totalExtraFees);
+        const savedAmt = (totalGenBase > 0 && totalConcBase > 0) ? Math.max(0, totalGenBase - totalConcBase) : 0;
 
         if (autoSetCost && ticketCostInput) {
-            ticketCostInput.value = (genFare > 0 || concFare > 0 || totalExtraFees > 0) ? actualPaid.toFixed(2) : '';
+            ticketCostInput.value = (totalGenBase > 0 || totalConcBase > 0 || totalExtraFees > 0) ? actualPaid.toFixed(2) : '';
         }
 
         const pctEl = document.getElementById('concession-badge-pct');
@@ -5192,22 +5279,41 @@ function initConcessionEventListeners() {
         const feesEl = document.getElementById('concession-badge-fees');
         const savedEl = document.getElementById('concession-badge-saved');
 
-        if (pctEl) pctEl.textContent = `${pct}%`;
-        if (generalEl) generalEl.textContent = `₹${genFare.toFixed(2)}`;
+        if (pctEl) pctEl.textContent = `${pct}%${hasEscort ? ' (Divyangjan + Escort)' : ' (Divyangjan)'}`;
+        if (generalEl) generalEl.textContent = `₹${totalGenBase.toFixed(2)}${hasEscort ? ' (for 2)' : ''}`;
         if (feesEl) feesEl.textContent = `₹${totalExtraFees.toFixed(2)}`;
         if (savedEl) savedEl.textContent = `₹${savedAmt.toFixed(2)}`;
 
         isUpdating = false;
     }
 
+    // Toggle Disability Concession ON / OFF
     isConcessionCb.addEventListener('change', function() {
+        const isTransport = document.getElementById('ticket-type')?.value !== 'darshan';
         if (concessionFieldsWrapper) {
             concessionFieldsWrapper.style.display = this.checked ? 'block' : 'none';
         }
+        if (stdContainer) {
+            stdContainer.style.display = (!this.checked && isTransport) ? 'block' : 'none';
+        }
         if (this.checked) {
             updateConcessionCalculation('general', true);
+        } else {
+            updateStandardFareCalculation('paxCount', true);
         }
     });
+
+    // Toggle Escort Passenger ON / OFF
+    hasEscortCb?.addEventListener('change', function() {
+        if (escortWrapper) {
+            escortWrapper.style.display = this.checked ? 'block' : 'none';
+        }
+        updateConcessionCalculation('general', true);
+    });
+
+    // Standard passenger & fare per person inputs
+    paxCountInput?.addEventListener('input', () => updateStandardFareCalculation('paxCount', true));
+    farePerPersonInput?.addEventListener('input', () => updateStandardFareCalculation('farePerPerson', true));
 
     document.getElementById('btn-reset-railway-charges')?.addEventListener('click', () => {
         if (railwayChargesInput) railwayChargesInput.value = '11.80';
@@ -5224,14 +5330,21 @@ function initConcessionEventListeners() {
     concessionPercentInput?.addEventListener('input', () => updateConcessionCalculation('percent', true));
     railwayChargesInput?.addEventListener('input', () => updateConcessionCalculation('general', true));
     travelInsuranceInput?.addEventListener('input', () => updateConcessionCalculation('general', true));
+
     ticketCostInput?.addEventListener('input', () => {
-        if (!isConcessionCb.checked) return;
-        const totalPaid = parseFloat(ticketCostInput.value) || 0;
-        const rw = parseFloat(railwayChargesInput?.value) || 0;
-        const ins = parseFloat(travelInsuranceInput?.value) || 0;
-        const base = Math.max(0, totalPaid - (rw + ins));
-        if (concessionFareInput) concessionFareInput.value = base.toFixed(2);
-        updateConcessionCalculation('concessionFare', false);
+        if (isConcessionCb.checked) {
+            const hasEscort = hasEscortCb ? hasEscortCb.checked : false;
+            const paxMultiplier = hasEscort ? 2 : 1;
+            const totalPaid = parseFloat(ticketCostInput.value) || 0;
+            const rw = (parseFloat(railwayChargesInput?.value) || 0) * paxMultiplier;
+            const ins = (parseFloat(travelInsuranceInput?.value) || 0) * paxMultiplier;
+            const baseTotal = Math.max(0, totalPaid - (rw + ins));
+            const basePerPerson = baseTotal / paxMultiplier;
+            if (concessionFareInput) concessionFareInput.value = basePerPerson.toFixed(2);
+            updateConcessionCalculation('concessionFare', false);
+        } else {
+            updateStandardFareCalculation('totalCost', false);
+        }
     });
 }
 
@@ -5249,6 +5362,26 @@ function showAddTicketModal() {
         const wrapper = document.getElementById('ticket-concession-fields-wrapper');
         if (wrapper) wrapper.style.display = 'none';
     }
+    const hasEscortCb = document.getElementById('ticket-has-escort');
+    if (hasEscortCb) {
+        hasEscortCb.checked = false;
+        const escortWrapper = document.getElementById('ticket-escort-fields-wrapper');
+        if (escortWrapper) escortWrapper.style.display = 'none';
+    }
+    if (document.getElementById('ticket-escort-name')) document.getElementById('ticket-escort-name').value = '';
+    if (document.getElementById('ticket-escort-seat')) document.getElementById('ticket-escort-seat').value = '';
+
+    const paxCountInput = document.getElementById('ticket-passenger-count');
+    if (paxCountInput) paxCountInput.value = 1;
+    const farePerPersonInput = document.getElementById('ticket-fare-per-person');
+    if (farePerPersonInput) farePerPersonInput.value = '';
+    const coPaxInput = document.getElementById('ticket-co-passengers');
+    if (coPaxInput) coPaxInput.value = '';
+    const coPaxWrapper = document.getElementById('co-passengers-wrapper');
+    if (coPaxWrapper) coPaxWrapper.style.display = 'none';
+    const stdContainer = document.getElementById('standard-passenger-fare-container');
+    if (stdContainer) stdContainer.style.display = 'block';
+
     if (document.getElementById('ticket-general-fare')) document.getElementById('ticket-general-fare').value = '';
     if (document.getElementById('ticket-concession-fare')) document.getElementById('ticket-concession-fare').value = '';
     if (document.getElementById('ticket-concession-percent')) document.getElementById('ticket-concession-percent').value = '';
@@ -5260,6 +5393,13 @@ function showAddTicketModal() {
         typeSelect.value = 'train';
         toggleTicketFormFields('train');
     }
+
+    const calcCount = document.getElementById('calc-badge-count');
+    const calcUnit = document.getElementById('calc-badge-unit-fare');
+    const calcTotal = document.getElementById('calc-badge-total');
+    if (calcCount) calcCount.textContent = '1';
+    if (calcUnit) calcUnit.textContent = '₹0.00';
+    if (calcTotal) calcTotal.textContent = '₹0.00';
     
     const modal = new bootstrap.Modal(document.getElementById('addTicketModal'));
     modal.show();
@@ -5336,6 +5476,51 @@ async function showEditTicketModal(ticketId) {
         if (feesEl) feesEl.textContent = `₹${totalFees.toFixed(2)}`;
         if (savedEl) savedEl.textContent = `₹${saved.toFixed(2)}`;
     }
+
+    // Escort passenger details
+    const hasEscortCb = document.getElementById('ticket-has-escort');
+    if (hasEscortCb) {
+        hasEscortCb.checked = !!ticket.hasEscort;
+        const escortWrapper = document.getElementById('ticket-escort-fields-wrapper');
+        if (escortWrapper) escortWrapper.style.display = ticket.hasEscort ? 'block' : 'none';
+    }
+    if (document.getElementById('ticket-escort-name')) {
+        document.getElementById('ticket-escort-name').value = ticket.escortName || '';
+    }
+    if (document.getElementById('ticket-escort-seat')) {
+        document.getElementById('ticket-escort-seat').value = ticket.escortSeat || '';
+    }
+
+    // Standard passenger & fare per person details
+    const paxCountInput = document.getElementById('ticket-passenger-count');
+    if (paxCountInput) {
+        paxCountInput.value = ticket.passengerCount || (ticket.hasEscort ? 2 : 1);
+    }
+    const farePerPersonInput = document.getElementById('ticket-fare-per-person');
+    if (farePerPersonInput) {
+        farePerPersonInput.value = ticket.farePerPerson !== undefined ? ticket.farePerPerson : ((ticket.passengerCount && ticket.cost) ? (ticket.cost / ticket.passengerCount).toFixed(2) : '');
+    }
+    const coPaxInput = document.getElementById('ticket-co-passengers');
+    if (coPaxInput) {
+        coPaxInput.value = ticket.coPassengers || '';
+    }
+    const coPaxWrapper = document.getElementById('co-passengers-wrapper');
+    if (coPaxWrapper) {
+        coPaxWrapper.style.display = ((ticket.passengerCount || 1) > 1 && !ticket.isConcession) ? 'block' : 'none';
+    }
+    const stdContainer = document.getElementById('standard-passenger-fare-container');
+    if (stdContainer) {
+        stdContainer.style.display = (tType !== 'darshan' && !ticket.isConcession) ? 'block' : 'none';
+    }
+
+    const calcCount = document.getElementById('calc-badge-count');
+    const calcUnit = document.getElementById('calc-badge-unit-fare');
+    const calcTotal = document.getElementById('calc-badge-total');
+    const paxCount = ticket.passengerCount || 1;
+    const unitFare = ticket.farePerPerson || (ticket.cost ? (ticket.cost / paxCount) : 0);
+    if (calcCount) calcCount.textContent = paxCount;
+    if (calcUnit) calcUnit.textContent = '₹' + parseFloat(unitFare).toFixed(2);
+    if (calcTotal) calcTotal.textContent = '₹' + parseFloat(ticket.cost || 0).toFixed(2);
 
     document.getElementById('ticket-no').value = ticket.ticketNo || '';
     document.getElementById('ticket-passenger-name').value = ticket.passengerName || '';
@@ -5423,16 +5608,27 @@ async function saveTicket() {
     const notes = document.getElementById('ticket-notes').value.trim();
 
     const isConcession = document.getElementById('ticket-is-concession')?.checked || false;
+    const hasEscort = isConcession ? (document.getElementById('ticket-has-escort')?.checked || false) : false;
+    const escortName = hasEscort ? (document.getElementById('ticket-escort-name')?.value.trim() || '') : '';
+    const escortSeat = hasEscort ? (document.getElementById('ticket-escort-seat')?.value.trim() || '') : '';
+
+    const passengerCount = isConcession ? (hasEscort ? 2 : 1) : (parseInt(document.getElementById('ticket-passenger-count')?.value) || 1);
+    const farePerPerson = isConcession ? (parseFloat(document.getElementById('ticket-concession-fare')?.value) || 0) : (parseFloat(document.getElementById('ticket-fare-per-person')?.value) || (passengerCount > 0 && cost > 0 ? cost / passengerCount : 0));
+    const coPassengers = (!isConcession && passengerCount > 1) ? (document.getElementById('ticket-co-passengers')?.value.trim() || '') : '';
+
     const generalFare = isConcession ? (parseFloat(document.getElementById('ticket-general-fare')?.value) || 0) : 0;
     const concessionFare = isConcession ? (parseFloat(document.getElementById('ticket-concession-fare')?.value) || 0) : 0;
     const railwayCharges = isConcession ? (parseFloat(document.getElementById('ticket-railway-charges')?.value) || 0) : 0;
     const travelInsurance = isConcession ? (parseFloat(document.getElementById('ticket-travel-insurance')?.value) || 0) : 0;
     
+    const paxMultiplier = isConcession ? (hasEscort ? 2 : 1) : 1;
     let concessionPercent = isConcession ? (parseFloat(document.getElementById('ticket-concession-percent')?.value) || 0) : 0;
     if (isConcession && !concessionPercent && generalFare > 0 && concessionFare > 0) {
         concessionPercent = Math.round(((generalFare - concessionFare) / generalFare) * 100);
     }
-    const concessionSavings = (isConcession && generalFare > 0 && concessionFare > 0) ? Math.max(0, generalFare - concessionFare) : (isConcession && generalFare > cost ? generalFare - cost : 0);
+    const concessionSavings = (isConcession && generalFare > 0 && concessionFare > 0) 
+        ? Math.max(0, (generalFare - concessionFare) * paxMultiplier) 
+        : (isConcession && (generalFare * paxMultiplier) > cost ? (generalFare * paxMultiplier) - cost : 0);
     
     const imageFileInput = document.getElementById('ticket-image');
     
@@ -5504,6 +5700,12 @@ async function saveTicket() {
             arrCode,
             arrivalTime,
             passengerName,
+            hasEscort,
+            escortName,
+            escortSeat,
+            passengerCount,
+            farePerPerson,
+            coPassengers,
             bookingStatus,
             cost,
             isConcession,
@@ -5528,7 +5730,12 @@ async function saveTicket() {
         
         if (trackExpense && cost > 0) {
             const expCat = type === 'darshan' ? 'activities' : (['train', 'flight', 'bus'].includes(type) ? type : 'public-transport');
-            const concTag = isConcession ? ` (Divyangjan Concession ${concessionPercent}% - Saved ₹${concessionSavings.toFixed(2)})` : '';
+            let concTag = '';
+            if (isConcession) {
+                concTag = ` (Divyangjan Concession ${concessionPercent}%${hasEscort ? ' + Escort' : ''} - Saved ₹${concessionSavings.toFixed(2)})`;
+            } else if (passengerCount > 1) {
+                concTag = ` (${passengerCount} Persons @ ₹${farePerPerson ? farePerPerson.toFixed(2) : (cost/passengerCount).toFixed(2)})`;
+            }
             const expDesc = type === 'darshan' 
                 ? `[Darshan Ticket] ${templeName || operator}: ${darshanCategory || serviceName} (Token: ${ticketNo})`
                 : `[Ticket] ${type.toUpperCase()}${concTag}: ${serviceNo ? serviceNo + ' - ' : ''}${serviceName || operator} (${depCode || departurePlace} → ${arrCode || arrivalPlace})`;
@@ -5981,11 +6188,22 @@ function renderTicketsList(trip) {
                         
                         <div class="border-top pt-2 mt-2">
                             <div class="row align-items-center" style="font-size: 0.75rem;">
-                                <div class="col-6 text-start">
-                                    <span class="text-muted d-block" style="font-size:0.6rem; text-transform:uppercase;">Passenger</span>
-                                    <strong class="text-dark text-truncate d-block">${ticket.passengerName || '--'}</strong>
+                                <div class="col-7 text-start">
+                                    ${hasConcession ? `
+                                        <span class="text-muted d-block" style="font-size:0.6rem; text-transform:uppercase;">
+                                            ${ticket.hasEscort ? '<i class="fas fa-users text-info me-1"></i>Passengers (2 Persons)' : '<i class="fas fa-wheelchair text-info me-1"></i>Passenger (Divyangjan)'}
+                                        </span>
+                                        <strong class="text-dark text-truncate d-block">${ticket.passengerName || '--'} <span class="badge bg-info-subtle text-info border border-info border-opacity-25" style="font-size:0.55rem;">Divyangjan</span></strong>
+                                        ${ticket.hasEscort ? `<div class="small text-secondary text-truncate mt-0.5"><i class="fas fa-user-friends text-info me-1"></i>Escort: <strong class="text-dark">${ticket.escortName || 'Attendant'}</strong>${ticket.escortSeat ? ` (${ticket.escortSeat})` : ''}</div>` : ''}
+                                    ` : `
+                                        <span class="text-muted d-block" style="font-size:0.6rem; text-transform:uppercase;">
+                                            ${(ticket.passengerCount || 1) > 1 ? `<i class="fas fa-users text-primary me-1"></i>Passengers (${ticket.passengerCount} Persons)` : 'Passenger'}
+                                        </span>
+                                        <strong class="text-dark text-truncate d-block">${ticket.passengerName || '--'}</strong>
+                                        ${ticket.coPassengers ? `<div class="small text-muted text-truncate mt-0.5" title="${ticket.coPassengers}"><i class="fas fa-user-plus text-primary me-1"></i>+ ${ticket.coPassengers}</div>` : ((ticket.passengerCount || 1) > 1 && ticket.farePerPerson ? `<div class="small text-muted mt-0.5"><i class="fas fa-tag text-success me-1"></i>₹${ticket.farePerPerson.toFixed(2)} / person</div>` : '')}
+                                    `}
                                 </div>
-                                <div class="col-6 text-end">
+                                <div class="col-5 text-end">
                                     <span class="text-muted d-block" style="font-size:0.6rem; text-transform:uppercase;">Booking Status</span>
                                     <strong class="text-success text-truncate d-block">${ticket.bookingStatus || '--'}</strong>
                                 </div>

@@ -90,14 +90,19 @@
 
     <!-- Trip Details Content -->
     <div class="container mt-4">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
+        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+            <div class="d-flex align-items-center flex-wrap gap-2">
                 <a href="dashboard.html" class="btn btn-outline-secondary me-2">
                     <i class="fas fa-arrow-left me-1"></i>Back to Dashboard
                 </a>
-                <h2 id="trip-details-name" class="d-inline-block ms-2">Trip Name</h2>
+                <h2 id="trip-details-name" class="d-inline-block ms-2 mb-0">Trip Name</h2>
             </div>
-            <span class="trip-code" id="trip-details-code">ABC123</span>
+            <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-primary btn-sm rounded-pill px-3 shadow-2xs fw-semibold" id="btn-share-trip-header" onclick="openShareTripModal()">
+                    <i class="fas fa-share-alt me-1"></i>Share Trip
+                </button>
+                <span class="trip-code" id="trip-details-code">ABC123</span>
+            </div>
         </div>
         
         <ul class="nav nav-tabs" id="trip-tabs">
@@ -304,9 +309,14 @@
 
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <h4>Trip Members</h4>
-                    <button class="btn btn-sm btn-outline-primary d-none" id="add-manual-member-btn-header" onclick="showAddManualMemberModal()">
-                        <i class="fas fa-user-plus me-1"></i>Add
-                    </button>
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-sm btn-primary rounded-pill px-2.5" onclick="openShareTripModal()">
+                            <i class="fas fa-user-plus me-1"></i>Invite Friends
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary rounded-pill px-2.5 d-none" id="add-manual-member-btn-header" onclick="showAddManualMemberModal()">
+                            <i class="fas fa-plus me-1"></i>Add
+                        </button>
+                    </div>
                 </div>
                 <div class="card">
                     <div class="card-body">
@@ -1093,6 +1103,32 @@
                                     </div>
                                 </div>
 
+                                
+                                <!-- ESCORT PASSENGER SECTION (Divyangjan Concession Policy) -->
+                                <div class="border rounded-2 p-2.5 mt-2 mb-2 bg-white border-info border-opacity-50">
+                                    <div class="form-check form-switch mb-1">
+                                        <input class="form-check-input" type="checkbox" id="ticket-has-escort">
+                                        <label class="form-check-label fw-semibold text-dark small" for="ticket-has-escort">
+                                            <i class="fas fa-user-friends text-info me-1"></i>Add Accompanying Escort / Attendant Passenger
+                                        </label>
+                                    </div>
+                                    <div id="ticket-escort-fields-wrapper" style="display: none;" class="mt-2 pt-2 border-top border-info border-opacity-25">
+                                        <div class="row g-2">
+                                            <div class="col-md-7 mb-1">
+                                                <label for="ticket-escort-name" class="form-label small fw-semibold">Escort / Attendant Full Name</label>
+                                                <input type="text" class="form-control form-control-sm" id="ticket-escort-name" placeholder="e.g. Accompanying person's name">
+                                            </div>
+                                            <div class="col-md-5 mb-1">
+                                                <label for="ticket-escort-seat" class="form-label small fw-semibold">Escort Seat / Berth (Optional)</label>
+                                                <input type="text" class="form-control form-control-sm" id="ticket-escort-seat" placeholder="e.g. Coach S3, Berth 5">
+                                            </div>
+                                        </div>
+                                        <div class="alert alert-info py-1 px-2 mb-0 mt-1 small" style="font-size: 0.72rem;">
+                                            <i class="fas fa-info-circle me-1"></i><strong>IRCTC Divyangjan Policy:</strong> 1 eligible escort receives concession. Total fare will automatically calculate for <strong>2 passengers</strong> (Divyangjan + Escort).
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div id="concession-live-calc-badge" class="p-2 border border-success border-opacity-25 rounded bg-success bg-opacity-10 text-success small mt-1 d-flex align-items-center justify-content-between flex-wrap gap-2">
                                     <div>
                                         <i class="fas fa-calculator me-1"></i>
@@ -1110,6 +1146,67 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- STANDARD PASSENGERS & AUTOMATIC FARE CALCULATION (Active when Disability Concession is Disabled) -->
+                        <div id="standard-passenger-fare-container" class="p-3 border border-primary border-opacity-25 rounded-3 mb-3" style="background: rgba(13, 110, 253, 0.04);">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <span class="fw-bold text-primary small text-uppercase">
+                                    <i class="fas fa-users me-1"></i>Passengers &amp; Automatic Fare Calculation
+                                </span>
+                                <span class="badge bg-primary-subtle text-primary border border-primary border-opacity-25" style="font-size: 0.65rem;">Auto Fare Calculator</span>
+                            </div>
+                            
+                            <div class="row g-2">
+                                <div class="col-md-5 mb-2">
+                                    <label for="ticket-passenger-count" class="form-label small fw-semibold">
+                                        How Many Passengers?
+                                    </label>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text bg-white text-primary"><i class="fas fa-user-group"></i></span>
+                                        <input type="number" class="form-control fw-bold" id="ticket-passenger-count" min="1" max="50" value="1" placeholder="1">
+                                        <button class="btn btn-outline-primary btn-xs px-1.5" type="button" onclick="setStandardPassengerCount(1)">1</button>
+                                        <button class="btn btn-outline-primary btn-xs px-1.5" type="button" onclick="setStandardPassengerCount(2)">2</button>
+                                        <button class="btn btn-outline-primary btn-xs px-1.5" type="button" onclick="setStandardPassengerCount(3)">3</button>
+                                        <button class="btn btn-outline-primary btn-xs px-1.5" type="button" onclick="setStandardPassengerCount(4)">4</button>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-7 mb-2">
+                                    <label for="ticket-fare-per-person" class="form-label small fw-semibold">
+                                        Fare per Person (<span class="rupee-symbol">₹</span>)
+                                    </label>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text bg-white fw-bold text-success">₹</span>
+                                        <input type="number" class="form-control" id="ticket-fare-per-person" min="0" step="0.01" placeholder="e.g. 450 (Fare for 1 passenger)">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Additional Co-Passengers when count > 1 -->
+                            <div id="co-passengers-wrapper" style="display: none;" class="mt-2 pt-2 border-top border-primary border-opacity-10">
+                                <label for="ticket-co-passengers" class="form-label small fw-semibold text-secondary">
+                                    <i class="fas fa-user-plus me-1 text-primary"></i>Co-Passenger Names (Optional)
+                                </label>
+                                <input type="text" class="form-control form-control-sm" id="ticket-co-passengers" placeholder="e.g. Ramesh, Suresh, Priya (comma separated)">
+                                <small class="text-muted" style="font-size: 0.7rem;">Primary traveler's name is in the Passenger field below. Enter accompanying travelers here.</small>
+                            </div>
+
+                            <!-- Live Fare Calculation Breakdown Badge -->
+                            <div id="standard-fare-calc-badge" class="p-2 border border-primary border-opacity-25 rounded bg-white small mt-2 d-flex align-items-center justify-content-between flex-wrap gap-2 shadow-2xs">
+                                <div>
+                                    <i class="fas fa-calculator text-primary me-1"></i>
+                                    <span>Passengers: <strong id="calc-badge-count" class="text-dark">1</strong></span>
+                                    <span class="mx-1 text-muted">•</span>
+                                    <span>Fare / Person: <strong id="calc-badge-unit-fare" class="text-success">₹0.00</strong></span>
+                                </div>
+                                <div>
+                                    <span class="badge bg-primary text-white px-2.5 py-1" style="font-size:0.75rem;">
+                                        Total Calculated: <span id="calc-badge-total">₹0.00</span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
 
                     <!-- GENERAL FIELDS FOR ALL TICKETS -->
@@ -1596,6 +1693,96 @@
     <script src="js/ai-planner-ui.js"></script>
     <script src="dashboard.js"></script>
     <script src="trip-details.js"></script>
+
+    
+    <!-- Share Trip with Friends Modal -->
+    <div class="modal fade" id="shareTripModal" tabindex="-1" aria-labelledby="shareTripModalTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg overflow-hidden" style="border-radius: 20px;">
+                <div class="modal-header text-white border-0 py-3 px-4" style="background: linear-gradient(135deg, #1e3a8a 0%, #0284c7 100%);">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="rounded-circle bg-white bg-opacity-20 p-2 d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+                            <i class="fas fa-share-nodes text-white fs-5"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title fw-bold mb-0 text-white" id="shareTripModalTitle">Share Trip with Friends</h5>
+                            <small class="text-white-50">Invite travel companions to join this trip</small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4 bg-light">
+                    <!-- Trip Snapshot Card -->
+                    <div class="card border-0 shadow-2xs rounded-3 p-3 mb-3 bg-white">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <span class="badge bg-primary-subtle text-primary mb-1" style="font-size:0.65rem;">Trip Invitation</span>
+                                <h5 class="fw-bold text-dark mb-1" id="share-modal-trip-name">Trip Name</h5>
+                                <div class="small text-muted" id="share-modal-route">
+                                    <i class="fas fa-map-marker-alt text-danger me-1"></i><span>Route</span>
+                                </div>
+                                <div class="small text-muted mt-1" id="share-modal-dates">
+                                    <i class="far fa-calendar-alt text-primary me-1"></i><span>Dates</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Unique Trip Code Section -->
+                    <div class="bg-white p-3 rounded-3 border mb-3 text-center shadow-2xs">
+                        <small class="text-muted d-block text-uppercase fw-semibold mb-1" style="font-size: 0.7rem; letter-spacing: 0.5px;">Trip Join Code</small>
+                        <div class="d-flex justify-content-center align-items-center gap-2">
+                            <span class="trip-code fs-4 px-4 py-1.5 fw-bold font-monospace bg-light rounded-pill border text-primary" id="share-trip-code">ABC123</span>
+                            <button class="btn btn-outline-primary btn-sm rounded-pill px-3" id="copy-code-btn" type="button" title="Copy trip code">
+                                <i class="fas fa-copy me-1"></i>Copy
+                            </button>
+                        </div>
+                        <small class="text-muted d-block mt-1.5" style="font-size: 0.72rem;">Friends can enter this code in "Join Trip" on TravelMate</small>
+                    </div>
+
+                    <!-- Direct Invite Link Section -->
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-secondary mb-1">
+                            <i class="fas fa-link me-1 text-primary"></i>Direct Invite Link
+                        </label>
+                        <div class="input-group input-group-sm shadow-2xs">
+                            <input type="text" class="form-control bg-white" id="share-invite-link" readonly value="https://...">
+                            <button class="btn btn-primary px-3 fw-semibold" type="button" id="copy-link-btn">
+                                <i class="fas fa-copy me-1"></i>Copy Link
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Instant Share Action Buttons -->
+                    <div class="d-flex flex-column gap-2">
+                        <button type="button" class="btn btn-success btn-sm w-100 py-2 rounded-pill fw-semibold shadow-2xs d-flex align-items-center justify-content-center gap-2" id="btn-share-whatsapp">
+                            <i class="fab fa-whatsapp fs-5"></i>Share on WhatsApp
+                        </button>
+                        
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <button type="button" class="btn btn-outline-primary btn-sm w-100 py-2 rounded-pill fw-semibold" id="btn-share-native">
+                                    <i class="fas fa-share-alt me-1"></i>Share via Apps...
+                                </button>
+                            </div>
+                            <div class="col-6">
+                                <button type="button" class="btn btn-outline-secondary btn-sm w-100 py-2 rounded-pill fw-semibold" id="btn-copy-full-msg">
+                                    <i class="fas fa-comment-dots me-1"></i>Copy Invite
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="copy-success" class="alert alert-success d-none mt-3 py-2 text-center small mb-0 rounded-pill">
+                        <i class="fas fa-check-circle me-1"></i>Copied to clipboard!
+                    </div>
+                </div>
+                <div class="modal-footer bg-white border-0 py-2 px-4">
+                    <button type="button" class="btn btn-secondary btn-sm rounded-pill px-4 ms-auto" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- In-App Notification Center Drawer -->
     <div class="notif-center-drawer shadow-lg" id="notif-center-drawer">

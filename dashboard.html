@@ -804,32 +804,91 @@
         </div>
     </div>
     
-   <!-- Share Trip Code Modal -->
-<div class="modal fade" id="shareTripModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Share Trip Code</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body text-center">
-                <div class="success-animation">
-                    <i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>
+   <!-- Share Trip with Friends Modal -->
+    <div class="modal fade" id="shareTripModal" tabindex="-1" aria-labelledby="shareTripModalTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg overflow-hidden" style="border-radius: 20px;">
+                <div class="modal-header text-white border-0 py-3 px-4" style="background: linear-gradient(135deg, #1e3a8a 0%, #0284c7 100%);">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="rounded-circle bg-white bg-opacity-20 p-2 d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+                            <i class="fas fa-share-nodes text-white fs-5"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title fw-bold mb-0 text-white" id="shareTripModalTitle">Share Trip with Friends</h5>
+                            <small class="text-white-50">Invite travel companions to join this trip</small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <h4 class="mb-3">Trip Created Successfully!</h4>
-                <p>Share this code with your travel companions:</p>
-                <div class="d-flex justify-content-center align-items-center mb-3">
-                    <span class="trip-code me-3" id="share-trip-code">ABC123</span>
-                    <button class="btn btn-outline-primary btn-sm" id="copy-code-btn">
-                        <i class="fas fa-copy me-1"></i>Copy
-                    </button>
+                <div class="modal-body p-4 bg-light">
+                    <!-- Trip Snapshot Card -->
+                    <div class="card border-0 shadow-2xs rounded-3 p-3 mb-3 bg-white">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <span class="badge bg-primary-subtle text-primary mb-1" style="font-size:0.65rem;">Trip Invitation</span>
+                                <h5 class="fw-bold text-dark mb-1" id="share-modal-trip-name">Trip Name</h5>
+                                <div class="small text-muted" id="share-modal-route">
+                                    <i class="fas fa-map-marker-alt text-danger me-1"></i><span>Route</span>
+                                </div>
+                                <div class="small text-muted mt-1" id="share-modal-dates">
+                                    <i class="far fa-calendar-alt text-primary me-1"></i><span>Dates</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Unique Trip Code Section -->
+                    <div class="bg-white p-3 rounded-3 border mb-3 text-center shadow-2xs">
+                        <small class="text-muted d-block text-uppercase fw-semibold mb-1" style="font-size: 0.7rem; letter-spacing: 0.5px;">Trip Join Code</small>
+                        <div class="d-flex justify-content-center align-items-center gap-2">
+                            <span class="trip-code fs-4 px-4 py-1.5 fw-bold font-monospace bg-light rounded-pill border text-primary" id="share-trip-code">ABC123</span>
+                            <button class="btn btn-outline-primary btn-sm rounded-pill px-3" id="copy-code-btn" type="button" title="Copy trip code">
+                                <i class="fas fa-copy me-1"></i>Copy
+                            </button>
+                        </div>
+                        <small class="text-muted d-block mt-1.5" style="font-size: 0.72rem;">Friends can enter this code in "Join Trip" on TravelMate</small>
+                    </div>
+
+                    <!-- Direct Invite Link Section -->
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-secondary mb-1">
+                            <i class="fas fa-link me-1 text-primary"></i>Direct Invite Link
+                        </label>
+                        <div class="input-group input-group-sm shadow-2xs">
+                            <input type="text" class="form-control bg-white" id="share-invite-link" readonly value="https://...">
+                            <button class="btn btn-primary px-3 fw-semibold" type="button" id="copy-link-btn">
+                                <i class="fas fa-copy me-1"></i>Copy Link
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Instant Share Action Buttons -->
+                    <div class="d-flex flex-column gap-2">
+                        <button type="button" class="btn btn-success btn-sm w-100 py-2 rounded-pill fw-semibold shadow-2xs d-flex align-items-center justify-content-center gap-2" id="btn-share-whatsapp">
+                            <i class="fab fa-whatsapp fs-5"></i>Share on WhatsApp
+                        </button>
+                        
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <button type="button" class="btn btn-outline-primary btn-sm w-100 py-2 rounded-pill fw-semibold" id="btn-share-native">
+                                    <i class="fas fa-share-alt me-1"></i>Share via Apps...
+                                </button>
+                            </div>
+                            <div class="col-6">
+                                <button type="button" class="btn btn-outline-secondary btn-sm w-100 py-2 rounded-pill fw-semibold" id="btn-copy-full-msg">
+                                    <i class="fas fa-comment-dots me-1"></i>Copy Invite
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="copy-success" class="alert alert-success d-none mt-3 py-2 text-center small mb-0 rounded-pill">
+                        <i class="fas fa-check-circle me-1"></i>Copied to clipboard!
+                    </div>
                 </div>
-                <div id="copy-success" class="alert alert-success d-none mt-3">
-                    Code copied to clipboard!
+                <div class="modal-footer bg-white border-0 py-2 px-4">
+                    <button type="button" class="btn btn-secondary btn-sm rounded-pill px-4 ms-auto" data-bs-dismiss="modal">Close</button>
                 </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Done</button>
             </div>
         </div>
     </div>

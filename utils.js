@@ -1579,3 +1579,174 @@ function getRouteSegments(trip, totalDistance) {
 }
 
 
+
+
+// ==========================================
+// SHARE TRIP WITH FRIENDS (Modal & Web Share API)
+// ==========================================
+function openShareTripModal(trip) {
+    if (!trip) {
+        if (typeof currentTrip !== 'undefined' && currentTrip) {
+            trip = currentTrip;
+        } else if (typeof userTrips !== 'undefined' && userTrips.length > 0) {
+            trip = userTrips[0];
+        }
+    }
+    if (!trip) {
+        if (typeof showToast === 'function') showToast('No trip selected to share', 'warning');
+        return;
+    }
+
+    const modalEl = document.getElementById('shareTripModal');
+    if (!modalEl) {
+        console.warn('shareTripModal element not found');
+        return;
+    }
+
+    const code = trip.code || 'TRIPMATE';
+    const tripName = trip.name || 'TravelMate Trip';
+    const route = (trip.startLocation && trip.destination) 
+        ? `${trip.startLocation} → ${trip.destination}` 
+        : (trip.destination || 'Exciting Destination');
+    
+    let datesStr = '';
+    if (trip.startDate) {
+        const sD = new Date(trip.startDate);
+        const eD = trip.endDate ? new Date(trip.endDate) : sD;
+        datesStr = `${sD.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} - ${eD.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+    }
+
+    // Direct Join Link (Points to dashboard.html with ?join=CODE)
+    const currentPath = window.location.pathname;
+    let basePath = currentPath;
+    if (basePath.endsWith('trip-details.html')) {
+        basePath = basePath.replace('trip-details.html', 'dashboard.html');
+    } else if (!basePath.endsWith('dashboard.html')) {
+        const lastSlash = basePath.lastIndexOf('/');
+        basePath = basePath.substring(0, lastSlash + 1) + 'dashboard.html';
+    }
+    const inviteUrl = `${window.location.origin}${basePath}?join=${code}`;
+
+    // Populating UI elements
+    const nameEl = document.getElementById('share-modal-trip-name');
+    if (nameEl) nameEl.textContent = tripName;
+    
+    const routeEl = document.getElementById('share-modal-route');
+    if (routeEl) routeEl.innerHTML = `<i class="fas fa-map-marker-alt text-danger me-1"></i><span>${route}</span>`;
+
+    const datesEl = document.getElementById('share-modal-dates');
+    if (datesEl) {
+        if (datesStr) {
+            datesEl.innerHTML = `<i class="far fa-calendar-alt text-primary me-1"></i><span>${datesStr}</span>`;
+            datesEl.classList.remove('d-none');
+        } else {
+            datesEl.classList.add('d-none');
+        }
+    }
+
+    const codeEl = document.getElementById('share-trip-code');
+    if (codeEl) codeEl.textContent = code;
+
+    const linkInput = document.getElementById('share-invite-link');
+    if (linkInput) linkInput.value = inviteUrl;
+
+    const copyAlert = document.getElementById('copy-success');
+    if (copyAlert) copyAlert.classList.add('d-none');
+
+    // WhatsApp Formatted Text
+    const waText = `🚗 *Join my journey on TravelMate!*\n\n` +
+        `🌟 *Trip:* ${tripName}\n` +
+        `📍 *Route:* ${route}\n` +
+        (datesStr ? `📅 *Dates:* ${datesStr}\n` : '') +
+        `🔑 *Trip Code:* *${code}*\n\n` +
+        `👉 *Click to join directly on TravelMate:*\n${inviteUrl}`;
+
+    function showShareCopiedFeedback(msg) {
+        if (copyAlert) {
+            copyAlert.innerHTML = `<i class="fas fa-check-circle me-1"></i>${msg}`;
+            copyAlert.classList.remove('d-none');
+            setTimeout(() => {
+                if (copyAlert) copyAlert.classList.add('d-none');
+            }, 3500);
+        }
+        if (typeof showToast === 'function') {
+            showToast(msg, 'success');
+        }
+    }
+
+    function copyFallback(text) {
+        const temp = document.createElement('textarea');
+        temp.value = text;
+        document.body.appendChild(temp);
+        temp.select();
+        document.execCommand('copy');
+        document.body.removeChild(temp);
+        showShareCopiedFeedback('Copied to clipboard!');
+    }
+
+    // Wire Copy Code Button
+    const copyCodeBtn = document.getElementById('copy-code-btn');
+    if (copyCodeBtn) {
+        copyCodeBtn.onclick = function() {
+            navigator.clipboard.writeText(code).then(() => {
+                showShareCopiedFeedback('Trip Code copied: ' + code);
+            }).catch(() => copyFallback(code));
+        };
+    }
+
+    // Wire Copy Link Button
+    const copyLinkBtn = document.getElementById('copy-link-btn');
+    if (copyLinkBtn) {
+        copyLinkBtn.onclick = function() {
+            navigator.clipboard.writeText(inviteUrl).then(() => {
+                showShareCopiedFeedback('Invite link copied to clipboard!');
+            }).catch(() => copyFallback(inviteUrl));
+        };
+    }
+
+    // Wire WhatsApp Button
+    const waBtn = document.getElementById('btn-share-whatsapp');
+    if (waBtn) {
+        waBtn.onclick = function() {
+            const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(waText)}`;
+            window.open(waUrl, '_blank');
+        };
+    }
+
+    // Wire Copy Full Message Button
+    const copyMsgBtn = document.getElementById('btn-copy-full-msg');
+    if (copyMsgBtn) {
+        copyMsgBtn.onclick = function() {
+            navigator.clipboard.writeText(waText).then(() => {
+                showShareCopiedFeedback('Full invitation message copied!');
+            }).catch(() => copyFallback(waText));
+        };
+    }
+
+    // Wire Native Web Share API Button
+    const nativeBtn = document.getElementById('btn-share-native');
+    if (nativeBtn) {
+        nativeBtn.onclick = function() {
+            if (navigator.share) {
+                navigator.share({
+                    title: `Join my trip: ${tripName}`,
+                    text: waText,
+                    url: inviteUrl
+                }).catch(err => {
+                    if (err.name !== 'AbortError') {
+                        console.warn('Native share failed:', err);
+                    }
+                });
+            } else {
+                navigator.clipboard.writeText(waText).then(() => {
+                    showShareCopiedFeedback('Message copied! You can paste into any app.');
+                }).catch(() => copyFallback(waText));
+            }
+        };
+    }
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+}
+
+window.openShareTripModal = openShareTripModal;
